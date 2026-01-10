@@ -20,14 +20,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
       DEPLOYMENT_MODE: self_hosted
-      SYNC_ON_STARTUP: "true"
+      SYNC_ON_STARTUP: "false"
       SYNC_INTERVAL_HOURS: 1
-      LOG_LEVEL: INFO
+      LOG_LEVEL: DEBUG
     volumes:
       - ~/.polar-flow:/root/.polar-flow
+      - ./src:/app/src  # Mount source for hot reload
+    command: uv run uvicorn polar_flow_server.app:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     restart: unless-stopped

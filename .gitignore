@@ -69,6 +69,7 @@ logs/
 # Documentation
 site/
 .mkdocs_cache/
+docs/local/
 
 # Environment
 .env.local

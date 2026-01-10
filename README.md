@@ -210,9 +210,3 @@ MIT
 - [SQLAlchemy](https://www.sqlalchemy.org/) - Async ORM
 - [PostgreSQL](https://www.postgresql.org/) - Database
 - [Polars](https://pola.rs/) - Data processing
-
-## Managed Service
-
-Want dashboards, mobile apps, and support without self-hosting?
-
-Check out [stumason.dev](https://stumason.dev) - managed service built with this engine + Laravel.

@@ -61,6 +61,18 @@ class Settings(BaseSettings):
         description="How many days of data to fetch on sync",
     )
 
+    # Polar OAuth app credentials (app-level, not user-level)
+    # NOTE: For self-hosted, these will be stored in DB via setup wizard
+    # For now, support reading from env for testing
+    polar_client_id: str | None = Field(
+        default=None,
+        description="Polar OAuth client ID (from admin.polaraccesslink.com)",
+    )
+    polar_client_secret: str | None = Field(
+        default=None,
+        description="Polar OAuth client secret (from admin.polaraccesslink.com)",
+    )
+
     # Self-hosted mode specific
     polar_token_path: Path = Field(
         default=Path.home() / ".polar-flow" / "token",

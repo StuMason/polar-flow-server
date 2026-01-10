@@ -2,16 +2,21 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from litestar import Litestar
+from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from litestar.openapi import OpenAPIConfig
+from litestar.template.config import TemplateConfig
 
 from polar_flow_server import __version__
+from polar_flow_server.admin import admin_router
 from polar_flow_server.api import api_routers
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.database import close_database, engine, init_database
+from polar_flow_server.routes import root_redirect
 
 # Configure structured logging
 structlog.configure(
@@ -63,13 +68,20 @@ def create_app() -> Litestar:
     Returns:
         Configured Litestar app instance
     """
+    # Get templates directory path
+    templates_dir = Path(__file__).parent / "templates"
+
     return Litestar(
-        route_handlers=api_routers,
+        route_handlers=[root_redirect, *api_routers, admin_router],
         lifespan=[lifespan],
         openapi_config=OpenAPIConfig(
             title="polar-flow-server API",
             version=__version__,
             description="Self-hosted health analytics server for Polar devices",
+        ),
+        template_config=TemplateConfig(
+            directory=templates_dir,
+            engine=JinjaTemplateEngine,
         ),
         plugins=[
             SQLAlchemyPlugin(

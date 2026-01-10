@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - polar-flow-server{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex items-center justify-between">
+    <div>
+        <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p class="text-gray-600 mt-1">Complete Polar V3 API health data</p>
+    </div>
+    <a
+        href="/admin/settings"
+        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+    >
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+        </svg>
+        Settings
+    </a>
+</div>
+
+<!-- Key Metrics Row -->
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-6" id="stats-container">
+    <!-- Latest HRV -->
+    <div class="bg-gradient-to-br from-purple-500 to-purple-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-purple-100 text-xs font-medium uppercase">HRV</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_hrv %}{{ latest_hrv|round(0) }}<span class="text-sm font-normal ml-1">ms</span>{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Latest HR -->
+    <div class="bg-gradient-to-br from-red-500 to-red-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-red-100 text-xs font-medium uppercase">Avg HR</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_hr and latest_hr.hr_avg %}{{ latest_hr.hr_avg }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Cardio Load -->
+    <div class="bg-gradient-to-br from-orange-500 to-orange-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-orange-100 text-xs font-medium uppercase">Strain</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertness -->
+    <div class="bg-gradient-to-br from-blue-500 to-blue-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-blue-100 text-xs font-medium uppercase">Alertness</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sleep Score (latest) -->
+    <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-indigo-100 text-xs font-medium uppercase">Sleep Score</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Record Counts -->
+<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9 mb-6">
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Sleep</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ sleep_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Recharge</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ recharge_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Activity</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ activity_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Exercises</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ exercise_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Cardio</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ cardio_load_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Alertness</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ alertness_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Bedtime</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ bedtime_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">Steps</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ activity_samples_count }}</div>
+    </div>
+    <div class="bg-white shadow rounded-lg p-3 text-center">
+        <div class="text-gray-500 text-xs">HR Days</div>
+        <div class="text-gray-900 text-lg font-semibold">{{ continuous_hr_count }}</div>
+    </div>
+</div>
+
+<!-- Sync Control -->
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-lg font-semibold text-gray-900">Data Sync</h2>
+            <p class="text-sm text-gray-600">Auto-sync runs every {{ sync_interval_hours }} hour(s). Syncs all 9 endpoints.</p>
+        </div>
+        <button
+            hx-post="/admin/sync"
+            hx-target="#sync-result"
+            hx-swap="innerHTML"
+            hx-indicator="#sync-spinner"
+            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+            <svg id="sync-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Sync Now
+        </button>
+    </div>
+    <div id="sync-result"></div>
+</div>
+
+<!-- Two Column Layout for Tables -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Recent Sleep Data -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Recent Sleep</h2>
+        </div>
+        {% if recent_sleep %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for sleep in recent_sleep %}
+                    <tr>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{{ sleep.date }}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm">
+                            {% if sleep.sleep_score %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if sleep.sleep_score >= 70 %}bg-green-100 text-green-800{% elif sleep.sleep_score >= 50 %}bg-yellow-100 text-yellow-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ sleep.sleep_score }}
+                            </span>
+                            {% else %}--{% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                            {% if sleep.total_sleep_seconds %}{{ (sleep.total_sleep_seconds / 3600)|round(1) }}h{% else %}--{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-6 text-center text-gray-500">No sleep data yet</div>
+        {% endif %}
+    </div>
+
+    <!-- Recent Recharge Data -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Nightly Recharge</h2>
+        </div>
+        {% if recent_recharge %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">HRV</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">ANS</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for recharge in recent_recharge %}
+                    <tr>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{{ recharge.date }}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                            {% if recharge.hrv_avg %}{{ recharge.hrv_avg|round(0) }} ms{% else %}--{% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                            {% if recharge.ans_charge %}{{ recharge.ans_charge|round(0) }}%{% else %}--{% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm">
+                            {% if recharge.nightly_recharge_status %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                {% if 'GOOD' in recharge.nightly_recharge_status or 'VERY_GOOD' in recharge.nightly_recharge_status %}bg-green-100 text-green-800
+                                {% elif 'COMPROMISED' in recharge.nightly_recharge_status %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ recharge.nightly_recharge_status|replace('NIGHTLY_RECHARGE_STATUS_', '')|replace('_', ' ')|title }}
+                            </span>
+                            {% else %}--{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-6 text-center text-gray-500">No recharge data yet</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Cardio Load Details -->
+{% if latest_cardio %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Training Load ({{ latest_cardio.date }})</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Strain</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_cardio.strain|round(0) if latest_cardio.strain else '--' }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Tolerance</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_cardio.tolerance|round(0) if latest_cardio.tolerance and latest_cardio.tolerance > 0 else '--' }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Load</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_cardio.cardio_load|round(0) if latest_cardio.cardio_load and latest_cardio.cardio_load > 0 else '--' }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Ratio</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_cardio.cardio_load_ratio|round(2) if latest_cardio.cardio_load_ratio and latest_cardio.cardio_load_ratio > 0 else '--' }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Status</div>
+            <div class="text-sm font-medium text-gray-900">
+                {% if latest_cardio.cardio_load_status %}
+                {{ latest_cardio.cardio_load_status|replace('LOAD_STATUS_', '')|replace('_', ' ')|title }}
+                {% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Continuous HR Details -->
+{% if latest_hr %}
+<div class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Heart Rate ({{ latest_hr.date }})</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Min</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_min if latest_hr.hr_min else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Avg</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_avg if latest_hr.hr_avg else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Max</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_max if latest_hr.hr_max else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Samples</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
