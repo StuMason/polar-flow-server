@@ -1,8 +1,13 @@
 """Admin panel routes."""
 
 import os
+import secrets
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
+
+# In-memory OAuth state storage (for self-hosted single-instance use)
+# In production SaaS, use Redis or database with TTL
+_oauth_states: dict[str, datetime] = {}
 
 import httpx
 from litestar import Request, get, post
@@ -254,11 +259,22 @@ async def oauth_authorize(session: AsyncSession) -> Redirect:
         # No OAuth credentials configured, redirect to setup
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
-    # Build authorization URL
+    # Generate CSRF state token
+    state = secrets.token_urlsafe(32)
+    _oauth_states[state] = datetime.utcnow() + timedelta(minutes=10)
+
+    # Clean up expired states
+    now = datetime.utcnow()
+    expired = [s for s, exp in _oauth_states.items() if exp < now]
+    for s in expired:
+        del _oauth_states[s]
+
+    # Build authorization URL with state for CSRF protection
     params = {
         "client_id": app_settings.polar_client_id,
         "response_type": "code",
         "redirect_uri": "http://localhost:8000/admin/oauth/callback",
+        "state": state,
     }
     auth_url = f"https://flow.polar.com/oauth2/authorization?{urlencode(params)}"
 
@@ -268,8 +284,9 @@ async def oauth_authorize(session: AsyncSession) -> Redirect:
 @get("/oauth/callback", sync_to_thread=False)
 async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | Template:
     """Handle OAuth callback from Polar."""
-    # Get authorization code from query params
+    # Get authorization code and state from query params
     code = request.query_params.get("code")
+    state = request.query_params.get("state")
     error = request.query_params.get("error")
 
     if error or not code:
@@ -278,12 +295,28 @@ async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | 
             context={"error": f"OAuth authorization failed: {error or 'No code received'}"},
         )
 
+    # Validate CSRF state token
+    if not state or state not in _oauth_states:
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Invalid OAuth state - possible CSRF attack. Please try again."},
+        )
+
+    # Check state hasn't expired and remove it (one-time use)
+    if _oauth_states[state] < datetime.utcnow():
+        del _oauth_states[state]
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "OAuth state expired. Please try again."},
+        )
+    del _oauth_states[state]
+
     # Get OAuth credentials from database
     stmt = select(AppSettings).where(AppSettings.id == 1)
     result = await session.execute(stmt)
     app_settings = result.scalar_one_or_none()
 
-    if not app_settings or not app_settings.polar_client_id:
+    if not app_settings or not app_settings.polar_client_id or not app_settings.polar_client_secret_encrypted:
         return Template(
             template_name="admin/partials/sync_error.html",
             context={"error": "OAuth credentials not configured"},
@@ -307,7 +340,13 @@ async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | 
             token_data = response.json()
 
         # Polar includes user_id in the token response as x_user_id
-        polar_user_id = str(token_data.get("x_user_id"))
+        x_user_id = token_data.get("x_user_id")
+        if x_user_id is None:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": "OAuth response missing user ID (x_user_id)"},
+            )
+        polar_user_id = str(x_user_id)
         access_token_encrypted = token_encryption.encrypt(token_data["access_token"])
 
         # Calculate token expiry

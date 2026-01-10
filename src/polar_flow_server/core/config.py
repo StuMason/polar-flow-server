@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     def get_encryption_key(self) -> bytes:
         """Get encryption key for Polar tokens.
 
+        In self-hosted mode, generates and persists key to ~/.polar-flow/encryption.key
+        to ensure tokens survive server restarts.
+
         Raises:
             ValueError: If encryption key not set in SaaS mode
         """
@@ -105,10 +108,22 @@ class Settings(BaseSettings):
         if self.is_saas():
             raise ValueError("ENCRYPTION_KEY must be set in SaaS mode")
 
-        # Generate a default key for self-hosted mode (not secure for production SaaS)
+        # Self-hosted: persist key to file so tokens survive restarts
+        from pathlib import Path
+
         from cryptography.fernet import Fernet
 
-        return Fernet.generate_key()
+        key_file = Path.home() / ".polar-flow" / "encryption.key"
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if key_file.exists():
+            return key_file.read_bytes().strip()
+
+        # Generate new key and persist
+        key = Fernet.generate_key()
+        key_file.write_bytes(key)
+        key_file.chmod(0o600)  # Owner read/write only
+        return key
 
 
 # Global settings instance
