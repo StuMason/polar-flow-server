@@ -338,7 +338,7 @@ class SyncService:
         """Sync SleepWise alertness predictions."""
         self.logger.debug("Syncing sleepwise alertness", user_id=user_id)
 
-        alertness_data = await client.sleepwise.alertness()
+        alertness_data = await client.sleepwise.get_alertness()
 
         count = 0
         for alertness in alertness_data:
@@ -363,7 +363,7 @@ class SyncService:
         """Sync SleepWise circadian bedtime recommendations."""
         self.logger.debug("Syncing sleepwise bedtime", user_id=user_id)
 
-        bedtime_data = await client.sleepwise.bedtime()
+        bedtime_data = await client.sleepwise.get_bedtime()
 
         count = 0
         for bedtime in bedtime_data:
