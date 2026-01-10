@@ -4,69 +4,36 @@ Self-hosted health analytics server for Polar devices. Own your data, analyze it
 
 ## What This Does
 
-Polar devices (watches, fitness trackers) collect health data: sleep, HRV, activity, exercises. The Polar API gives you access to this data, but only for the last 28-30 days. No long-term trends, no baselines, no recovery analysis.
+Polar devices collect health data: sleep, HRV, activity, exercises. The Polar API provides access to this data, but only for the last 28-30 days.
 
-This server fixes that. It:
+This server:
 
-1. **Syncs** your data from the Polar API automatically
-2. **Stores** everything in a local database (your data, your disk)
-3. **Analyzes** the data (HRV baselines, recovery scores, sleep debt, training load)
-4. **Exposes** a REST API so you can build dashboards, apps, or integrations
-
-Think of it as your personal health data warehouse with built-in analytics.
-
-## Why Self-Host
-
-- **Own your data** - Not locked into Polar's 28-day window
-- **Deep analysis** - HRV baselines over months/years, not days
-- **Privacy** - Your health data stays on your server
-- **Extensible** - Build your own dashboards, connect to other tools
-- **Free** - No subscription, no limits
+1. Syncs data from Polar API automatically
+2. Stores everything in PostgreSQL (your data, your server)
+3. Runs analytics (HRV baselines, recovery scores, sleep debt)
+4. Exposes REST API for dashboards and integrations
+5. Multi-user ready (same codebase for self-hosted and SaaS)
 
 ## Architecture
 
 ```
-Polar API → polar-flow SDK → Scheduler → Database → Analytics Engine → REST API
-                                                                            ↓
-                                                              Your Dashboard/App
+Polar API → polar-flow SDK → Sync Service → PostgreSQL → Analytics → REST API
+                                                                          ↓
+                                                                Laravel/Dashboard
 ```
 
-**Components:**
+**Python data analytics engine:**
+- Litestar (async web framework)
+- SQLAlchemy 2.0 (async ORM)
+- PostgreSQL (self-hosted or shared with Laravel)
+- Polars (data processing)
+- Strict type checking with mypy
 
-- **Scheduler** - Fetches new data every hour using [polar-flow](https://github.com/StuMason/polar-flow)
-- **Database** - DuckDB (embedded) or TimescaleDB (production)
-- **Analytics** - HRV baselines, recovery scores, sleep debt calculations
-- **API** - FastAPI endpoints for querying your data
-- **MCP Server** (optional) - Claude Desktop integration for AI health insights
-
-## What You Get
-
-**Data Storage:**
-- Sleep data (scores, stages, HRV, breathing rate)
-- Nightly Recharge (ANS charge, recovery metrics)
-- Activities (steps, calories, distance, zones)
-- Exercises (workouts with heart rate, pace, samples)
-
-**Computed Metrics:**
-- HRV baselines (7-day, 30-day rolling averages)
-- HRV deviation from baseline (%)
-- Recovery status (recovered, recovering, strained)
-- Sleep debt tracking
-- Training load and readiness scores
-
-**API Endpoints:**
-- `/recovery/today` - Current recovery status
-- `/sleep/history` - Historical sleep data with computed metrics
-- `/activity/list` - Activity summaries
-- `/hrv/trends` - HRV trends and baselines
-- `/sync/trigger` - Manual sync endpoint
-
-## Prerequisites
-
-- A Polar device (watch, fitness tracker)
-- Polar AccessLink API credentials ([get them here](https://admin.polaraccesslink.com))
-- Docker (easiest) or Python 3.11+
-- 100MB disk space (grows with your data)
+**Multi-tenancy:**
+- Every table includes `user_id` column
+- All API endpoints scoped by `user_id`
+- Self-hosted: one user, SaaS: many users
+- Same codebase for both modes
 
 ## Quick Start
 
@@ -77,181 +44,175 @@ Polar API → polar-flow SDK → Scheduler → Database → Analytics Engine →
 3. Set redirect URI to `http://localhost:8888/callback`
 4. Note your `CLIENT_ID` and `CLIENT_SECRET`
 
-### 2. Authenticate
+### 2. Authenticate with Polar
 
 ```bash
+# Authenticate to get your token
 docker run -it --rm \
   -e CLIENT_ID=your_client_id \
   -e CLIENT_SECRET=your_client_secret \
   -v ~/.polar-flow:/root/.polar-flow \
-  stumason/polar-flow-server \
+  ghcr.io/stumason/polar-flow-server:latest \
   polar-flow auth
 ```
 
-This opens your browser, handles OAuth, and saves the token.
-
-### 3. Run the Server
-
-```bash
-docker run -d \
-  -p 8000:8000 \
-  -v ~/.polar-flow:/root/.polar-flow \
-  -v polar-data:/data \
-  --name polar-flow-server \
-  stumason/polar-flow-server
-```
-
-That's it. The server starts syncing your data every hour.
-
-### 4. Check Your Data
-
-```bash
-curl http://localhost:8000/recovery/today
-```
-
-## Installation
-
-### Docker (Recommended)
-
-See Quick Start above.
-
-### Docker Compose
-
-```yaml
-version: "3.8"
-
-services:
-  polar-flow-server:
-    image: stumason/polar-flow-server:latest
-    ports:
-      - "8000:8000"
-    volumes:
-      - ~/.polar-flow:/root/.polar-flow
-      - polar-data:/data
-    environment:
-      - SYNC_INTERVAL_HOURS=1
-    restart: unless-stopped
-
-volumes:
-  polar-data:
-```
-
-### From Source
+### 3. Start with Docker Compose
 
 ```bash
 git clone https://github.com/StuMason/polar-flow-server.git
 cd polar-flow-server
 
-# Install dependencies
-uv sync
+# Start PostgreSQL + API server
+docker-compose up -d
 
-# Authenticate
-uv run polar-flow auth
+# Check health
+curl http://localhost:8000/health
 
-# Run server
-uv run python -m polar_flow_server
+# View logs
+docker-compose logs -f
 ```
+
+The server starts syncing data every hour automatically.
+
+## API Usage
+
+All endpoints are scoped by `user_id`:
+
+```bash
+# Get your Polar user ID (stored during auth)
+export USER_ID=$(cat ~/.polar-flow/user_id)
+export TOKEN=$(cat ~/.polar-flow/token)
+
+# Get sleep data
+curl "http://localhost:8000/api/v1/users/$USER_ID/sleep?days=30"
+
+# Get sleep for specific date
+curl "http://localhost:8000/api/v1/users/$USER_ID/sleep/2026-01-09"
+
+# Trigger manual sync
+curl -X POST \
+  -H "X-Polar-Token: $TOKEN" \
+  "http://localhost:8000/api/v1/users/$USER_ID/sync/trigger"
+```
+
+Visit `http://localhost:8000/docs` for interactive API documentation.
+
+## Data Stored
+
+**Sleep:**
+- Sleep score, stages (light/deep/REM)
+- HRV average and samples
+- Heart rate (avg/min/max)
+- Breathing rate, skin temperature
+
+**Nightly Recharge:**
+- ANS charge (autonomic nervous system)
+- Sleep charge and status
+- HRV, heart rate, breathing rate status
+
+**Daily Activity:**
+- Steps, distance, calories
+- Active time, inactivity alerts
+- Activity score
+
+**Exercises:**
+- Sport type, duration, distance
+- Heart rate zones and averages
+- Pace, cadence, power
+- Training load
 
 ## Configuration
 
-Environment variables:
+Environment variables (see `.env.example`):
 
-- `DATABASE_PATH` - Path to DuckDB file (default: `/data/polar.db`)
-- `SYNC_INTERVAL_HOURS` - How often to sync (default: `1`)
-- `SYNC_ON_STARTUP` - Sync immediately on start (default: `true`)
-- `API_HOST` - API host (default: `0.0.0.0`)
-- `API_PORT` - API port (default: `8000`)
+```bash
+# Database (PostgreSQL required)
+DATABASE_URL=postgresql+asyncpg://polar:polar@postgres:5432/polar
 
-## API Documentation
+# Deployment mode
+DEPLOYMENT_MODE=self_hosted  # or 'saas' for Laravel integration
 
-Once running, visit `http://localhost:8000/docs` for interactive API documentation.
+# Sync settings
+SYNC_INTERVAL_HOURS=1
+SYNC_ON_STARTUP=true
+SYNC_DAYS_LOOKBACK=30
 
-Key endpoints:
-
-**Recovery:**
-- `GET /recovery/today` - Current recovery status with score and recommendation
-- `GET /recovery/history?days=7` - Recovery history
-
-**Sleep:**
-- `GET /sleep/history?days=30` - Sleep data with computed metrics
-- `GET /sleep/debt` - Current sleep debt
-
-**Activity:**
-- `GET /activity/list` - Recent activities
-- `GET /activity/trends` - Activity trends
-
-**HRV:**
-- `GET /hrv/trends?days=90` - HRV baselines and trends
-
-**Sync:**
-- `POST /sync/trigger` - Manually trigger data sync
-- `GET /sync/status` - Check sync status
-
-## Analytics Explained
-
-### HRV Baseline
-
-Calculates rolling median HRV over 7 and 30 days. Median is used instead of mean to reduce impact of outliers (bad sleep, alcohol, etc.).
-
-**Why it matters:** HRV below your baseline indicates stress, fatigue, or illness. HRV above baseline indicates good recovery.
-
-### Recovery Score
-
-Weighted combination of:
-- HRV deviation (40%)
-- Sleep score (30%)
-- ANS charge (20%)
-- Sleep duration (10%)
-
-**Scale:** 0-100
-- 70+ = Recovered (ready for intense training)
-- 50-70 = Recovering (moderate training ok)
-- <50 = Strained (prioritize rest)
-
-### Sleep Debt
-
-Cumulative sleep deficit relative to your target (default 8 hours). Includes decay factor - old debt gradually diminishes.
-
-**Why it matters:** Sleep debt accumulates and impacts recovery, performance, and health.
-
-## MCP Server (Claude Integration)
-
-Optional feature for Claude Desktop users. Enables natural language queries:
-
-- "What's my recovery status?"
-- "Should I train hard today?"
-- "Show my HRV trends this month"
-- "Am I getting enough sleep?"
-
-Enable by setting `ENABLE_MCP=true`.
+# API
+API_HOST=0.0.0.0
+API_PORT=8000
+```
 
 ## Development
 
 ```bash
+# Clone and install
+git clone https://github.com/StuMason/polar-flow-server.git
+cd polar-flow-server
+uv sync --all-extras
+
+# Start PostgreSQL
+docker-compose up -d postgres
+
+# Run server with hot reload
+uv run polar-flow-server serve --reload
+
 # Run tests
 uv run pytest
 
-# Run with hot reload
-uv run uvicorn polar_flow_server.main:app --reload
+# Type check
+uv run mypy src/polar_flow_server
 
-# Run sync manually
-uv run python -m polar_flow_server.sync
+# Lint
+uv run ruff check src/ tests/
 ```
 
-## Contributing
+## SaaS Integration (Laravel)
 
-Contributions welcome! This is a personal project but PRs for bug fixes, new analytics, or features are appreciated.
+For managed hosting with Laravel:
+
+1. Share PostgreSQL database between Laravel and Python service
+2. Laravel manages users, billing, auth
+3. Python service handles data sync and analytics
+4. Laravel calls Python API for data retrieval
+
+```php
+// Laravel example
+$response = Http::get("http://python-service:8000/api/v1/users/{$user->id}/sleep");
+$sleepData = $response->json();
+```
+
+## Analytics (Coming Soon)
+
+- HRV baselines (7/30/60-day rolling medians)
+- Recovery score calculation
+- Sleep debt tracking
+- Training load analysis
+- Injury risk prediction
+- ML-powered insights
+
+## Documentation
+
+Full documentation: [stumason.github.io/polar-flow-server](https://stumason.github.io/polar-flow-server/)
+
+- [Quick Start](https://stumason.github.io/polar-flow-server/quickstart/)
+- [API Reference](https://stumason.github.io/polar-flow-server/api/overview/)
+- [Architecture](https://stumason.github.io/polar-flow-server/architecture/)
+- [Deployment](https://stumason.github.io/polar-flow-server/deployment/self-hosted/)
 
 ## License
 
 MIT
 
-## Acknowledgments
+## Built With
 
-Built on [polar-flow](https://github.com/StuMason/polar-flow), a modern Python SDK for the Polar AccessLink API.
+- [polar-flow](https://github.com/StuMason/polar-flow) - Modern Python SDK for Polar AccessLink API
+- [Litestar](https://litestar.dev/) - Async web framework
+- [SQLAlchemy](https://www.sqlalchemy.org/) - Async ORM
+- [PostgreSQL](https://www.postgresql.org/) - Database
+- [Polars](https://pola.rs/) - Data processing
 
-## Support
+## Managed Service
 
-This is a self-hosted tool. No support provided, but feel free to open issues for bugs or feature requests.
+Want dashboards, mobile apps, and support without self-hosting?
 
-If you want a managed version with dashboards, mobile apps, and support, check out [stumason.dev](https://stumason.dev).
+Check out [stumason.dev](https://stumason.dev) - managed service built with this engine + Laravel.

@@ -1,0 +1,109 @@
+[project]
+name = "polar-flow-server"
+version = "0.1.0"
+description = "Self-hosted health analytics server for Polar devices"
+readme = "README.md"
+authors = [
+    { name = "Stu Mason", email = "stu@stuartmason.co.uk" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    # Web framework
+    "litestar[standard]>=2.14.0",
+    "uvicorn[standard]>=0.34.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14.0",
+    "advanced-alchemy>=0.27.0",  # Required for Litestar SQLAlchemy plugin
+    "asyncpg>=0.30.0",  # PostgreSQL async driver
+    "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
+
+    # Polar Flow SDK
+    "polar-flow-api>=1.1.0",
+
+    # Data processing
+    "polars>=1.17.1",
+    "pyarrow>=18.1.0",
+
+    # Validation
+    "pydantic>=2.10.5",
+    "pydantic-settings>=2.7.1",
+
+    # Security
+    "argon2-cffi>=23.1.0",
+    "cryptography>=44.0.0",
+    "python-jose[cryptography]>=3.3.0",
+
+    # Task scheduling
+    "apscheduler>=3.10.4",
+
+    # Utilities
+    "python-dotenv>=1.0.1",
+    "structlog>=24.4.0",
+    "httpx>=0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+    "pytest-cov>=6.0.0",
+    "mypy>=1.14.0",
+    "ruff>=0.9.1",
+]
+
+mcp = [
+    "mcp>=1.3.2",  # Claude Desktop MCP server
+]
+
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.24",
+]
+
+[project.scripts]
+polar-flow-server = "polar_flow_server.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.22,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["polar_flow_server"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["apscheduler.*", "duckdb_engine.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=polar_flow_server --cov-report=term-missing"

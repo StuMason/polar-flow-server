@@ -1,0 +1,55 @@
+site_name: polar-flow-server
+site_description: Self-hosted health analytics server for Polar devices
+site_url: https://stumason.github.io/polar-flow-server/
+repo_url: https://github.com/StuMason/polar-flow-server
+repo_name: StuMason/polar-flow-server
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - content.code.copy
+    - search.suggest
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            heading_level: 2
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - Architecture: architecture.md
+  - API Reference:
+      - Overview: api/overview.md
+      - Sleep: api/sleep.md
+      - Activity: api/activity.md
+      - Exercises: api/exercises.md
+      - Nightly Recharge: api/recharge.md
+      - Sync: api/sync.md
+  - Deployment:
+      - Self-Hosted: deployment/self-hosted.md
+      - SaaS Integration: deployment/saas.md
+      - Docker: deployment/docker.md
+  - Analytics: analytics.md
+  - MCP Server: mcp.md
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
