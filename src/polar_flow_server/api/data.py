@@ -118,7 +118,7 @@ async def get_recharge_list(
             "date": str(r.date),
             "hrv_avg": r.hrv_avg,
             "ans_charge": r.ans_charge,
-            "nightly_recharge_status": r.nightly_recharge_status,
+            "ans_charge_status": r.ans_charge_status,
             "breathing_rate_avg": r.breathing_rate_avg,
             "heart_rate_avg": r.heart_rate_avg,
         }
@@ -226,7 +226,7 @@ async def get_exercises_list(
             "duration_minutes": round(r.duration_seconds / 60, 1) if r.duration_seconds else None,
             "distance_km": round(r.distance_meters / 1000, 2) if r.distance_meters else None,
             "calories": r.calories,
-            "avg_heart_rate": r.avg_heart_rate,
+            "average_heart_rate": r.average_heart_rate,
             "max_heart_rate": r.max_heart_rate,
             "training_load": r.training_load,
         }
@@ -259,17 +259,17 @@ async def get_exercise_detail(
         "duration_seconds": r.duration_seconds,
         "distance_meters": r.distance_meters,
         "calories": r.calories,
-        "avg_heart_rate": r.avg_heart_rate,
+        "average_heart_rate": r.average_heart_rate,
         "max_heart_rate": r.max_heart_rate,
-        "avg_speed": r.avg_speed,
-        "max_speed": r.max_speed,
-        "avg_cadence": r.avg_cadence,
+        "average_speed_mps": r.average_speed_mps,
+        "max_speed_mps": r.max_speed_mps,
+        "average_cadence": r.average_cadence,
         "max_cadence": r.max_cadence,
-        "avg_power": r.avg_power,
+        "average_power": r.average_power,
         "max_power": r.max_power,
         "training_load": r.training_load,
-        "ascent": r.ascent,
-        "descent": r.descent,
+        "ascent_meters": r.ascent_meters,
+        "descent_meters": r.descent_meters,
         "notes": r.notes,
     }
 
@@ -301,7 +301,7 @@ async def get_alertness_list(
             "period_start_time": str(r.period_start_time),
             "period_end_time": str(r.period_end_time),
             "grade": r.grade,
-            "alertness_level": r.alertness_level,
+            "grade_classification": r.grade_classification,
         }
         for r in records
     ]
@@ -328,9 +328,11 @@ async def get_bedtime_list(
         {
             "period_start_time": str(r.period_start_time),
             "period_end_time": str(r.period_end_time),
-            "bedtime_optimal": str(r.bedtime_optimal) if r.bedtime_optimal else None,
-            "bedtime_early": str(r.bedtime_early) if r.bedtime_early else None,
-            "bedtime_late": str(r.bedtime_late) if r.bedtime_late else None,
+            "preferred_sleep_start": str(r.preferred_sleep_start),
+            "preferred_sleep_end": str(r.preferred_sleep_end),
+            "sleep_gate_start": str(r.sleep_gate_start),
+            "sleep_gate_end": str(r.sleep_gate_end),
+            "quality": r.quality,
         }
         for r in records
     ]

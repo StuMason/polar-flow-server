@@ -4,9 +4,7 @@ These tests verify that SDK models are correctly transformed to database dicts.
 """
 
 import json
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 
 class TestSpO2Transformer:
@@ -15,6 +13,7 @@ class TestSpO2Transformer:
     def test_transform_complete_data(self) -> None:
         """Test transforming complete SpO2 data."""
         from polar_flow.models.biosensing import SpO2Result
+
         from polar_flow_server.transformers.spo2 import SpO2Transformer
 
         # Create SDK model with all fields
@@ -49,12 +48,13 @@ class TestSpO2Transformer:
         assert result["test_status"] == "COMPLETED"
 
         # Verify datetime conversion
-        expected_dt = datetime(2024, 1, 10, 0, 0, 0, tzinfo=timezone.utc)
+        expected_dt = datetime(2024, 1, 10, 0, 0, 0, tzinfo=UTC)
         assert result["test_time"] == expected_dt
 
     def test_transform_minimal_data(self) -> None:
         """Test transforming with minimal required fields."""
         from polar_flow.models.biosensing import SpO2Result
+
         from polar_flow_server.transformers.spo2 import SpO2Transformer
 
         sdk_data = {
@@ -85,6 +85,7 @@ class TestECGTransformer:
     def test_transform_with_samples(self) -> None:
         """Test transforming ECG with waveform samples."""
         from polar_flow.models.biosensing import ECGResult
+
         from polar_flow_server.transformers.ecg import ECGTransformer
 
         sdk_data = {
@@ -135,6 +136,7 @@ class TestECGTransformer:
     def test_transform_without_optional_fields(self) -> None:
         """Test transforming ECG without PTT data."""
         from polar_flow.models.biosensing import ECGResult
+
         from polar_flow_server.transformers.ecg import ECGTransformer
 
         sdk_data = {
@@ -164,6 +166,7 @@ class TestBodyTemperatureTransformer:
     def test_transform_with_samples(self) -> None:
         """Test transforming body temperature with samples."""
         from polar_flow.models.biosensing import BodyTemperaturePeriod
+
         from polar_flow_server.transformers.temperature import BodyTemperatureTransformer
 
         sdk_data = {
@@ -211,6 +214,7 @@ class TestSkinTemperatureTransformer:
     def test_transform_normal_temperature(self) -> None:
         """Test transforming normal skin temperature."""
         from polar_flow.models.biosensing import SkinTemperature
+
         from polar_flow_server.transformers.temperature import SkinTemperatureTransformer
 
         sdk_data = {
@@ -230,6 +234,7 @@ class TestSkinTemperatureTransformer:
     def test_transform_elevated_temperature(self) -> None:
         """Test transforming elevated skin temperature."""
         from polar_flow.models.biosensing import SkinTemperature
+
         from polar_flow_server.transformers.temperature import SkinTemperatureTransformer
 
         sdk_data = {

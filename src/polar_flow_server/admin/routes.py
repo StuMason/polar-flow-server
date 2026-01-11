@@ -66,10 +66,10 @@ def _calculate_recovery_status(
         factors.append(sleep_score)
 
     # HRV/ANS factor (0-100)
-    ans_score = 50  # default
+    ans_score: float = 50.0  # default
     if recharge:
         if recharge.ans_charge:
-            ans_score = recharge.ans_charge
+            ans_score = float(recharge.ans_charge)
             if ans_score >= 70:
                 recommendations.append("ANS recovery is excellent. Your body is ready for stress.")
             elif ans_score >= 50:
@@ -712,7 +712,7 @@ async def export_sleep_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response:
+) -> Response[bytes]:
     """Export sleep data as CSV."""
     since_date = date.today() - timedelta(days=days)
     stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
@@ -738,7 +738,7 @@ async def export_sleep_csv(
         )
 
     return Response(
-        content=output.getvalue(),
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sleep_{days}days.csv"},
     )
@@ -749,7 +749,7 @@ async def export_activity_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response:
+) -> Response[bytes]:
     """Export activity data as CSV."""
     since_date = date.today() - timedelta(days=days)
     stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
@@ -775,7 +775,7 @@ async def export_activity_csv(
         )
 
     return Response(
-        content=output.getvalue(),
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=activity_{days}days.csv"},
     )
@@ -786,7 +786,7 @@ async def export_recharge_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response:
+) -> Response[bytes]:
     """Export recharge/HRV data as CSV."""
     since_date = date.today() - timedelta(days=days)
     stmt = (
@@ -807,14 +807,14 @@ async def export_recharge_csv(
                 r.date.isoformat(),
                 r.hrv_avg or "",
                 r.ans_charge or "",
-                r.nightly_recharge_status or "",
+                r.ans_charge_status or "",
                 r.breathing_rate_avg or "",
                 r.heart_rate_avg or "",
             ]
         )
 
     return Response(
-        content=output.getvalue(),
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=recharge_{days}days.csv"},
     )
@@ -825,7 +825,7 @@ async def export_cardio_load_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response:
+) -> Response[bytes]:
     """Export cardio load data as CSV."""
     since_date = date.today() - timedelta(days=days)
     stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
@@ -849,7 +849,7 @@ async def export_cardio_load_csv(
         )
 
     return Response(
-        content=output.getvalue(),
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=cardio_load_{days}days.csv"},
     )
