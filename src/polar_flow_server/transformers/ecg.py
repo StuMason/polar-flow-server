@@ -86,7 +86,7 @@ class ECGTransformer:
             "ptt_systolic_ms": sdk_ecg.pulse_transit_time_systolic_ms,
             "ptt_diastolic_ms": sdk_ecg.pulse_transit_time_diastolic_ms,
             "ptt_quality_index": sdk_ecg.pulse_transit_time_quality_index,
-            "sample_count": len(sdk_ecg.samples),
+            "sample_count": len(sdk_ecg.samples) if sdk_ecg.samples else 0,
             "samples_json": samples_json,
             "quality_json": quality_json,
             "duration_seconds": sdk_ecg.duration_seconds,

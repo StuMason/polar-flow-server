@@ -67,7 +67,7 @@ class BodyTemperatureTransformer:
             "temp_min": sdk_temp.min_temperature,
             "temp_max": sdk_temp.max_temperature,
             "temp_avg": sdk_temp.avg_temperature,
-            "sample_count": len(sdk_temp.samples),
+            "sample_count": len(sdk_temp.samples) if sdk_temp.samples else 0,
             "samples_json": samples_json,
         }
 
