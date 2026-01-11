@@ -1,5 +1,7 @@
 """Admin panel routes."""
 
+import csv
+import io
 import os
 import secrets
 from datetime import date, datetime, timedelta
@@ -8,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 from litestar import Request, get, post
-from litestar.response import Redirect, Template
+from litestar.response import Redirect, Response, Template
 from litestar.status_codes import HTTP_200_OK, HTTP_303_SEE_OTHER
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +33,115 @@ from polar_flow_server.services.sync import SyncService
 # In-memory OAuth state storage (for self-hosted single-instance use)
 # In production SaaS, use Redis or database with TTL
 _oauth_states: dict[str, datetime] = {}
+
+
+def _calculate_recovery_status(
+    sleep: Sleep | None,
+    recharge: NightlyRecharge | None,
+    cardio: CardioLoad | None,
+) -> dict[str, Any]:
+    """Calculate recovery status and generate recommendations.
+
+    Returns a dict with:
+    - readiness: "excellent" | "good" | "fair" | "poor"
+    - readiness_score: 0-100
+    - recommendations: list of actionable advice
+    - training_advice: what type of training is appropriate today
+    """
+    recommendations: list[str] = []
+    factors: list[float] = []
+
+    # Sleep factor (0-100)
+    sleep_score = 50  # default if no data
+    if sleep and sleep.sleep_score:
+        sleep_score = sleep.sleep_score
+        if sleep_score >= 85:
+            recommendations.append("Excellent sleep! You're well-rested for intense training.")
+        elif sleep_score >= 70:
+            pass  # good, no recommendation needed
+        elif sleep_score >= 50:
+            recommendations.append("Sleep was fair. Consider a lighter workout today.")
+        else:
+            recommendations.append("Poor sleep. Prioritize recovery over training.")
+        factors.append(sleep_score)
+
+    # HRV/ANS factor (0-100)
+    ans_score: float = 50.0  # default
+    if recharge:
+        if recharge.ans_charge:
+            ans_score = float(recharge.ans_charge)
+            if ans_score >= 70:
+                recommendations.append("ANS recovery is excellent. Your body is ready for stress.")
+            elif ans_score >= 50:
+                pass  # normal
+            elif ans_score >= 30:
+                recommendations.append("ANS recovery is moderate. Keep intensity manageable.")
+            else:
+                recommendations.append("ANS shows fatigue. Focus on active recovery today.")
+            factors.append(ans_score)
+
+        # Check HRV trend if available
+        if recharge.hrv_avg:
+            # Note: In a real app, we'd compare to baseline
+            if recharge.hrv_avg < 25:
+                recommendations.append("Low HRV detected. Your body may be under stress.")
+
+    # Training load factor
+    load_score = 50  # default balanced
+    if cardio and cardio.cardio_load_ratio:
+        ratio = cardio.cardio_load_ratio
+        if ratio >= 1.5:
+            load_score = 20
+            recommendations.append("High training load! Take a recovery day to avoid overtraining.")
+        elif ratio >= 1.2:
+            load_score = 40
+            recommendations.append("Training load elevated. Consider reducing intensity.")
+        elif ratio >= 0.8:
+            load_score = 80
+            # Good balance, no recommendation
+        elif ratio >= 0.5:
+            load_score = 60
+            recommendations.append("Training load is low. You can push harder if you feel good.")
+        else:
+            load_score = 40
+            recommendations.append(
+                "Very low training load. Consider increasing activity to maintain fitness."
+            )
+        factors.append(load_score)
+
+    # Calculate overall readiness
+    if factors:
+        readiness_score = sum(factors) / len(factors)
+    else:
+        readiness_score = 50  # no data
+
+    # Determine readiness level
+    if readiness_score >= 80:
+        readiness = "excellent"
+        training_advice = "Great day for high-intensity training, intervals, or competition."
+    elif readiness_score >= 65:
+        readiness = "good"
+        training_advice = (
+            "Good for moderate training. Tempo runs, strength work, or steady-state cardio."
+        )
+    elif readiness_score >= 45:
+        readiness = "fair"
+        training_advice = "Best for easy training. Light jog, mobility work, or skill practice."
+    else:
+        readiness = "poor"
+        training_advice = "Recovery day recommended. Gentle stretching, walking, or complete rest."
+
+    # Add training advice as recommendation
+    if not recommendations:
+        recommendations.append("All metrics look normal. Train as planned!")
+
+    return {
+        "readiness": readiness,
+        "readiness_score": round(readiness_score),
+        "recommendations": recommendations,
+        "training_advice": training_advice,
+        "has_data": bool(factors),
+    }
 
 
 @get("/", sync_to_thread=False)
@@ -172,6 +283,13 @@ async def admin_dashboard(request: Request[Any, Any, Any], session: AsyncSession
     recharge_list_result = await session.execute(recent_recharge_stmt)
     recent_recharge = recharge_list_result.scalars().all()
 
+    # Calculate recovery recommendations
+    recovery_status = _calculate_recovery_status(
+        sleep=recent_sleep[0] if recent_sleep else None,
+        recharge=latest_recharge,
+        cardio=latest_cardio,
+    )
+
     return Template(
         template_name="admin/dashboard.html",
         context={
@@ -191,6 +309,7 @@ async def admin_dashboard(request: Request[Any, Any, Any], session: AsyncSession
             "latest_hr": latest_hr,
             "latest_alertness": latest_alertness,
             "sync_interval_hours": settings.sync_interval_hours,
+            "recovery_status": recovery_status,
         },
     )
 
@@ -421,7 +540,322 @@ async def admin_settings(request: Request[Any, Any, Any], session: AsyncSession)
     )
 
 
-# Export routes
+# ============================================================================
+# Chart Data API Routes (JSON endpoints for Chart.js)
+# ============================================================================
+
+
+@get("/api/charts/sleep", sync_to_thread=False)
+async def chart_sleep_data(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get sleep data for charts.
+
+    Returns sleep score, duration, and stage breakdown for the last N days.
+    """
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
+    result = await session.execute(stmt)
+    sleep_data = result.scalars().all()
+
+    return {
+        "labels": [s.date.isoformat() for s in sleep_data],
+        "datasets": {
+            "sleep_score": [s.sleep_score for s in sleep_data],
+            "total_hours": [
+                round(s.total_sleep_seconds / 3600, 2) if s.total_sleep_seconds else 0
+                for s in sleep_data
+            ],
+            "deep_hours": [
+                round(s.deep_sleep_seconds / 3600, 2) if s.deep_sleep_seconds else 0
+                for s in sleep_data
+            ],
+            "light_hours": [
+                round(s.light_sleep_seconds / 3600, 2) if s.light_sleep_seconds else 0
+                for s in sleep_data
+            ],
+            "rem_hours": [
+                round(s.rem_sleep_seconds / 3600, 2) if s.rem_sleep_seconds else 0
+                for s in sleep_data
+            ],
+        },
+    }
+
+
+@get("/api/charts/activity", sync_to_thread=False)
+async def chart_activity_data(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get activity data for charts.
+
+    Returns steps, calories, and active time for the last N days.
+    """
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
+    result = await session.execute(stmt)
+    activity_data = result.scalars().all()
+
+    return {
+        "labels": [a.date.isoformat() for a in activity_data],
+        "datasets": {
+            "steps": [a.steps or 0 for a in activity_data],
+            "calories_active": [a.calories_active or 0 for a in activity_data],
+            "calories_total": [a.calories_total or 0 for a in activity_data],
+            "active_minutes": [
+                round(a.active_time_seconds / 60, 1) if a.active_time_seconds else 0
+                for a in activity_data
+            ],
+            "distance_km": [
+                round(a.distance_meters / 1000, 2) if a.distance_meters else 0
+                for a in activity_data
+            ],
+        },
+    }
+
+
+@get("/api/charts/heart-rate", sync_to_thread=False)
+async def chart_heart_rate_data(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get heart rate data for charts.
+
+    Returns min/avg/max heart rate for the last N days.
+    """
+    since_date = date.today() - timedelta(days=days)
+    stmt = (
+        select(ContinuousHeartRate)
+        .where(ContinuousHeartRate.date >= since_date)
+        .order_by(ContinuousHeartRate.date.asc())
+    )
+    result = await session.execute(stmt)
+    hr_data = result.scalars().all()
+
+    return {
+        "labels": [h.date.isoformat() for h in hr_data],
+        "datasets": {
+            "hr_min": [h.hr_min or 0 for h in hr_data],
+            "hr_avg": [h.hr_avg or 0 for h in hr_data],
+            "hr_max": [h.hr_max or 0 for h in hr_data],
+        },
+    }
+
+
+@get("/api/charts/hrv", sync_to_thread=False)
+async def chart_hrv_data(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get HRV data from Nightly Recharge for charts.
+
+    Returns HRV average and ANS charge for the last N days.
+    """
+    since_date = date.today() - timedelta(days=days)
+    stmt = (
+        select(NightlyRecharge)
+        .where(NightlyRecharge.date >= since_date)
+        .order_by(NightlyRecharge.date.asc())
+    )
+    result = await session.execute(stmt)
+    recharge_data = result.scalars().all()
+
+    return {
+        "labels": [r.date.isoformat() for r in recharge_data],
+        "datasets": {
+            "hrv_avg": [r.hrv_avg or 0 for r in recharge_data],
+            "ans_charge": [r.ans_charge or 0 for r in recharge_data],
+        },
+    }
+
+
+@get("/api/charts/cardio-load", sync_to_thread=False)
+async def chart_cardio_load_data(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get cardio load data for charts.
+
+    Returns strain, tolerance, and load ratio for the last N days.
+    """
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
+    result = await session.execute(stmt)
+    cardio_data = result.scalars().all()
+
+    return {
+        "labels": [c.date.isoformat() for c in cardio_data],
+        "datasets": {
+            "strain": [c.strain or 0 for c in cardio_data],
+            "tolerance": [c.tolerance or 0 for c in cardio_data],
+            "cardio_load": [c.cardio_load or 0 for c in cardio_data],
+            "load_ratio": [
+                round(c.cardio_load_ratio, 2) if c.cardio_load_ratio else 0 for c in cardio_data
+            ],
+        },
+    }
+
+
+# ============================================================================
+# CSV Export Endpoints
+# ============================================================================
+
+
+@get("/export/sleep.csv", sync_to_thread=False)
+async def export_sleep_csv(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> Response[bytes]:
+    """Export sleep data as CSV."""
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
+    result = await session.execute(stmt)
+    sleep_data = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["date", "sleep_score", "total_hours", "deep_hours", "light_hours", "rem_hours"]
+    )
+
+    for s in sleep_data:
+        writer.writerow(
+            [
+                s.date.isoformat(),
+                s.sleep_score,
+                round(s.total_sleep_seconds / 3600, 2) if s.total_sleep_seconds else "",
+                round(s.deep_sleep_seconds / 3600, 2) if s.deep_sleep_seconds else "",
+                round(s.light_sleep_seconds / 3600, 2) if s.light_sleep_seconds else "",
+                round(s.rem_sleep_seconds / 3600, 2) if s.rem_sleep_seconds else "",
+            ]
+        )
+
+    return Response(
+        content=output.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=sleep_{days}days.csv"},
+    )
+
+
+@get("/export/activity.csv", sync_to_thread=False)
+async def export_activity_csv(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> Response[bytes]:
+    """Export activity data as CSV."""
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
+    result = await session.execute(stmt)
+    activity_data = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["date", "steps", "calories_active", "calories_total", "distance_km", "active_minutes"]
+    )
+
+    for a in activity_data:
+        writer.writerow(
+            [
+                a.date.isoformat(),
+                a.steps or "",
+                a.calories_active or "",
+                a.calories_total or "",
+                round(a.distance_meters / 1000, 2) if a.distance_meters else "",
+                round(a.active_time_seconds / 60, 1) if a.active_time_seconds else "",
+            ]
+        )
+
+    return Response(
+        content=output.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=activity_{days}days.csv"},
+    )
+
+
+@get("/export/recharge.csv", sync_to_thread=False)
+async def export_recharge_csv(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> Response[bytes]:
+    """Export recharge/HRV data as CSV."""
+    since_date = date.today() - timedelta(days=days)
+    stmt = (
+        select(NightlyRecharge)
+        .where(NightlyRecharge.date >= since_date)
+        .order_by(NightlyRecharge.date.asc())
+    )
+    result = await session.execute(stmt)
+    recharge_data = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "hrv_avg", "ans_charge", "status", "breathing_rate", "heart_rate_avg"])
+
+    for r in recharge_data:
+        writer.writerow(
+            [
+                r.date.isoformat(),
+                r.hrv_avg or "",
+                r.ans_charge or "",
+                r.ans_charge_status or "",
+                r.breathing_rate_avg or "",
+                r.heart_rate_avg or "",
+            ]
+        )
+
+    return Response(
+        content=output.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=recharge_{days}days.csv"},
+    )
+
+
+@get("/export/cardio-load.csv", sync_to_thread=False)
+async def export_cardio_load_csv(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    days: int = 30,
+) -> Response[bytes]:
+    """Export cardio load data as CSV."""
+    since_date = date.today() - timedelta(days=days)
+    stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
+    result = await session.execute(stmt)
+    cardio_data = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "strain", "tolerance", "cardio_load", "load_ratio", "status"])
+
+    for c in cardio_data:
+        writer.writerow(
+            [
+                c.date.isoformat(),
+                c.strain or "",
+                c.tolerance or "",
+                c.cardio_load or "",
+                round(c.cardio_load_ratio, 2) if c.cardio_load_ratio else "",
+                c.cardio_load_status or "",
+            ]
+        )
+
+    return Response(
+        content=output.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=cardio_load_{days}days.csv"},
+    )
+
+
+# Export routes list
 admin_routes = [
     admin_index,
     save_oauth_credentials,
@@ -430,4 +864,15 @@ admin_routes = [
     oauth_authorize,
     oauth_callback,
     admin_settings,
+    # Chart API endpoints
+    chart_sleep_data,
+    chart_activity_data,
+    chart_heart_rate_data,
+    chart_hrv_data,
+    chart_cardio_load_data,
+    # CSV Export endpoints
+    export_sleep_csv,
+    export_activity_csv,
+    export_recharge_csv,
+    export_cardio_load_csv,
 ]
