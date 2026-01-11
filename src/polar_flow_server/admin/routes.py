@@ -5,10 +5,6 @@ import secrets
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
-# In-memory OAuth state storage (for self-hosted single-instance use)
-# In production SaaS, use Redis or database with TTL
-_oauth_states: dict[str, datetime] = {}
-
 import httpx
 from litestar import Request, get, post
 from litestar.response import Redirect, Template
@@ -30,6 +26,10 @@ from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
 from polar_flow_server.models.user import User
 from polar_flow_server.services.sync import SyncService
+
+# In-memory OAuth state storage (for self-hosted single-instance use)
+# In production SaaS, use Redis or database with TTL
+_oauth_states: dict[str, datetime] = {}
 
 
 @get("/", sync_to_thread=False)
@@ -316,7 +316,11 @@ async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | 
     result = await session.execute(stmt)
     app_settings = result.scalar_one_or_none()
 
-    if not app_settings or not app_settings.polar_client_id or not app_settings.polar_client_secret_encrypted:
+    if (
+        not app_settings
+        or not app_settings.polar_client_id
+        or not app_settings.polar_client_secret_encrypted
+    ):
         return Template(
             template_name="admin/partials/sync_error.html",
             context={"error": "OAuth credentials not configured"},
