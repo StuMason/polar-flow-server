@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from polar_flow.models.biosensing import SpO2Result
+    from polar_flow.models.biosensing import SpO2Result  # type: ignore[import-not-found]
 
 
 class SpO2Transformer:
