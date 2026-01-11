@@ -20,7 +20,7 @@ dependencies = [
     "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
 
     # Polar Flow SDK
-    "polar-flow-api>=1.3.0",
+    "polar-flow-api>=1.4.0",
 
     # Data processing
     "polars>=1.17.1",

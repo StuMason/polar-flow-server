@@ -490,13 +490,8 @@ class SyncService:
         """
         self.logger.debug("Syncing SpO2 data", user_id=user_id)
 
-        # Biosensing requires polar-flow >= 1.4.0
-        if not hasattr(client, "biosensing"):
-            self.logger.debug("SpO2 sync skipped - SDK version doesn't support biosensing")
-            return 0
-
         try:
-            spo2_data = await client.biosensing.get_spo2()  # type: ignore[attr-defined]
+            spo2_data = await client.biosensing.get_spo2()
         except Exception as e:
             self.logger.debug("SpO2 sync skipped", error=str(e))
             return 0
@@ -528,13 +523,8 @@ class SyncService:
         """
         self.logger.debug("Syncing ECG data", user_id=user_id)
 
-        # Biosensing requires polar-flow >= 1.4.0
-        if not hasattr(client, "biosensing"):
-            self.logger.debug("ECG sync skipped - SDK version doesn't support biosensing")
-            return 0
-
         try:
-            ecg_data = await client.biosensing.get_ecg()  # type: ignore[attr-defined]
+            ecg_data = await client.biosensing.get_ecg()
         except Exception as e:
             self.logger.debug("ECG sync skipped", error=str(e))
             return 0
@@ -566,13 +556,8 @@ class SyncService:
         """
         self.logger.debug("Syncing body temperature", user_id=user_id)
 
-        # Biosensing requires polar-flow >= 1.4.0
-        if not hasattr(client, "biosensing"):
-            self.logger.debug("Body temp sync skipped - SDK version doesn't support biosensing")
-            return 0
-
         try:
-            temp_data = await client.biosensing.get_body_temperature()  # type: ignore[attr-defined]
+            temp_data = await client.biosensing.get_body_temperature()
         except Exception as e:
             self.logger.debug("Body temperature sync skipped", error=str(e))
             return 0
@@ -604,13 +589,8 @@ class SyncService:
         """
         self.logger.debug("Syncing skin temperature", user_id=user_id)
 
-        # Biosensing requires polar-flow >= 1.4.0
-        if not hasattr(client, "biosensing"):
-            self.logger.debug("Skin temp sync skipped - SDK version doesn't support biosensing")
-            return 0
-
         try:
-            temp_data = await client.biosensing.get_skin_temperature()  # type: ignore[attr-defined]
+            temp_data = await client.biosensing.get_skin_temperature()
         except Exception as e:
             self.logger.debug("Skin temperature sync skipped", error=str(e))
             return 0

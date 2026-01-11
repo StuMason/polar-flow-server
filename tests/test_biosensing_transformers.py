@@ -1,16 +1,10 @@
 """Tests for Biosensing transformers.
 
 These tests verify that SDK models are correctly transformed to database dicts.
-Requires polar-flow-api >= 1.4.0 which includes biosensing models.
 """
 
 import json
 from datetime import UTC, datetime
-
-import pytest
-
-# Skip all tests in this module if biosensing module not available
-pytest.importorskip("polar_flow.models.biosensing")
 
 
 class TestSpO2Transformer:

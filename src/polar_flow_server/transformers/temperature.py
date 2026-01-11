@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from polar_flow.models.biosensing import BodyTemperaturePeriod, SkinTemperature  # type: ignore[import-not-found]
+    from polar_flow.models.biosensing import BodyTemperaturePeriod, SkinTemperature
 
 
 class BodyTemperatureTransformer:
