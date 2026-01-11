@@ -12,21 +12,28 @@ from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
 from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
+from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
+from polar_flow_server.models.spo2 import SpO2
+from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.transformers import (
     ActivitySamplesTransformer,
     ActivityTransformer,
+    BodyTemperatureTransformer,
     CardioLoadTransformer,
     ContinuousHRTransformer,
+    ECGTransformer,
     ExerciseTransformer,
     RechargeTransformer,
+    SkinTemperatureTransformer,
     SleepTransformer,
     SleepWiseAlertnessTransformer,
     SleepWiseBedtimeTransformer,
+    SpO2Transformer,
 )
 
 logger = structlog.get_logger()
@@ -92,6 +99,11 @@ class SyncService:
             "sleepwise_bedtime": 0,
             "activity_samples": 0,
             "continuous_hr": 0,
+            # Biosensing (requires compatible devices)
+            "spo2": 0,
+            "ecg": 0,
+            "body_temperature": 0,
+            "skin_temperature": 0,
         }
 
         async with PolarFlow(access_token=polar_token) as client:
@@ -127,6 +139,13 @@ class SyncService:
             # Sync continuous heart rate (requires SDK >= 1.3.0)
             if hasattr(client, "continuous_hr"):
                 results["continuous_hr"] = await self._sync_continuous_hr(client, user_id, days)
+
+            # Sync biosensing data (requires SDK >= 1.4.0 and compatible devices)
+            if hasattr(client, "biosensing"):
+                results["spo2"] = await self._sync_spo2(client, user_id)
+                results["ecg"] = await self._sync_ecg(client, user_id)
+                results["body_temperature"] = await self._sync_body_temperature(client, user_id)
+                results["skin_temperature"] = await self._sync_skin_temperature(client, user_id)
 
         # Commit all changes to database
         await self.session.commit()
@@ -451,5 +470,142 @@ class SyncService:
                     date=str(fetch_date),
                     error=str(e),
                 )
+
+        return count
+
+    # =========================================================================
+    # Biosensing Sync Methods
+    # (Requires compatible devices like Vantage V3 with Elixir sensor platform)
+    # =========================================================================
+
+    async def _sync_spo2(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync SpO2 (blood oxygen) data.
+
+        Note: Requires a device with SpO2 capability (e.g., Vantage V3).
+        Returns 0 if no data available or device doesn't support SpO2.
+        """
+        self.logger.debug("Syncing SpO2 data", user_id=user_id)
+
+        try:
+            spo2_data = await client.biosensing.get_spo2()
+        except Exception as e:
+            self.logger.debug("SpO2 sync skipped", error=str(e))
+            return 0
+
+        count = 0
+        for spo2 in spo2_data:
+            spo2_dict = SpO2Transformer.transform(spo2, user_id)
+
+            stmt = insert(SpO2).values(user_id=user_id, **spo2_dict)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "test_time"],
+                set_=spo2_dict,
+            )
+
+            await self.session.execute(stmt)
+            count += 1
+
+        return count
+
+    async def _sync_ecg(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync ECG (electrocardiogram) data.
+
+        Note: Requires a device with ECG capability (e.g., Vantage V3).
+        Returns 0 if no data available or device doesn't support ECG.
+        """
+        self.logger.debug("Syncing ECG data", user_id=user_id)
+
+        try:
+            ecg_data = await client.biosensing.get_ecg()
+        except Exception as e:
+            self.logger.debug("ECG sync skipped", error=str(e))
+            return 0
+
+        count = 0
+        for ecg in ecg_data:
+            ecg_dict = ECGTransformer.transform(ecg, user_id)
+
+            stmt = insert(ECG).values(user_id=user_id, **ecg_dict)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "test_time"],
+                set_=ecg_dict,
+            )
+
+            await self.session.execute(stmt)
+            count += 1
+
+        return count
+
+    async def _sync_body_temperature(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync body temperature data.
+
+        Note: Requires a device with temperature sensors.
+        Returns 0 if no data available or device doesn't support temperature.
+        """
+        self.logger.debug("Syncing body temperature", user_id=user_id)
+
+        try:
+            temp_data = await client.biosensing.get_body_temperature()
+        except Exception as e:
+            self.logger.debug("Body temperature sync skipped", error=str(e))
+            return 0
+
+        count = 0
+        for temp in temp_data:
+            temp_dict = BodyTemperatureTransformer.transform(temp, user_id)
+
+            stmt = insert(BodyTemperature).values(user_id=user_id, **temp_dict)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "start_time"],
+                set_=temp_dict,
+            )
+
+            await self.session.execute(stmt)
+            count += 1
+
+        return count
+
+    async def _sync_skin_temperature(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync skin temperature data.
+
+        Note: Requires a device with skin temperature sensors.
+        Returns 0 if no data available or device doesn't support this.
+        """
+        self.logger.debug("Syncing skin temperature", user_id=user_id)
+
+        try:
+            temp_data = await client.biosensing.get_skin_temperature()
+        except Exception as e:
+            self.logger.debug("Skin temperature sync skipped", error=str(e))
+            return 0
+
+        count = 0
+        for temp in temp_data:
+            temp_dict = SkinTemperatureTransformer.transform(temp, user_id)
+
+            stmt = insert(SkinTemperature).values(user_id=user_id, **temp_dict)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["user_id", "sleep_date"],
+                set_=temp_dict,
+            )
+
+            await self.session.execute(stmt)
+            count += 1
 
         return count

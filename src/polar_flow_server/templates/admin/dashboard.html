@@ -20,12 +20,12 @@
     </a>
 </div>
 
-<!-- Key Metrics Row -->
+<!-- Key Metrics Row (Latest Values) -->
 <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-6" id="stats-container">
     <!-- Latest HRV -->
     <div class="bg-gradient-to-br from-purple-500 to-purple-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-purple-100 text-xs font-medium uppercase">HRV</div>
+            <div class="text-purple-100 text-xs font-medium uppercase">HRV (last night)</div>
             <div class="text-white text-2xl font-bold mt-1">
                 {% if latest_hrv %}{{ latest_hrv|round(0) }}<span class="text-sm font-normal ml-1">ms</span>{% else %}--{% endif %}
             </div>
@@ -35,7 +35,7 @@
     <!-- Latest HR -->
     <div class="bg-gradient-to-br from-red-500 to-red-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-red-100 text-xs font-medium uppercase">Avg HR</div>
+            <div class="text-red-100 text-xs font-medium uppercase">Resting HR</div>
             <div class="text-white text-2xl font-bold mt-1">
                 {% if latest_hr and latest_hr.hr_avg %}{{ latest_hr.hr_avg }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
             </div>
@@ -45,7 +45,7 @@
     <!-- Cardio Load -->
     <div class="bg-gradient-to-br from-orange-500 to-orange-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-orange-100 text-xs font-medium uppercase">Strain</div>
+            <div class="text-orange-100 text-xs font-medium uppercase">7-Day Strain</div>
             <div class="text-white text-2xl font-bold mt-1">
                 {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
             </div>
@@ -57,7 +57,7 @@
         <div class="p-4">
             <div class="text-blue-100 text-xs font-medium uppercase">Alertness</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}{% else %}--{% endif %}
+                {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}<span class="text-sm font-normal ml-1">/5</span>{% else %}--{% endif %}
             </div>
         </div>
     </div>
@@ -67,49 +67,99 @@
         <div class="p-4">
             <div class="text-indigo-100 text-xs font-medium uppercase">Sleep Score</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}{% else %}--{% endif %}
+                {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}<span class="text-sm font-normal ml-1">/100</span>{% else %}--{% endif %}
             </div>
         </div>
     </div>
 </div>
 
+<!-- Today's Readiness -->
+{% if recovery_status.has_data %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <div class="flex items-center gap-3 mb-3">
+                <h2 class="text-lg font-semibold text-gray-900">Today's Readiness</h2>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                    {% if recovery_status.readiness == 'excellent' %}bg-green-100 text-green-800
+                    {% elif recovery_status.readiness == 'good' %}bg-blue-100 text-blue-800
+                    {% elif recovery_status.readiness == 'fair' %}bg-yellow-100 text-yellow-800
+                    {% else %}bg-red-100 text-red-800{% endif %}">
+                    {{ recovery_status.readiness|title }} ({{ recovery_status.readiness_score }}/100)
+                </span>
+            </div>
+            <p class="text-gray-700 font-medium mb-3">{{ recovery_status.training_advice }}</p>
+            <div class="space-y-2">
+                {% for rec in recovery_status.recommendations %}
+                <div class="flex items-start gap-2 text-sm text-gray-600">
+                    <svg class="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>{{ rec }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="ml-6 flex-shrink-0">
+            <!-- Readiness gauge visualization -->
+            <div class="w-24 h-24 relative">
+                <svg class="w-24 h-24 transform -rotate-90">
+                    <circle cx="48" cy="48" r="40" stroke="#e5e7eb" stroke-width="8" fill="none"/>
+                    <circle cx="48" cy="48" r="40"
+                        stroke="{% if recovery_status.readiness == 'excellent' %}#22c55e{% elif recovery_status.readiness == 'good' %}#3b82f6{% elif recovery_status.readiness == 'fair' %}#eab308{% else %}#ef4444{% endif %}"
+                        stroke-width="8" fill="none"
+                        stroke-dasharray="{{ (recovery_status.readiness_score / 100) * 251.2 }} 251.2"
+                        stroke-linecap="round"/>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="text-2xl font-bold text-gray-900">{{ recovery_status.readiness_score }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Data Record Counts -->
-<div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9 mb-6">
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Sleep</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ sleep_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Recharge</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ recharge_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Activity</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ activity_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Exercises</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ exercise_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Cardio</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ cardio_load_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Alertness</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ alertness_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Bedtime</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ bedtime_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">Steps</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ activity_samples_count }}</div>
-    </div>
-    <div class="bg-white shadow rounded-lg p-3 text-center">
-        <div class="text-gray-500 text-xs">HR Days</div>
-        <div class="text-gray-900 text-lg font-semibold">{{ continuous_hr_count }}</div>
+<div class="bg-white shadow rounded-lg p-4 mb-6">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-3">Records in Database</div>
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ sleep_count }}</div>
+            <div class="text-gray-500 text-xs">nights</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ recharge_count }}</div>
+            <div class="text-gray-500 text-xs">recharge</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ activity_count }}</div>
+            <div class="text-gray-500 text-xs">activity days</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ exercise_count }}</div>
+            <div class="text-gray-500 text-xs">workouts</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ cardio_load_count }}</div>
+            <div class="text-gray-500 text-xs">cardio days</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ alertness_count }}</div>
+            <div class="text-gray-500 text-xs">alertness</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ bedtime_count }}</div>
+            <div class="text-gray-500 text-xs">bedtimes</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ activity_samples_count }}</div>
+            <div class="text-gray-500 text-xs">samples</div>
+        </div>
+        <div class="text-center">
+            <div class="text-gray-900 text-lg font-semibold">{{ continuous_hr_count }}</div>
+            <div class="text-gray-500 text-xs">HR days</div>
+        </div>
     </div>
 </div>
 
@@ -225,6 +275,78 @@
     </div>
 </div>
 
+<!-- Charts Section -->
+<div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Trends & Analytics</h2>
+        <div class="flex items-center gap-4">
+            <!-- Export Dropdown -->
+            <div class="relative">
+                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" onclick="document.getElementById('export-menu').classList.toggle('hidden')">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Export CSV
+                </button>
+                <div id="export-menu" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
+                    <a href="/admin/export/sleep.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
+                    <a href="/admin/export/activity.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
+                    <a href="/admin/export/recharge.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
+                    <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
+                </div>
+            </div>
+            <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="refreshCharts()">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30" selected>Last 30 days</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Chart Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Sleep Score Chart -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score & Duration</h3>
+            <div class="h-64">
+                <canvas id="sleepChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Activity Chart -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Daily Steps</h3>
+            <div class="h-64">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Heart Rate Chart -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Heart Rate (Min/Avg/Max)</h3>
+            <div class="h-64">
+                <canvas id="hrChart"></canvas>
+            </div>
+        </div>
+
+        <!-- HRV Chart -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">HRV & Recovery</h3>
+            <div class="h-64">
+                <canvas id="hrvChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Cardio Load Chart -->
+        <div class="bg-white shadow rounded-lg p-4 lg:col-span-2">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Training Load (Strain vs Tolerance)</h3>
+            <div class="h-64">
+                <canvas id="cardioChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Cardio Load Details -->
 {% if latest_cardio %}
 <div class="bg-white shadow rounded-lg p-6 mb-6">
@@ -282,4 +404,428 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Chart.js Initialization -->
+<script>
+// Chart instances (for cleanup on refresh)
+let sleepChart, activityChart, hrChart, hrvChart, cardioChart;
+
+// Close export menu when clicking outside
+document.addEventListener('click', function(e) {
+    const menu = document.getElementById('export-menu');
+    const btn = document.getElementById('export-btn');
+    if (!menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.add('hidden');
+    }
+});
+
+// Tooltip descriptions for each chart type
+const chartDescriptions = {
+    sleep: {
+        title: 'Sleep Quality',
+        sleep_score: 'Overall sleep quality (0-100). 70+ is good, 85+ is excellent.',
+        total_hours: 'Total time asleep. Most adults need 7-9 hours.'
+    },
+    activity: {
+        title: 'Daily Activity',
+        steps: 'Total steps. 10,000 steps is a common daily goal.'
+    },
+    hr: {
+        title: 'Heart Rate Trends',
+        hr_max: 'Highest HR during the day. Elevations may indicate stress or exercise.',
+        hr_avg: 'Average resting HR. Lower is generally healthier (60-100 normal).',
+        hr_min: 'Lowest HR, usually during sleep. Athletes often have lower resting HR.'
+    },
+    hrv: {
+        title: 'Recovery Metrics',
+        hrv_avg: 'Heart Rate Variability in ms. Higher = better recovery. Track your baseline.',
+        ans_charge: 'ANS Charge (%). How well your autonomic nervous system recovered overnight.'
+    },
+    cardio: {
+        title: 'Training Load',
+        strain: 'Recent training stress. High strain needs recovery time.',
+        tolerance: 'Your fitness capacity. Built through consistent training.',
+        load_ratio: 'Strain/Tolerance ratio. 0.8-1.2 is balanced, <0.8 detraining, >1.5 overreaching.'
+    }
+};
+
+// Common chart options with enhanced tooltips
+const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+        intersect: false,
+        mode: 'index'
+    },
+    plugins: {
+        legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, padding: 15 }
+        },
+        tooltip: {
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            titleColor: '#fff',
+            bodyColor: '#e5e7eb',
+            padding: 12,
+            cornerRadius: 8,
+            displayColors: true,
+            boxPadding: 4
+        }
+    },
+    scales: {
+        x: {
+            grid: { display: false },
+            ticks: { maxRotation: 45, minRotation: 0 }
+        },
+        y: {
+            beginAtZero: true,
+            grid: { color: '#f3f4f6' }
+        }
+    }
+};
+
+// Format date labels for display
+function formatDateLabel(dateStr) {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Create custom tooltip callback
+function createTooltipCallback(descriptions) {
+    return {
+        callbacks: {
+            afterBody: function(context) {
+                const datasetLabel = context[0]?.dataset?.label?.toLowerCase().replace(/ /g, '_');
+                const key = Object.keys(descriptions).find(k => datasetLabel?.includes(k.replace('_', ' ')) || datasetLabel?.includes(k));
+                if (key && descriptions[key]) {
+                    return '\n' + descriptions[key];
+                }
+                return '';
+            }
+        }
+    };
+}
+
+// Fetch and render all charts
+async function refreshCharts() {
+    const days = document.getElementById('chart-days').value;
+
+    // Destroy existing charts
+    [sleepChart, activityChart, hrChart, hrvChart, cardioChart].forEach(chart => {
+        if (chart) chart.destroy();
+    });
+
+    // Fetch all data in parallel
+    const [sleepData, activityData, hrData, hrvData, cardioData] = await Promise.all([
+        fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json()),
+        fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
+        fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
+        fetch(`/admin/api/charts/hrv?days=${days}`).then(r => r.json()),
+        fetch(`/admin/api/charts/cardio-load?days=${days}`).then(r => r.json())
+    ]);
+
+    // Sleep Chart (Sleep Score + Duration)
+    const sleepLabels = sleepData.labels.map(formatDateLabel);
+    sleepChart = new Chart(document.getElementById('sleepChart'), {
+        type: 'line',
+        data: {
+            labels: sleepLabels,
+            datasets: [
+                {
+                    label: 'Sleep Score',
+                    data: sleepData.datasets.sleep_score,
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Hours',
+                    data: sleepData.datasets.total_hours,
+                    borderColor: '#8b5cf6',
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Sleep Quality Metrics',
+                        afterLabel: (ctx) => {
+                            if (ctx.dataset.label === 'Sleep Score') {
+                                const v = ctx.raw;
+                                if (v >= 85) return '  Excellent sleep!';
+                                if (v >= 70) return '  Good sleep quality';
+                                if (v >= 50) return '  Fair - room for improvement';
+                                return '  Poor - check sleep habits';
+                            }
+                            if (ctx.dataset.label === 'Hours') {
+                                const v = ctx.raw;
+                                if (v >= 7 && v <= 9) return '  Optimal range';
+                                if (v < 7) return '  Consider more sleep';
+                                return '  May be oversleeping';
+                            }
+                            return '';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, max: 100, title: { display: true, text: 'Score' } },
+                y1: { position: 'right', beginAtZero: true, max: 12, title: { display: true, text: 'Hours' }, grid: { display: false } }
+            }
+        }
+    });
+
+    // Activity Chart (Steps)
+    const activityLabels = activityData.labels.map(formatDateLabel);
+    activityChart = new Chart(document.getElementById('activityChart'), {
+        type: 'bar',
+        data: {
+            labels: activityLabels,
+            datasets: [{
+                label: 'Steps',
+                data: activityData.datasets.steps,
+                backgroundColor: 'rgba(34, 197, 94, 0.7)',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Daily Activity',
+                        afterLabel: (ctx) => {
+                            const v = ctx.raw;
+                            if (v >= 10000) return '  Great! Hit the 10k goal';
+                            if (v >= 7500) return '  Good activity level';
+                            if (v >= 5000) return '  Moderate - try to move more';
+                            return '  Low - consider a walk';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, title: { display: true, text: 'Steps' } }
+            }
+        }
+    });
+
+    // Heart Rate Chart (Min/Avg/Max as area bands)
+    const hrLabels = hrData.labels.map(formatDateLabel);
+    hrChart = new Chart(document.getElementById('hrChart'), {
+        type: 'line',
+        data: {
+            labels: hrLabels,
+            datasets: [
+                {
+                    label: 'Max HR',
+                    data: hrData.datasets.hr_max,
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Avg HR',
+                    data: hrData.datasets.hr_avg,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Min HR',
+                    data: hrData.datasets.hr_min,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Heart Rate Analysis',
+                        afterLabel: (ctx) => {
+                            const label = ctx.dataset.label;
+                            const v = ctx.raw;
+                            if (label === 'Min HR') {
+                                if (v < 50) return '  Very low - athletic or bradycardia';
+                                if (v < 60) return '  Excellent resting HR';
+                                if (v < 70) return '  Good resting HR';
+                                return '  Consider cardio training';
+                            }
+                            if (label === 'Max HR') {
+                                return '  Peak during activity/stress';
+                            }
+                            return '';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, title: { display: true, text: 'BPM' } }
+            }
+        }
+    });
+
+    // HRV Chart
+    const hrvLabels = hrvData.labels.map(formatDateLabel);
+    hrvChart = new Chart(document.getElementById('hrvChart'), {
+        type: 'line',
+        data: {
+            labels: hrvLabels,
+            datasets: [
+                {
+                    label: 'HRV (ms)',
+                    data: hrvData.datasets.hrv_avg,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'ANS Charge (%)',
+                    data: hrvData.datasets.ans_charge,
+                    borderColor: '#06b6d4',
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Recovery Metrics',
+                        afterLabel: (ctx) => {
+                            const label = ctx.dataset.label;
+                            const v = ctx.raw;
+                            if (label === 'HRV (ms)') {
+                                return '  Higher = better recovery. Track your personal baseline.';
+                            }
+                            if (label === 'ANS Charge (%)') {
+                                if (v >= 70) return '  Excellent recovery';
+                                if (v >= 50) return '  Good recovery';
+                                if (v >= 30) return '  Moderate - take it easy';
+                                return '  Poor - prioritize rest';
+                            }
+                            return '';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, title: { display: true, text: 'HRV (ms)' } },
+                y1: { position: 'right', beginAtZero: true, max: 100, title: { display: true, text: 'ANS %' }, grid: { display: false } }
+            }
+        }
+    });
+
+    // Cardio Load Chart (Strain vs Tolerance)
+    const cardioLabels = cardioData.labels.map(formatDateLabel);
+    cardioChart = new Chart(document.getElementById('cardioChart'), {
+        type: 'line',
+        data: {
+            labels: cardioLabels,
+            datasets: [
+                {
+                    label: 'Strain',
+                    data: cardioData.datasets.strain,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Tolerance',
+                    data: cardioData.datasets.tolerance,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'Load Ratio',
+                    data: cardioData.datasets.load_ratio,
+                    borderColor: '#6366f1',
+                    borderDash: [5, 5],
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Training Load Balance',
+                        afterLabel: (ctx) => {
+                            const label = ctx.dataset.label;
+                            const v = ctx.raw;
+                            if (label === 'Strain') {
+                                return '  Recent training stress (7-day avg)';
+                            }
+                            if (label === 'Tolerance') {
+                                return '  Your fitness capacity (28-day avg)';
+                            }
+                            if (label === 'Load Ratio') {
+                                if (v >= 1.5) return '  High risk of overtraining!';
+                                if (v >= 1.2) return '  Productive overreaching';
+                                if (v >= 0.8) return '  Balanced training';
+                                if (v >= 0.5) return '  Maintenance mode';
+                                return '  Detraining - increase volume';
+                            }
+                            return '';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, title: { display: true, text: 'Load' } },
+                y1: { position: 'right', beginAtZero: true, max: 3, title: { display: true, text: 'Ratio' }, grid: { display: false } }
+            }
+        }
+    });
+}
+
+// Initialize charts on page load
+document.addEventListener('DOMContentLoaded', refreshCharts);
+
+// Refresh charts after sync completes
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'sync-result') {
+        refreshCharts();
+    }
+});
+</script>
 {% endblock %}

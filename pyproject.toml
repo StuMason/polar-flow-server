@@ -107,3 +107,11 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v --cov=polar_flow_server --cov-report=term-missing"
+
+[tool.uv.sources]
+polar-flow-api = { path = "../polar-flow" }
+
+[dependency-groups]
+dev = [
+    "polar-flow-api",
+]
