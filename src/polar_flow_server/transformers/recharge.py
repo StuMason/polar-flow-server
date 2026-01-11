@@ -42,9 +42,10 @@ class RechargeTransformer:
             Dict ready for database insertion with all fields mapped correctly
         """
         # Handle date - could be date object or string
-        recharge_date = sdk_recharge.date
-        if isinstance(recharge_date, str):
-            recharge_date = date_type.fromisoformat(recharge_date)
+        raw_date = sdk_recharge.date
+        recharge_date: date_type = (
+            date_type.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+        )
 
         return {
             "date": recharge_date,

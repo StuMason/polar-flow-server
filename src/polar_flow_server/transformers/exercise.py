@@ -1,6 +1,6 @@
 """Exercise data transformer.
 
-Converts polar-flow SDK ExerciseDetails model to database-ready dictionary.
+Converts polar-flow SDK Exercise model to database-ready dictionary.
 """
 
 from __future__ import annotations
@@ -9,11 +9,11 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from polar_flow.models.exercise import ExerciseDetails
+    from polar_flow.models.exercise import Exercise
 
 
 class ExerciseTransformer:
-    """Transform SDK ExerciseDetails -> Database Exercise dict.
+    """Transform SDK Exercise -> Database Exercise dict.
 
     Maps SDK field names to database column names with proper type conversions.
 
@@ -33,11 +33,11 @@ class ExerciseTransformer:
     """
 
     @staticmethod
-    def transform(sdk_exercise: ExerciseDetails, user_id: str) -> dict[str, Any]:
+    def transform(sdk_exercise: Exercise, user_id: str) -> dict[str, Any]:
         """Convert SDK exercise model to database-ready dict.
 
         Args:
-            sdk_exercise: SDK ExerciseDetails instance from polar-flow
+            sdk_exercise: SDK Exercise instance from polar-flow
             user_id: User identifier for database record
 
         Returns:

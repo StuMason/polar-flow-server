@@ -422,9 +422,17 @@ class SyncService:
         count = 0
 
         for i in range(hr_days):
-            target_date = date.today() - timedelta(days=i)
+            fetch_date = date.today() - timedelta(days=i)
             try:
-                hr_data = await client.continuous_hr.get(date=str(target_date))
+                hr_data = await client.continuous_hr.get(target_date=str(fetch_date))
+
+                # SDK returns None if no data available
+                if hr_data is None:
+                    self.logger.debug(
+                        "No continuous HR for date",
+                        date=str(fetch_date),
+                    )
+                    continue
 
                 hr_dict = ContinuousHRTransformer.transform(hr_data, user_id)
 
@@ -437,10 +445,10 @@ class SyncService:
                 await self.session.execute(stmt)
                 count += 1
             except Exception as e:
-                # Skip days without data
+                # Skip days with errors
                 self.logger.debug(
-                    "No continuous HR for date",
-                    date=str(target_date),
+                    "Error fetching continuous HR for date",
+                    date=str(fetch_date),
                     error=str(e),
                 )
 

@@ -3,6 +3,7 @@
 import os
 import secrets
 from datetime import date, datetime, timedelta
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -33,7 +34,9 @@ _oauth_states: dict[str, datetime] = {}
 
 
 @get("/", sync_to_thread=False)
-async def admin_index(request: Request, session: AsyncSession) -> Template | Redirect:
+async def admin_index(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
     """Admin panel home - setup wizard or dashboard.
 
     Shows setup wizard if no app settings exist, otherwise dashboard.
@@ -53,7 +56,7 @@ async def admin_index(request: Request, session: AsyncSession) -> Template | Red
 
 @post("/setup/oauth", sync_to_thread=False, status_code=HTTP_200_OK)
 async def save_oauth_credentials(
-    request: Request,
+    request: Request[Any, Any, Any],
     session: AsyncSession,
 ) -> Template:
     """Save Polar OAuth credentials to database."""
@@ -102,7 +105,7 @@ async def save_oauth_credentials(
 
 
 @get("/dashboard", sync_to_thread=False)
-async def admin_dashboard(request: Request, session: AsyncSession) -> Template:
+async def admin_dashboard(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
     """Admin dashboard with stats and sync controls."""
     # Get data counts for all endpoints
     sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
@@ -193,7 +196,7 @@ async def admin_dashboard(request: Request, session: AsyncSession) -> Template:
 
 
 @post("/sync", sync_to_thread=False, status_code=HTTP_200_OK)
-async def trigger_manual_sync(request: Request, session: AsyncSession) -> Template:
+async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
     """Trigger manual sync and return updated stats."""
     # Get user and token from database
     stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
@@ -201,21 +204,24 @@ async def trigger_manual_sync(request: Request, session: AsyncSession) -> Templa
     user = result.scalar_one_or_none()
 
     # Get token - from user if exists, otherwise fall back to env var (testing only)
+    user_id: str
+    polar_token: str
+
     if user:
         user_id = user.polar_user_id
         polar_token = token_encryption.decrypt(user.access_token_encrypted)
     else:
         # Testing fallback - check env var directly
-        polar_token = os.getenv("ACCESS_TOKEN")
-        user_id = "self"
-
-        if not polar_token:
+        env_token = os.getenv("ACCESS_TOKEN")
+        if not env_token:
             return Template(
                 template_name="admin/partials/sync_error.html",
                 context={
                     "error": "No user configured. Complete setup first or set ACCESS_TOKEN env var for testing."
                 },
             )
+        polar_token = env_token
+        user_id = "self"
 
     # Run sync
     sync_service = SyncService(session)
@@ -282,7 +288,9 @@ async def oauth_authorize(session: AsyncSession) -> Redirect:
 
 
 @get("/oauth/callback", sync_to_thread=False)
-async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | Template:
+async def oauth_callback(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Redirect | Template:
     """Handle OAuth callback from Polar."""
     # Get authorization code and state from query params
     code = request.query_params.get("code")
@@ -391,7 +399,7 @@ async def oauth_callback(request: Request, session: AsyncSession) -> Redirect | 
 
 
 @get("/settings", sync_to_thread=False)
-async def admin_settings(request: Request, session: AsyncSession) -> Template:
+async def admin_settings(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
     """Admin settings page - view/edit OAuth credentials and connection status."""
     # Get app settings
     stmt = select(AppSettings).where(AppSettings.id == 1)

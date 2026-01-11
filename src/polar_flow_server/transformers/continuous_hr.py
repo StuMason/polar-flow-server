@@ -40,9 +40,10 @@ class ContinuousHRTransformer:
             Dict ready for database insertion with all fields mapped correctly
         """
         # Parse date from string if needed
-        hr_date = sdk_hr.date
-        if isinstance(hr_date, str):
-            hr_date = date_type.fromisoformat(hr_date)
+        raw_date = sdk_hr.date
+        hr_date: date_type = (
+            date_type.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+        )
 
         samples = sdk_hr.heart_rate_samples
         sample_count = len(samples)

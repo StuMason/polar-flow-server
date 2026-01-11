@@ -43,9 +43,10 @@ class CardioLoadTransformer:
             Dict ready for database insertion with all fields mapped correctly
         """
         # Parse date from string if needed
-        load_date = sdk_cardio_load.date
-        if isinstance(load_date, str):
-            load_date = date_type.fromisoformat(load_date)
+        raw_date = sdk_cardio_load.date
+        load_date: date_type = (
+            date_type.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+        )
 
         # Extract load level distribution
         load_level = sdk_cardio_load.cardio_load_level

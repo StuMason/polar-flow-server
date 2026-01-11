@@ -1,6 +1,6 @@
 """Activity data transformer.
 
-Converts polar-flow SDK ActivitySummary model to database-ready dictionary.
+Converts polar-flow SDK Activity model to database-ready dictionary.
 """
 
 from __future__ import annotations
@@ -8,11 +8,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from polar_flow.models.activity import ActivitySummary
+    from polar_flow.models.activity import Activity
 
 
 class ActivityTransformer:
-    """Transform SDK ActivitySummary -> Database Activity dict.
+    """Transform SDK Activity -> Database Activity dict.
 
     Maps SDK field names to database column names with proper type conversions.
 
@@ -28,11 +28,11 @@ class ActivityTransformer:
     """
 
     @staticmethod
-    def transform(sdk_activity: ActivitySummary, user_id: str) -> dict[str, Any]:
+    def transform(sdk_activity: Activity, user_id: str) -> dict[str, Any]:
         """Convert SDK activity model to database-ready dict.
 
         Args:
-            sdk_activity: SDK ActivitySummary instance from polar-flow
+            sdk_activity: SDK Activity instance from polar-flow
             user_id: User identifier for database record
 
         Returns:
