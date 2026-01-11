@@ -1310,7 +1310,7 @@ wheels = [
 
 [[package]]
 name = "polar-flow-api"
-version = "1.1.0"
+version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1318,9 +1318,9 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/14/0a0d6ae40ce1ff40675db1aaec5fc7e66e71c9fb491a5954c71ed2ac9552/polar_flow_api-1.1.0.tar.gz", hash = "sha256:57d1b14d8a29d1f05ac0a194c6e291549e38572cc5b74f6dc92606ff03d1fb83", size = 126802, upload-time = "2026-01-09T21:33:28.968Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f8/12/21ce154f8b2e3fd42b65de4ce6818e91a8b6c1720b21cb1fe7e9912bf1a3/polar_flow_api-1.3.0.tar.gz", hash = "sha256:f30e70f4f56e811e1095cb24b46a0fe1b31f07208cb286188ffcab146a91fdeb", size = 129733, upload-time = "2026-01-10T13:14:31.45Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/79/624d8b8a37722dbdbc9d0d9119d7fcfb397853af014e5dc00bbafbf63ae0/polar_flow_api-1.1.0-py3-none-any.whl", hash = "sha256:466f0339d2f43f1812462695110dd559e327e81cefb2c9c8bbc30edd96364207", size = 31266, upload-time = "2026-01-09T21:33:27.722Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/85/479e392d21ea307a86b32e745a8350eaf2a775af41066ade194885466a64/polar_flow_api-1.3.0-py3-none-any.whl", hash = "sha256:dfa9d6f908e49669b576cb99d1fd0deda6c2609d3ff57bfa535d1f171afde980", size = 39188, upload-time = "2026-01-10T13:14:29.861Z" },
 ]
 
 [[package]]
@@ -1381,7 +1381,7 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
-    { name = "polar-flow-api", specifier = ">=1.1.0" },
+    { name = "polar-flow-api", specifier = ">=1.3.0" },
     { name = "polars", specifier = ">=1.17.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.3" },
     { name = "pyarrow", specifier = ">=18.1.0" },

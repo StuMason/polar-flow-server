@@ -8,32 +8,28 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 
 This server:
 
-1. Syncs data from Polar API automatically
+1. Syncs all 9 Polar API endpoints automatically
 2. Stores everything in PostgreSQL (your data, your server)
-3. Runs analytics (HRV baselines, recovery scores, sleep debt)
-4. Exposes REST API for dashboards and integrations
+3. Provides an HTMX-powered admin dashboard
+4. Exposes REST API for custom integrations
 5. Multi-user ready (same codebase for self-hosted and SaaS)
 
 ## Architecture
 
 ```
-Polar API → polar-flow SDK → Sync Service → PostgreSQL → Analytics → REST API
-                                                                          ↓
-                                                                Laravel/Dashboard
+Polar API → polar-flow SDK → Sync Service → PostgreSQL
+                                                  ↓
+                                           Admin Dashboard (HTMX)
+                                                  ↓
+                                             REST API
 ```
 
-**Python data analytics engine:**
+**Stack:**
 - Litestar (async web framework)
 - SQLAlchemy 2.0 (async ORM)
-- PostgreSQL (self-hosted or shared with Laravel)
-- Polars (data processing)
-- Strict type checking with mypy
-
-**Multi-tenancy:**
-- Every table includes `user_id` column
-- All API endpoints scoped by `user_id`
-- Self-hosted: one user, SaaS: many users
-- Same codebase for both modes
+- PostgreSQL
+- HTMX + Tailwind (admin UI)
+- polar-flow SDK v1.3.0
 
 ## Quick Start
 
@@ -41,120 +37,98 @@ Polar API → polar-flow SDK → Sync Service → PostgreSQL → Analytics → R
 
 1. Go to [admin.polaraccesslink.com](https://admin.polaraccesslink.com)
 2. Create a new client
-3. Set redirect URI to `http://localhost:8888/callback`
+3. Set redirect URI to `http://localhost:8000/admin/oauth/callback`
 4. Note your `CLIENT_ID` and `CLIENT_SECRET`
 
-### 2. Authenticate with Polar
-
-```bash
-# Authenticate to get your token
-docker run -it --rm \
-  -e CLIENT_ID=your_client_id \
-  -e CLIENT_SECRET=your_client_secret \
-  -v ~/.polar-flow:/root/.polar-flow \
-  ghcr.io/stumason/polar-flow-server:latest \
-  polar-flow auth
-```
-
-### 3. Start with Docker Compose
+### 2. Start with Docker Compose
 
 ```bash
 git clone https://github.com/StuMason/polar-flow-server.git
 cd polar-flow-server
-
-# Start PostgreSQL + API server
 docker-compose up -d
-
-# Check health
-curl http://localhost:8000/health
-
-# View logs
-docker-compose logs -f
 ```
 
-The server starts syncing data every hour automatically.
+### 3. Connect Your Polar Account
 
-## API Usage
+1. Open http://localhost:8000/admin
+2. Enter your Polar OAuth credentials
+3. Click "Connect with Polar" to authorize
+4. Hit "Sync Now" to pull your data
 
-All endpoints are scoped by `user_id`:
+The server syncs data every hour automatically.
 
-```bash
-# Get your Polar user ID (stored during auth)
-export USER_ID=$(cat ~/.polar-flow/user_id)
-export TOKEN=$(cat ~/.polar-flow/token)
+## Dashboard
 
-# Get sleep data
-curl "http://localhost:8000/api/v1/users/$USER_ID/sleep?days=30"
+The admin panel at `/admin/dashboard` shows:
 
-# Get sleep for specific date
-curl "http://localhost:8000/api/v1/users/$USER_ID/sleep/2026-01-09"
+- **Key Metrics** - HRV, Heart Rate, Training Strain, Alertness, Sleep Score
+- **Record Counts** - All 9 data types with totals
+- **Recent Sleep** - Last 7 days with scores
+- **Nightly Recharge** - HRV, ANS charge, recovery status
+- **Training Load** - Strain, tolerance, load ratio
+- **Continuous HR** - Daily min/avg/max heart rate
 
-# Trigger manual sync
-curl -X POST \
-  -H "X-Polar-Token: $TOKEN" \
-  "http://localhost:8000/api/v1/users/$USER_ID/sync/trigger"
-```
+## Data Synced (9 Endpoints)
 
-Visit `http://localhost:8000/docs` for interactive API documentation.
-
-## Data Stored
-
-**Sleep:**
-- Sleep score, stages (light/deep/REM)
-- HRV average and samples
-- Heart rate (avg/min/max)
-- Breathing rate, skin temperature
-
-**Nightly Recharge:**
-- ANS charge (autonomic nervous system)
-- Sleep charge and status
-- HRV, heart rate, breathing rate status
-
-**Daily Activity:**
-- Steps, distance, calories
-- Active time, inactivity alerts
-- Activity score
-
-**Exercises:**
-- Sport type, duration, distance
-- Heart rate zones and averages
-- Pace, cadence, power
-- Training load
+| Endpoint | Data |
+|----------|------|
+| **Sleep** | Score, stages (light/deep/REM), duration |
+| **Nightly Recharge** | HRV, ANS charge, recovery status |
+| **Daily Activity** | Steps, distance, calories, active time |
+| **Exercises** | Sport, duration, HR zones, training load |
+| **Cardio Load** | Strain, tolerance, load ratio, status |
+| **SleepWise Alertness** | Hourly alertness predictions |
+| **SleepWise Bedtime** | Optimal sleep timing recommendations |
+| **Activity Samples** | Minute-by-minute step data |
+| **Continuous HR** | All-day heart rate (5-min intervals) |
 
 ## Configuration
 
 Environment variables (see `.env.example`):
 
 ```bash
-# Database (PostgreSQL required)
+# Database
 DATABASE_URL=postgresql+asyncpg://polar:polar@postgres:5432/polar
 
 # Deployment mode
-DEPLOYMENT_MODE=self_hosted  # or 'saas' for Laravel integration
+DEPLOYMENT_MODE=self_hosted
 
 # Sync settings
 SYNC_INTERVAL_HOURS=1
-SYNC_ON_STARTUP=true
-SYNC_DAYS_LOOKBACK=30
+SYNC_ON_STARTUP=false
+SYNC_DAYS_LOOKBACK=28
 
-# API
-API_HOST=0.0.0.0
-API_PORT=8000
+# Optional: Set explicit encryption key (auto-generated otherwise)
+# ENCRYPTION_KEY=your-32-byte-fernet-key
+```
+
+## API Endpoints
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Get sleep data (last 7 days)
+curl "http://localhost:8000/api/users/{user_id}/sleep?days=7"
+
+# Get sleep for specific date
+curl "http://localhost:8000/api/users/{user_id}/sleep/2026-01-10"
+
+# Trigger manual sync (via admin panel recommended)
+curl -X POST http://localhost:8000/admin/sync
 ```
 
 ## Development
 
 ```bash
-# Clone and install
-git clone https://github.com/StuMason/polar-flow-server.git
-cd polar-flow-server
+# Install dependencies
 uv sync --all-extras
 
 # Start PostgreSQL
 docker-compose up -d postgres
 
 # Run server with hot reload
-uv run polar-flow-server serve --reload
+uv run uvicorn polar_flow_server.app:app --reload
 
 # Run tests
 uv run pytest
@@ -163,56 +137,28 @@ uv run pytest
 uv run mypy src/polar_flow_server
 
 # Lint
-uv run ruff check src/ tests/
+uv run ruff check src/
 ```
 
-## SaaS Integration (Laravel)
+## Multi-Tenancy
 
-For managed hosting with Laravel:
+The server supports multiple users out of the box:
 
-1. Share PostgreSQL database between Laravel and Python service
-2. Laravel manages users, billing, auth
-3. Python service handles data sync and analytics
-4. Laravel calls Python API for data retrieval
+- Every table includes `user_id` column
+- All queries scoped by `user_id`
+- Self-hosted: typically one user
+- SaaS: many users, same codebase
 
-```php
-// Laravel example
-$response = Http::get("http://python-service:8000/api/v1/users/{$user->id}/sleep");
-$sleepData = $response->json();
-```
+For SaaS deployment, set `DEPLOYMENT_MODE=saas` and provide `ENCRYPTION_KEY`.
 
-## Analytics (Coming Soon)
+## Built With
 
-- HRV baselines (7/30/60-day rolling medians)
-- Recovery score calculation
-- Sleep debt tracking
-- Training load analysis
-- Injury risk prediction
-- ML-powered insights
-
-## Documentation
-
-Full documentation: [stumason.github.io/polar-flow-server](https://stumason.github.io/polar-flow-server/)
-
-- [Quick Start](https://stumason.github.io/polar-flow-server/quickstart/)
-- [API Reference](https://stumason.github.io/polar-flow-server/api/overview/)
-- [Architecture](https://stumason.github.io/polar-flow-server/architecture/)
-- [Deployment](https://stumason.github.io/polar-flow-server/deployment/self-hosted/)
+- [polar-flow](https://github.com/StuMason/polar-flow) - Python SDK for Polar AccessLink API
+- [Litestar](https://litestar.dev/) - Async web framework
+- [SQLAlchemy](https://www.sqlalchemy.org/) - Async ORM
+- [HTMX](https://htmx.org/) - Admin UI interactions
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
 
 ## License
 
 MIT
-
-## Built With
-
-- [polar-flow](https://github.com/StuMason/polar-flow) - Modern Python SDK for Polar AccessLink API
-- [Litestar](https://litestar.dev/) - Async web framework
-- [SQLAlchemy](https://www.sqlalchemy.org/) - Async ORM
-- [PostgreSQL](https://www.postgresql.org/) - Database
-- [Polars](https://pola.rs/) - Data processing
-
-## Managed Service
-
-Want dashboards, mobile apps, and support without self-hosting?
-
-Check out [stumason.dev](https://stumason.dev) - managed service built with this engine + Laravel.

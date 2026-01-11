@@ -1,0 +1,28 @@
+<div class="rounded-md bg-green-50 p-4">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+        </div>
+        <div class="ml-3">
+            <h3 class="text-sm font-medium text-green-800">Sync completed successfully</h3>
+            <div class="mt-2 text-sm text-green-700">
+                <ul class="list-disc list-inside space-y-1">
+                    <li>Sleep records: {{ results.sleep }}</li>
+                    <li>Exercises: {{ results.exercises }}</li>
+                    <li>Activities: {{ results.activity }}</li>
+                    <li>Recharge data: {{ results.recharge }}</li>
+                </ul>
+            </div>
+            <div class="mt-3 text-xs text-green-600">
+                Total records: {{ sleep_count }} sleep, {{ exercise_count }} exercises, {{ activity_count }} activities
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Update stat cards via out-of-band swap -->
+<dd id="sleep-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ sleep_count }}</dd>
+<dd id="exercise-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ exercise_count }}</dd>
+<dd id="activity-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ activity_count }}</dd>
