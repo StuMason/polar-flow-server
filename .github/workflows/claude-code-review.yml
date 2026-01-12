@@ -26,15 +26,17 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_tools: "Bash,Read,Glob,Grep,Task,WebFetch"
           prompt: |
-            Review this PR thoroughly. For each changed file:
+            Review PR #${{ github.event.pull_request.number }} thoroughly.
 
+            First, run `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
+
+            Then for each changed file, analyze:
             1. **Summary**: What does this change do?
             2. **Security**: Any security concerns (auth, injection, secrets)?
             3. **Bugs**: Logic errors, edge cases, error handling?
             4. **Style**: Consistency with codebase patterns?
             5. **Improvements**: Suggestions for better approaches?
 
-            Be specific. Reference line numbers. If everything looks good, say why.
-
-            PR: ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            Be specific. Reference line numbers. Post your review as a PR comment using `gh pr comment`.
