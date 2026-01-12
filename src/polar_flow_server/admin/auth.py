@@ -71,7 +71,10 @@ async def authenticate_admin(email: str, password: str, session: AsyncSession) -
         hash_password("dummy_password_to_prevent_timing_attack")
         return None
 
-    if not verify_password(password, admin.password_hash):
+    # Access password_hash while in async context to avoid lazy loading issues
+    stored_hash = admin.password_hash
+
+    if not verify_password(password, stored_hash):
         return None
 
     # Update last login time

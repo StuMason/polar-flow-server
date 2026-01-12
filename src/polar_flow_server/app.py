@@ -7,7 +7,9 @@ from pathlib import Path
 import structlog
 from litestar import Litestar
 from litestar.contrib.jinja import JinjaTemplateEngine
+from advanced_alchemy.config.asyncio import AsyncSessionConfig
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from litestar.config.csrf import CSRFConfig
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
 from litestar.stores.memory import MemoryStore
@@ -84,6 +86,18 @@ def create_app() -> Litestar:
         max_age=86400,  # 24 hours
     )
 
+    # CSRF protection config
+    csrf_config = CSRFConfig(
+        secret=settings.get_session_secret(),
+        cookie_name="csrf_token",
+        header_name="X-CSRF-Token",
+        exclude=[
+            "/admin/oauth/callback",  # OAuth callback from Polar
+            "/api/",  # API routes use API key auth, not sessions
+            "/health",
+        ],
+    )
+
     return Litestar(
         route_handlers=[root_redirect, *api_routers, admin_router],
         lifespan=[lifespan],
@@ -101,10 +115,12 @@ def create_app() -> Litestar:
                 config=SQLAlchemyAsyncConfig(
                     engine_instance=engine,
                     session_dependency_key="session",
+                    session_config=AsyncSessionConfig(expire_on_commit=False),
                 ),
             ),
         ],
         middleware=[session_config.middleware],
+        csrf_config=csrf_config,
         stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",
     )

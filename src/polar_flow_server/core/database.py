@@ -28,7 +28,7 @@ def create_engine() -> AsyncEngine:
         echo=False,
         pool_size=10,
         max_overflow=20,
-        pool_pre_ping=True,  # Verify connections before using
+        pool_recycle=300,  # Recycle connections every 5 minutes
     )
 
 

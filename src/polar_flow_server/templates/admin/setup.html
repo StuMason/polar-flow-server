@@ -27,6 +27,7 @@
                 </div>
 
                 <form hx-post="/admin/setup/oauth" hx-target="#setup-result" hx-swap="innerHTML" class="space-y-4">
+                    {% if csrf_token %}<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">{% endif %}
                     <div>
                         <label for="client_id" class="block text-sm font-medium text-gray-700 mb-1">
                             Client ID

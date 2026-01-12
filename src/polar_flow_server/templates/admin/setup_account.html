@@ -21,6 +21,7 @@
         {% endif %}
 
         <form method="POST" action="/admin/setup/account" class="space-y-6">
+            {% if csrf_token %}<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">{% endif %}
             <div>
                 <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
                     Name (optional)

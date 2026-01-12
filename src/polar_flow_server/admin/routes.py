@@ -3,8 +3,9 @@
 import csv
 import io
 import os
+import re
 import secrets
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
@@ -41,6 +42,22 @@ from polar_flow_server.services.sync import SyncService
 # In-memory OAuth state storage (for self-hosted single-instance use)
 # In production SaaS, use Redis or database with TTL
 _oauth_states: dict[str, datetime] = {}
+
+# Simple email validation pattern
+_EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
+
+def _get_csrf_token(request: Request[Any, Any, Any]) -> str | None:
+    """Get CSRF token for template forms.
+
+    The CSRF middleware stores the token in connection_state.csrf_token
+    which is accessible via the request's internal state.
+    """
+    from litestar.connection.base import ScopeState
+
+    # Get the connection state from scope
+    state = ScopeState.from_scope(request.scope)
+    return state.csrf_token
 
 
 def _get_base_url(request: Request[Any, Any, Any]) -> str:
@@ -202,6 +219,7 @@ async def admin_index(
             template_name="admin/setup.html",
             context={
                 "callback_url": f"{base_url}/admin/oauth/callback",
+                "csrf_token": _get_csrf_token(request),
             },
         )
 
@@ -225,7 +243,10 @@ async def setup_account_form(
     if await admin_user_exists(session):
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
-    return Template(template_name="admin/setup_account.html", context={})
+    return Template(
+        template_name="admin/setup_account.html",
+        context={"csrf_token": _get_csrf_token(request)},
+    )
 
 
 @post("/setup/account", sync_to_thread=False)
@@ -249,7 +270,7 @@ async def setup_account_submit(
     errors = []
     if not email:
         errors.append("Email is required")
-    elif "@" not in email:
+    elif not _EMAIL_PATTERN.match(email):
         errors.append("Invalid email address")
 
     if not password:
@@ -263,7 +284,12 @@ async def setup_account_submit(
     if errors:
         return Template(
             template_name="admin/setup_account.html",
-            context={"errors": errors, "email": email, "name": name},
+            context={
+                "errors": errors,
+                "email": email,
+                "name": name,
+                "csrf_token": _get_csrf_token(request),
+            },
         )
 
     # Create admin user
@@ -280,7 +306,12 @@ async def setup_account_submit(
     except Exception as e:
         return Template(
             template_name="admin/setup_account.html",
-            context={"errors": [str(e)], "email": email, "name": name},
+            context={
+                "errors": [str(e)],
+                "email": email,
+                "name": name,
+                "csrf_token": _get_csrf_token(request),
+            },
         )
 
 
@@ -301,7 +332,10 @@ async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> 
     if is_authenticated(request):
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
-    return Template(template_name="admin/login.html", context={})
+    return Template(
+        template_name="admin/login.html",
+        context={"csrf_token": _get_csrf_token(request)},
+    )
 
 
 @post("/login", sync_to_thread=False)
@@ -316,21 +350,29 @@ async def login_submit(
     if not email or not password:
         return Template(
             template_name="admin/login.html",
-            context={"error": "Email and password are required", "email": email},
+            context={
+                "error": "Email and password are required",
+                "email": email,
+                "csrf_token": _get_csrf_token(request),
+            },
         )
 
     admin = await authenticate_admin(str(email), str(password), session)
     if not admin:
         return Template(
             template_name="admin/login.html",
-            context={"error": "Invalid email or password", "email": email},
+            context={
+                "error": "Invalid credentials",
+                "email": email,
+                "csrf_token": _get_csrf_token(request),
+            },
         )
 
     login_admin(request, admin)
     return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
 
-@get("/logout", sync_to_thread=False)
+@post("/logout", sync_to_thread=False)
 async def logout(request: Request[Any, Any, Any]) -> Redirect:
     """Log out and redirect to login page."""
     logout_admin(request)
@@ -495,6 +537,7 @@ async def admin_dashboard(
             "latest_alertness": latest_alertness,
             "sync_interval_hours": settings.sync_interval_hours,
             "recovery_status": recovery_status,
+            "csrf_token": _get_csrf_token(request),
         },
     )
 
@@ -582,10 +625,10 @@ async def oauth_authorize(request: Request[Any, Any, Any], session: AsyncSession
 
     # Generate CSRF state token
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = datetime.utcnow() + timedelta(minutes=10)
+    _oauth_states[state] = datetime.now(UTC) + timedelta(minutes=10)
 
     # Clean up expired states
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     expired = [s for s, exp in _oauth_states.items() if exp < now]
     for s in expired:
         del _oauth_states[s]
@@ -629,7 +672,7 @@ async def oauth_callback(
         )
 
     # Check state hasn't expired and remove it (one-time use)
-    if _oauth_states[state] < datetime.utcnow():
+    if _oauth_states[state] < datetime.now(UTC):
         del _oauth_states[state]
         return Template(
             template_name="admin/partials/sync_error.html",
@@ -685,7 +728,7 @@ async def oauth_callback(
 
         # Calculate token expiry
         expires_in = token_data.get("expires_in", 31536000)  # Default 1 year
-        token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        token_expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
         # Check if user exists
         user_stmt = select(User).where(User.polar_user_id == polar_user_id)
@@ -764,6 +807,9 @@ async def chart_sleep_data(
 
     Returns sleep score, duration, and stage breakdown for the last N days.
     """
+    if not is_authenticated(request):
+        return {"error": "Authentication required", "status": 401}
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
     result = await session.execute(stmt)
@@ -803,6 +849,9 @@ async def chart_activity_data(
 
     Returns steps, calories, and active time for the last N days.
     """
+    if not is_authenticated(request):
+        return {"error": "Authentication required", "status": 401}
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
     result = await session.execute(stmt)
@@ -836,6 +885,9 @@ async def chart_heart_rate_data(
 
     Returns min/avg/max heart rate for the last N days.
     """
+    if not is_authenticated(request):
+        return {"error": "Authentication required", "status": 401}
+
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(ContinuousHeartRate)
@@ -865,6 +917,9 @@ async def chart_hrv_data(
 
     Returns HRV average and ANS charge for the last N days.
     """
+    if not is_authenticated(request):
+        return {"error": "Authentication required", "status": 401}
+
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(NightlyRecharge)
@@ -893,6 +948,9 @@ async def chart_cardio_load_data(
 
     Returns strain, tolerance, and load ratio for the last N days.
     """
+    if not is_authenticated(request):
+        return {"error": "Authentication required", "status": 401}
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
     result = await session.execute(stmt)
@@ -921,8 +979,11 @@ async def export_sleep_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response[bytes]:
+) -> Response[bytes] | Redirect:
     """Export sleep data as CSV."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
     result = await session.execute(stmt)
@@ -958,8 +1019,11 @@ async def export_activity_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response[bytes]:
+) -> Response[bytes] | Redirect:
     """Export activity data as CSV."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
     result = await session.execute(stmt)
@@ -995,8 +1059,11 @@ async def export_recharge_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response[bytes]:
+) -> Response[bytes] | Redirect:
     """Export recharge/HRV data as CSV."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(NightlyRecharge)
@@ -1034,8 +1101,11 @@ async def export_cardio_load_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
     days: int = 30,
-) -> Response[bytes]:
+) -> Response[bytes] | Redirect:
     """Export cardio load data as CSV."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     since_date = date.today() - timedelta(days=days)
     stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
     result = await session.execute(stmt)

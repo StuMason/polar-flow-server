@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(255), nullable=False, unique=True, index=True),
         sa.Column("password_hash", sa.String(255), nullable=False),
         sa.Column("name", sa.String(255), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, default=True),
+        sa.Column("is_active", sa.Boolean(), nullable=False, default=True, index=True),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",

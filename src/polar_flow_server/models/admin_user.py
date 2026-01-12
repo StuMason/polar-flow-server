@@ -12,7 +12,7 @@ class AdminUser(Base, TimestampMixin):
     """Admin user for dashboard authentication.
 
     Self-hosted deployments typically have one admin user.
-    Password is hashed using bcrypt via passlib.
+    Password is hashed using Argon2.
     """
 
     __tablename__ = "admin_users"
