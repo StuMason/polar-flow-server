@@ -177,6 +177,91 @@
     </div>
 </div>
 
+<!-- API Keys Management -->
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
+            <p class="text-sm text-gray-600">Manage API keys for service-to-service authentication</p>
+        </div>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            {{ api_keys|length }} key{% if api_keys|length != 1 %}s{% endif %}
+        </span>
+    </div>
+
+    {% if api_keys %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scope</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate Limit</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for key in api_keys %}
+                <tr class="{% if not key.is_active %}bg-gray-50 opacity-60{% endif %}">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <code class="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{{ key.key_prefix }}...</code>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{{ key.name }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if key.user_id %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            User: {{ key.user_id[:12] }}{% if key.user_id|length > 12 %}...{% endif %}
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Service-level
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="bg-blue-600 h-2 rounded-full" style="width: {{ (key.rate_limit_remaining / key.rate_limit_requests * 100)|round }}%"></div>
+                            </div>
+                            <span>{{ key.rate_limit_remaining }}/{{ key.rate_limit_requests }}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        {% if key.is_active %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Active
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Revoked
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {% if key.last_used_at %}
+                        {{ key.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                        <span class="text-gray-400">Never</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-8">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No API keys</h3>
+        <p class="mt-1 text-sm text-gray-500">API keys are created when users connect via OAuth.</p>
+    </div>
+    {% endif %}
+</div>
+
 <!-- Sync Control -->
 <div class="bg-white shadow rounded-lg p-6 mb-6">
     <div class="flex items-center justify-between mb-4">

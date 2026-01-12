@@ -28,6 +28,7 @@ from polar_flow_server.core.config import settings
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
+from polar_flow_server.models.api_key import APIKey
 from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.exercise import Exercise
@@ -513,6 +514,11 @@ async def admin_dashboard(
         cardio=latest_cardio,
     )
 
+    # Get API keys data
+    api_keys_stmt = select(APIKey).order_by(APIKey.created_at.desc())
+    api_keys_result = await session.execute(api_keys_stmt)
+    api_keys = api_keys_result.scalars().all()
+
     return Template(
         template_name="admin/dashboard.html",
         context={
@@ -533,6 +539,7 @@ async def admin_dashboard(
             "latest_alertness": latest_alertness,
             "sync_interval_hours": settings.sync_interval_hours,
             "recovery_status": recovery_status,
+            "api_keys": api_keys,
             "csrf_token": _get_csrf_token(request),
         },
     )
