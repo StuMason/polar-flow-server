@@ -22,8 +22,12 @@ RUN uv sync --frozen --no-dev
 # Create data directory
 RUN mkdir -p /data
 
+# Copy and set up entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Expose port
 EXPOSE 8000
 
-# Run the server
-CMD ["uv", "run", "polar-flow-server", "serve"]
+# Run migrations then start server
+ENTRYPOINT ["docker-entrypoint.sh"]
