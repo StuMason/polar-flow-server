@@ -2,9 +2,8 @@
 
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import create_engine, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy import create_engine
 
 from alembic import context
 
@@ -16,11 +15,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import settings for database URL
-from polar_flow_server.core.config import settings
-
-# Import Base and all models to register them with metadata
-from polar_flow_server.models.base import Base
-from polar_flow_server.models import (  # noqa: F401
+from polar_flow_server.core.config import settings  # noqa: E402
+from polar_flow_server.models import (  # noqa: E402, F401
+    ECG,
     Activity,
     ActivitySamples,
     APIKey,
@@ -28,7 +25,6 @@ from polar_flow_server.models import (  # noqa: F401
     BodyTemperature,
     CardioLoad,
     ContinuousHeartRate,
-    ECG,
     Exercise,
     NightlyRecharge,
     SkinTemperature,
@@ -38,6 +34,9 @@ from polar_flow_server.models import (  # noqa: F401
     SpO2,
     User,
 )
+
+# Import Base and all models to register them with metadata
+from polar_flow_server.models.base import Base  # noqa: E402
 
 # Set target metadata for autogenerate support
 target_metadata = Base.metadata

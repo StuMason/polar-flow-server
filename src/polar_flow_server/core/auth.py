@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from litestar.connection import ASGIConnection
 from litestar.exceptions import NotAuthorizedException
@@ -66,9 +66,7 @@ async def validate_api_key(key: str, session: AsyncSession) -> APIKey | None:
     if api_key:
         # Update last_used_at
         await session.execute(
-            update(APIKey)
-            .where(APIKey.id == api_key.id)
-            .values(last_used_at=datetime.now(timezone.utc))
+            update(APIKey).where(APIKey.id == api_key.id).values(last_used_at=datetime.now(UTC))
         )
         await session.commit()
 

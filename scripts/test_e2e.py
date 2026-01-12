@@ -98,7 +98,7 @@ def test_export_summary():
     r = httpx.get(f"{BASE_URL}/users/{USER_ID}/export/summary?days=30", headers=headers)
     assert r.status_code == 200, f"Export summary failed: {r.status_code}"
     data = r.json()
-    print(f"  ✅ Export summary:")
+    print("  ✅ Export summary:")
     print(f"     User: {data['user_id']}")
     print(f"     Total records: {data['total_records']}")
     print(f"     Counts: {data['record_counts']}")
