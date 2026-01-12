@@ -50,14 +50,10 @@ _EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 def _get_csrf_token(request: Request[Any, Any, Any]) -> str | None:
     """Get CSRF token for template forms.
 
-    The CSRF middleware stores the token in connection_state.csrf_token
-    which is accessible via the request's internal state.
+    The CSRF middleware stores the token in the csrf_token cookie.
+    We read it from there to pass to templates for form submission.
     """
-    from litestar.connection.base import ScopeState
-
-    # Get the connection state from scope
-    state = ScopeState.from_scope(request.scope)
-    return state.csrf_token
+    return request.cookies.get("csrf_token")
 
 
 def _get_base_url(request: Request[Any, Any, Any]) -> str:
