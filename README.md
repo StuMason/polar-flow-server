@@ -141,35 +141,80 @@ curl -H "X-API-Key: pfk_your_api_key_here" \
 - Master API key (`API_KEY` env var) bypasses rate limiting
 - Rate limit info returned in response headers
 
-## OAuth Integration
+## OAuth Integration (SaaS / Multi-User)
 
-For applications that need to integrate with polar-flow-server (e.g., mobile apps, web frontends):
+For applications that need to integrate with polar-flow-server (e.g., Laravel, mobile apps, web frontends).
+
+This allows **any Polar user** to connect their account to your application.
 
 ### OAuth Flow
 
-1. **Start OAuth** - Redirect user to `/oauth/start?client_id=YOUR_CLIENT_ID`
-2. **User Authorizes** - User logs into Polar and grants access
-3. **Callback** - Server receives auth code, creates user, generates temp code
-4. **Exchange** - Your app exchanges temp code for API key:
+```
+┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────┐
+│  Your App       │────▶│  polar-flow-server  │────▶│  Polar Flow     │
+│  (Laravel etc)  │     │                     │     │  (OAuth)        │
+│                 │◀────│                     │◀────│                 │
+└─────────────────┘     └─────────────────────┘     └─────────────────┘
+```
+
+**Step 1: Redirect user to start OAuth**
+
+```
+GET /oauth/start?callback_url=https://yourapp.com/callback&client_id=your-app-name
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `callback_url` | Yes | Where to redirect after OAuth (your app's callback endpoint) |
+| `client_id` | No | Identifier for your app (validated during exchange) |
+
+**Step 2: User authorizes on Polar**
+
+User is redirected to Polar, logs in with their credentials, and authorizes your app.
+
+**Step 3: User redirected to your callback**
+
+```
+https://yourapp.com/callback?code=TEMP_CODE_HERE
+```
+
+**Step 4: Exchange temp code for API key (server-to-server)**
 
 ```bash
 POST /oauth/exchange
 Content-Type: application/json
 
 {
-  "code": "temp_code_from_callback",
-  "client_id": "YOUR_CLIENT_ID"
-}
-
-# Response:
-{
-  "api_key": "pfk_...",
-  "user_id": "polar_user_id",
-  "expires_in": null
+  "code": "TEMP_CODE_HERE",
+  "client_id": "your-app-name"
 }
 ```
 
-5. **Use API Key** - Make authenticated requests with the API key
+Response:
+```json
+{
+  "api_key": "pfk_abc123...",
+  "polar_user_id": "12345678",
+  "expires_at": null
+}
+```
+
+**Step 5: Store and use the API key**
+
+Store `api_key` and `polar_user_id` for this user. Use the API key for all data requests:
+
+```bash
+curl -H "X-API-Key: pfk_abc123..." \
+  "https://your-polar-server.com/users/12345678/sleep?days=7"
+```
+
+### Polar Admin Setup
+
+In [admin.polaraccesslink.com](https://admin.polaraccesslink.com), set your app's redirect URI to:
+
+```
+https://your-polar-server.com/oauth/callback
+```
 
 ### Key Management
 
