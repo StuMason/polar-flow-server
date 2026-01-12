@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
-from litestar import Router, get, post
+from litestar import Router, get, post, Request
 from litestar.exceptions import NotAuthorizedException, NotFoundException
 from litestar.params import Parameter
 from litestar.response import Redirect
@@ -105,11 +105,10 @@ def _get_base_url_from_headers(headers: dict[str, str]) -> str:
 
 @get("/oauth/start", status_code=HTTP_303_SEE_OTHER)
 async def oauth_start_saas(
+    request: Request,
     session: AsyncSession,
     callback_url: str,
     client_id: str | None = None,
-    request_host: str | None = None,
-    request_scheme: str | None = None,
 ) -> Redirect:
     """Start OAuth flow for SaaS clients.
 
@@ -143,10 +142,10 @@ async def oauth_start_saas(
     for s in expired:
         del _saas_oauth_states[s]
 
-    # Build authorization URL
-    # Note: We use a special SaaS callback endpoint
-    scheme = request_scheme or "https"
-    host = request_host or "localhost:8000"
+    # Build authorization URL - extract host/scheme from request headers
+    # Coolify/nginx sets x-forwarded-* headers
+    scheme = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
     base_url = f"{scheme}://{host}"
     redirect_uri = f"{base_url}/oauth/callback"
 
@@ -165,12 +164,11 @@ async def oauth_start_saas(
 
 @get("/oauth/callback", status_code=HTTP_303_SEE_OTHER)
 async def oauth_callback_saas(
+    request: Request,
     session: AsyncSession,
     code: str | None = None,
     oauth_state: str | None = Parameter(default=None, query="state"),
     error: str | None = None,
-    request_host: str | None = None,
-    request_scheme: str | None = None,
 ) -> Redirect:
     """Handle OAuth callback for SaaS clients.
 
@@ -223,8 +221,9 @@ async def oauth_callback_saas(
 
     # Exchange code for access token
     client_secret = token_encryption.decrypt(app_settings.polar_client_secret_encrypted)
-    scheme = request_scheme or "https"
-    host = request_host or "localhost:8000"
+    # Extract host/scheme from request headers (Coolify/nginx sets x-forwarded-*)
+    scheme = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "localhost:8000")
     base_url = f"{scheme}://{host}"
     redirect_uri = f"{base_url}/oauth/callback"
 
