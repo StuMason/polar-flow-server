@@ -108,6 +108,11 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v --cov=polar_flow_server --cov-report=term-missing"
 
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+]
+
 # NOTE: For local development with unreleased SDK changes, uncomment:
 # [tool.uv.sources]
 # polar-flow-api = { path = "../polar-flow" }
