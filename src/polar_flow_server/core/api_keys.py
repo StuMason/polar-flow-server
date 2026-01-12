@@ -361,9 +361,7 @@ async def cleanup_expired_temp_codes(session: AsyncSession) -> int:
     from sqlalchemy.engine import CursorResult
 
     now = datetime.now(UTC)
-    result = await session.execute(
-        delete(TempAuthCode).where(TempAuthCode.expires_at < now)
-    )
+    result = await session.execute(delete(TempAuthCode).where(TempAuthCode.expires_at < now))
     # Cast to CursorResult which has rowcount attribute
     cursor_result: CursorResult[tuple[()]] = result  # type: ignore[assignment]
     return cursor_result.rowcount or 0

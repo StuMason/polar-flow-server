@@ -88,7 +88,9 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_temp_auth_codes_code_hash"), "temp_auth_codes", ["code_hash"], unique=True
     )
-    op.create_index(op.f("ix_temp_auth_codes_user_id"), "temp_auth_codes", ["user_id"], unique=False)
+    op.create_index(
+        op.f("ix_temp_auth_codes_user_id"), "temp_auth_codes", ["user_id"], unique=False
+    )
 
 
 def downgrade() -> None:
