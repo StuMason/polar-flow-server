@@ -1191,6 +1191,7 @@ admin_routes = [
     trigger_manual_sync,
     oauth_authorize,
     admin_settings,
+    reset_oauth_credentials,
     # Chart API endpoints
     chart_sleep_data,
     chart_activity_data,
