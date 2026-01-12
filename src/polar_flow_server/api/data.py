@@ -9,6 +9,8 @@ from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from polar_flow_server.core.auth import api_key_guard
+
 from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
 from polar_flow_server.models.cardio_load import CardioLoad
@@ -566,9 +568,10 @@ async def export_summary(
     }
 
 
-# Router with all endpoints
+# Router with all endpoints - protected by API key authentication
 data_router = Router(
     path="/",
+    guards=[api_key_guard],
     route_handlers=[
         # Activity
         get_activity_list,

@@ -1,14 +1,20 @@
+# Production Docker Compose for Coolify deployment
+# Domain: polar-server.stuartmason.co.uk
+#
+# Required environment variables:
+#   - API_KEY: API key for authenticating requests
+#   - POLAR_CLIENT_ID: Polar OAuth client ID (from admin.polaraccesslink.com)
+#   - POLAR_CLIENT_SECRET: Polar OAuth client secret
+
 services:
   postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: polar
-      POSTGRES_PASSWORD: polar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-polar_prod_password}
       POSTGRES_DB: polar
     volumes:
-      - polar-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U polar"]
       interval: 5s
@@ -20,21 +26,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
+      DATABASE_URL: postgresql+asyncpg://polar:${POSTGRES_PASSWORD:-polar_prod_password}@postgres:5432/polar
       DEPLOYMENT_MODE: self_hosted
+      API_KEY: ${API_KEY}
+      POLAR_CLIENT_ID: ${POLAR_CLIENT_ID}
+      POLAR_CLIENT_SECRET: ${POLAR_CLIENT_SECRET}
       SYNC_ON_STARTUP: "false"
       SYNC_INTERVAL_HOURS: 1
-      LOG_LEVEL: DEBUG
-      API_KEY: pfs_test_key_for_development_only
-    volumes:
-      - ~/.polar-flow:/root/.polar-flow
-      - ./src:/app/src  # Mount source for hot reload
-      - ./alembic:/app/alembic  # Mount alembic for migrations
-      - ./alembic.ini:/app/alembic.ini  # Mount alembic config
-    command: uv run uvicorn polar_flow_server.app:app --host 0.0.0.0 --port 8000 --reload
+      LOG_LEVEL: INFO
     ports:
       - "8000:8000"
     healthcheck:
@@ -46,4 +46,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  polar-data:
+  postgres-data:

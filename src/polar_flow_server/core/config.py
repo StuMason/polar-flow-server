@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     )
 
     # Security
+    api_key: str | None = Field(
+        default=None,
+        description="Single API key for simple auth (self-hosted mode)",
+    )
     encryption_key: str | None = Field(
         default=None,
         description="Encryption key for Polar tokens (base64 encoded)",

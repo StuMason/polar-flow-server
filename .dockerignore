@@ -1,0 +1,60 @@
+# Git
+.git
+.github
+.gitignore
+
+# Python
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist
+build
+eggs
+*.egg
+.eggs
+
+# Testing and linting
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+coverage.xml
+*.cover
+
+# Documentation (built by mkdocs)
+site/
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local development
+*.db
+*.sqlite
+data/
+
+# Tests
+tests/
+
+# Documentation source (keep docs/ for reference, but site/ is built output)
+# docs/
+
+# Misc
+*.md
+!README.md
+!CHANGELOG.md
+*.log
+.DS_Store
+Thumbs.db
