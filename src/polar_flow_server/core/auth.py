@@ -96,16 +96,21 @@ async def validate_simple_api_key(key: str) -> bool:
 async def api_key_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
     """Litestar guard that validates API key from request header.
 
-    Checks for API key in X-API-Key header or Authorization: Bearer header.
-    Validates against database (SaaS mode) or config (self-hosted mode).
+    If no API_KEY is configured, authentication is skipped (open access).
+    Otherwise validates against config or database.
 
     Args:
         connection: The ASGI connection
         _: The route handler (unused)
 
     Raises:
-        NotAuthorizedException: If API key is missing or invalid
+        NotAuthorizedException: If API key is required but missing/invalid
     """
+    # If no API_KEY configured, skip authentication (simple self-hosted mode)
+    if not settings.api_key:
+        logger.debug("No API_KEY configured - authentication disabled")
+        return
+
     # Extract API key from headers
     api_key = connection.headers.get("X-API-Key")
 
@@ -120,15 +125,10 @@ async def api_key_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None
         raise NotAuthorizedException("Missing API key. Use X-API-Key header.")
 
     # Validate the key
-    is_valid = False
+    is_valid = await validate_simple_api_key(api_key)
 
-    # First try simple config-based key (for self-hosted)
-    if settings.api_key:
-        is_valid = await validate_simple_api_key(api_key)
-
-    # If no config key or it didn't match, try database
+    # If config key didn't match, try database
     if not is_valid:
-        # Get database session from app state
         from polar_flow_server.core.database import async_session_maker
 
         async with async_session_maker() as session:

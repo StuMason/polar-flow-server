@@ -1,17 +1,13 @@
-# Production Docker Compose for Coolify deployment
-# Domain: polar-server.stuartmason.co.uk
-#
-# Required environment variables:
-#   - API_KEY: API key for authenticating requests
-#   - POLAR_CLIENT_ID: Polar OAuth client ID (from admin.polaraccesslink.com)
-#   - POLAR_CLIENT_SECRET: Polar OAuth client secret
+# Production Docker Compose
+# Just run: docker-compose -f docker-compose.prod.yml up -d
+# Then visit: http://localhost:8000/admin to configure
 
 services:
   postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: polar
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-polar_prod_password}
+      POSTGRES_PASSWORD: polar
       POSTGRES_DB: polar
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -20,21 +16,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   polar-flow-server:
-    build: .
+    image: stumason/polar-flow-server:latest
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://polar:${POSTGRES_PASSWORD:-polar_prod_password}@postgres:5432/polar
-      DEPLOYMENT_MODE: self_hosted
-      API_KEY: ${API_KEY}
-      POLAR_CLIENT_ID: ${POLAR_CLIENT_ID}
-      POLAR_CLIENT_SECRET: ${POLAR_CLIENT_SECRET}
-      SYNC_ON_STARTUP: "false"
-      SYNC_INTERVAL_HOURS: 1
-      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
     ports:
       - "8000:8000"
     healthcheck:
