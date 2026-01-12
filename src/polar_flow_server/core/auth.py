@@ -4,6 +4,7 @@ import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime
+from typing import Any
 
 from litestar.connection import ASGIConnection
 from litestar.exceptions import NotAuthorizedException
@@ -91,7 +92,9 @@ async def validate_simple_api_key(key: str) -> bool:
     return secrets.compare_digest(key, settings.api_key)
 
 
-async def api_key_guard(connection: ASGIConnection, _: BaseRouteHandler) -> None:
+async def api_key_guard(
+    connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler
+) -> None:
     """Litestar guard that validates API key from request header.
 
     If no API_KEY is configured, authentication is skipped (open access).
