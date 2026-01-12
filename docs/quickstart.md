@@ -56,10 +56,9 @@ curl http://localhost:8000/api/v1/users/$POLAR_USER_ID/sleep?days=7
 
 ## Next Steps
 
+- [Architecture](architecture.md) - System design and components
 - [API Reference](api/overview.md) - All available endpoints
-- [Analytics](analytics.md) - How recovery scores and baselines are calculated
-- [MCP Server](mcp.md) - Claude Desktop integration
-- [Docker Deployment](deployment/docker.md) - Advanced Docker configuration
+- [polar-flow SDK](https://stumason.github.io/polar-flow/) - Python SDK documentation
 
 ## From Source
 

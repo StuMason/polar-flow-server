@@ -19,32 +19,12 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: google
-            show_source: false
-            show_root_heading: true
-            heading_level: 2
 
 nav:
   - Home: index.md
   - Quick Start: quickstart.md
   - Architecture: architecture.md
-  - API Reference:
-      - Overview: api/overview.md
-      - Sleep: api/sleep.md
-      - Activity: api/activity.md
-      - Exercises: api/exercises.md
-      - Nightly Recharge: api/recharge.md
-      - Sync: api/sync.md
-  - Deployment:
-      - Self-Hosted: deployment/self-hosted.md
-      - SaaS Integration: deployment/saas.md
-      - Docker: deployment/docker.md
-  - Analytics: analytics.md
-  - MCP Server: mcp.md
+  - API Reference: api/overview.md
 
 markdown_extensions:
   - pymdownx.highlight
