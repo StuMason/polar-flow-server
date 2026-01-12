@@ -15,6 +15,14 @@ from litestar.status_codes import HTTP_200_OK, HTTP_303_SEE_OTHER
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from polar_flow_server.admin.auth import (
+    admin_user_exists,
+    authenticate_admin,
+    create_admin_user,
+    is_authenticated,
+    login_admin,
+    logout_admin,
+)
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.models.activity import Activity
@@ -33,6 +41,24 @@ from polar_flow_server.services.sync import SyncService
 # In-memory OAuth state storage (for self-hosted single-instance use)
 # In production SaaS, use Redis or database with TTL
 _oauth_states: dict[str, datetime] = {}
+
+
+def _get_base_url(request: Request[Any, Any, Any]) -> str:
+    """Get the base URL for OAuth callbacks.
+
+    Priority:
+    1. BASE_URL environment variable (production)
+    2. Auto-detect from request headers (development)
+    """
+    if settings.base_url:
+        return settings.base_url.rstrip("/")
+
+    # Auto-detect from request
+    # Check for proxy headers first (common in production)
+    proto = request.headers.get("X-Forwarded-Proto", "http")
+    host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host", "localhost:8000")
+
+    return f"{proto}://{host}"
 
 
 def _calculate_recovery_status(
@@ -148,21 +174,167 @@ def _calculate_recovery_status(
 async def admin_index(
     request: Request[Any, Any, Any], session: AsyncSession
 ) -> Template | Redirect:
-    """Admin panel home - setup wizard or dashboard.
+    """Admin panel home - handles initial setup flow.
 
-    Shows setup wizard if no app settings exist, otherwise dashboard.
+    Flow:
+    1. No admin user exists → /admin/setup/account (create first admin)
+    2. Not logged in → /admin/login
+    3. No OAuth settings → /admin/setup (OAuth setup)
+    4. All good → /admin/dashboard
     """
-    # Check if app settings exist (indicates setup complete)
+    # Step 1: Check if admin user exists
+    if not await admin_user_exists(session):
+        return Redirect(path="/admin/setup/account", status_code=HTTP_303_SEE_OTHER)
+
+    # Step 2: Check if authenticated
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+    # Step 3: Check if OAuth settings exist
     stmt = select(AppSettings).where(AppSettings.id == 1)
     result = await session.execute(stmt)
     app_settings = result.scalar_one_or_none()
 
-    if not app_settings:
-        # No settings yet, show setup wizard
-        return Template(template_name="admin/setup.html", context={})
+    if not app_settings or not app_settings.polar_client_id:
+        # No OAuth settings yet, show setup wizard
+        base_url = _get_base_url(request)
+        return Template(
+            template_name="admin/setup.html",
+            context={
+                "callback_url": f"{base_url}/admin/oauth/callback",
+            },
+        )
 
-    # Settings exist, show dashboard
+    # All good, go to dashboard
     return Redirect(path="/admin/dashboard", status_code=HTTP_303_SEE_OTHER)
+
+
+# =============================================================================
+# Admin Account Setup (First-Run)
+# =============================================================================
+
+
+@get("/setup/account", sync_to_thread=False)
+async def setup_account_form(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Show admin account creation form.
+
+    Only accessible if no admin user exists yet.
+    """
+    if await admin_user_exists(session):
+        return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+
+    return Template(template_name="admin/setup_account.html", context={})
+
+
+@post("/setup/account", sync_to_thread=False)
+async def setup_account_submit(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Create the first admin account.
+
+    Only accessible if no admin user exists yet.
+    """
+    if await admin_user_exists(session):
+        return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+
+    form_data = await request.form()
+    email = form_data.get("email", "").strip()
+    password = form_data.get("password", "")
+    password_confirm = form_data.get("password_confirm", "")
+    name = form_data.get("name", "").strip() or None
+
+    # Validation
+    errors = []
+    if not email:
+        errors.append("Email is required")
+    elif "@" not in email:
+        errors.append("Invalid email address")
+
+    if not password:
+        errors.append("Password is required")
+    elif len(password) < 8:
+        errors.append("Password must be at least 8 characters")
+
+    if password != password_confirm:
+        errors.append("Passwords do not match")
+
+    if errors:
+        return Template(
+            template_name="admin/setup_account.html",
+            context={"errors": errors, "email": email, "name": name},
+        )
+
+    # Create admin user
+    try:
+        admin = await create_admin_user(
+            email=str(email),
+            password=str(password),
+            session=session,
+            name=str(name) if name else None,
+        )
+        # Log them in immediately
+        login_admin(request, admin)
+        return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+    except Exception as e:
+        return Template(
+            template_name="admin/setup_account.html",
+            context={"errors": [str(e)], "email": email, "name": name},
+        )
+
+
+# =============================================================================
+# Login / Logout
+# =============================================================================
+
+
+@get("/login", sync_to_thread=False)
+async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> Template | Redirect:
+    """Show login form.
+
+    Redirects to setup if no admin exists, or to dashboard if already logged in.
+    """
+    if not await admin_user_exists(session):
+        return Redirect(path="/admin/setup/account", status_code=HTTP_303_SEE_OTHER)
+
+    if is_authenticated(request):
+        return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+
+    return Template(template_name="admin/login.html", context={})
+
+
+@post("/login", sync_to_thread=False)
+async def login_submit(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Process login form submission."""
+    form_data = await request.form()
+    email = form_data.get("email", "").strip()
+    password = form_data.get("password", "")
+
+    if not email or not password:
+        return Template(
+            template_name="admin/login.html",
+            context={"error": "Email and password are required", "email": email},
+        )
+
+    admin = await authenticate_admin(str(email), str(password), session)
+    if not admin:
+        return Template(
+            template_name="admin/login.html",
+            context={"error": "Invalid email or password", "email": email},
+        )
+
+    login_admin(request, admin)
+    return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+
+
+@get("/logout", sync_to_thread=False)
+async def logout(request: Request[Any, Any, Any]) -> Redirect:
+    """Log out and redirect to login page."""
+    logout_admin(request)
+    return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/setup/oauth", sync_to_thread=False, status_code=HTTP_200_OK)
@@ -171,6 +343,13 @@ async def save_oauth_credentials(
     session: AsyncSession,
 ) -> Template:
     """Save Polar OAuth credentials to database."""
+    # Auth check
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
     form_data = await request.form()
     client_id = form_data.get("client_id")
     client_secret = form_data.get("client_secret")
@@ -216,8 +395,14 @@ async def save_oauth_credentials(
 
 
 @get("/dashboard", sync_to_thread=False)
-async def admin_dashboard(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
+async def admin_dashboard(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
     """Admin dashboard with stats and sync controls."""
+    # Auth check - redirect to login if not authenticated
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     # Get data counts for all endpoints
     sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
     exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
@@ -317,6 +502,13 @@ async def admin_dashboard(request: Request[Any, Any, Any], session: AsyncSession
 @post("/sync", sync_to_thread=False, status_code=HTTP_200_OK)
 async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
     """Trigger manual sync and return updated stats."""
+    # Auth check
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
     # Get user and token from database
     stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
     result = await session.execute(stmt)
@@ -373,8 +565,12 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
 
 
 @get("/oauth/authorize", sync_to_thread=False)
-async def oauth_authorize(session: AsyncSession) -> Redirect:
+async def oauth_authorize(request: Request[Any, Any, Any], session: AsyncSession) -> Redirect:
     """Start OAuth flow - redirect to Polar authorization page."""
+    # Auth check
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     # Get OAuth credentials from database
     stmt = select(AppSettings).where(AppSettings.id == 1)
     result = await session.execute(stmt)
@@ -395,10 +591,13 @@ async def oauth_authorize(session: AsyncSession) -> Redirect:
         del _oauth_states[s]
 
     # Build authorization URL with state for CSRF protection
+    base_url = _get_base_url(request)
+    redirect_uri = f"{base_url}/admin/oauth/callback"
+
     params = {
         "client_id": app_settings.polar_client_id,
         "response_type": "code",
-        "redirect_uri": "http://localhost:8000/admin/oauth/callback",
+        "redirect_uri": redirect_uri,
         "state": state,
     }
     auth_url = f"https://flow.polar.com/oauth2/authorization?{urlencode(params)}"
@@ -456,6 +655,10 @@ async def oauth_callback(
     # Exchange code for access token
     client_secret = token_encryption.decrypt(app_settings.polar_client_secret_encrypted)
 
+    # Use same redirect_uri as authorization request
+    base_url = _get_base_url(request)
+    redirect_uri = f"{base_url}/admin/oauth/callback"
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -463,7 +666,7 @@ async def oauth_callback(
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
-                    "redirect_uri": "http://localhost:8000/admin/oauth/callback",
+                    "redirect_uri": redirect_uri,
                 },
                 auth=(app_settings.polar_client_id, client_secret),
             )
@@ -518,8 +721,14 @@ async def oauth_callback(
 
 
 @get("/settings", sync_to_thread=False)
-async def admin_settings(request: Request[Any, Any, Any], session: AsyncSession) -> Template:
+async def admin_settings(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
     """Admin settings page - view/edit OAuth credentials and connection status."""
+    # Auth check
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
     # Get app settings
     stmt = select(AppSettings).where(AppSettings.id == 1)
     result = await session.execute(stmt)
@@ -857,12 +1066,19 @@ async def export_cardio_load_csv(
 
 # Export routes list
 admin_routes = [
+    # Public routes (no auth required)
     admin_index,
+    setup_account_form,
+    setup_account_submit,
+    login_form,
+    login_submit,
+    logout,
+    oauth_callback,  # OAuth callback must be accessible
+    # Protected routes (auth required via session check in each route)
     save_oauth_credentials,
     admin_dashboard,
     trigger_manual_sync,
     oauth_authorize,
-    oauth_callback,
     admin_settings,
     # Chart API endpoints
     chart_sleep_data,

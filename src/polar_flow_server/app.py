@@ -8,7 +8,9 @@ import structlog
 from litestar import Litestar
 from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
+from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
 
 from polar_flow_server import __version__
@@ -71,6 +73,17 @@ def create_app() -> Litestar:
     # Get templates directory path
     templates_dir = Path(__file__).parent / "templates"
 
+    # Session store for admin authentication
+    # In production with multiple instances, use Redis instead
+    session_store = MemoryStore()
+
+    # Session middleware config
+    session_config = ServerSideSessionConfig(
+        key=settings.get_session_secret(),
+        store="session_store",
+        max_age=86400,  # 24 hours
+    )
+
     return Litestar(
         route_handlers=[root_redirect, *api_routers, admin_router],
         lifespan=[lifespan],
@@ -91,6 +104,8 @@ def create_app() -> Litestar:
                 ),
             ),
         ],
+        middleware=[session_config.middleware],
+        stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",
     )
 

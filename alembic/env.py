@@ -20,6 +20,7 @@ from polar_flow_server.models import (  # noqa: E402, F401
     ECG,
     Activity,
     ActivitySamples,
+    AdminUser,
     APIKey,
     AppSettings,
     BodyTemperature,
