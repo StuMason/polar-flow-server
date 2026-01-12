@@ -12,7 +12,7 @@ This server:
 2. Stores everything in PostgreSQL (your data, your server)
 3. Provides an HTMX-powered admin dashboard
 4. Exposes REST API for custom integrations
-5. Multi-user ready (same codebase for self-hosted and SaaS)
+5. Multi-user ready with per-user API keys
 
 ## Architecture
 
@@ -65,6 +65,7 @@ The server syncs data every hour automatically.
 The admin panel at `/admin/dashboard` shows:
 
 - **Key Metrics** - HRV, Heart Rate, Training Strain, Alertness, Sleep Score
+- **API Keys** - Manage per-user API keys with rate limit tracking
 - **Record Counts** - All 9 data types with totals
 - **Recent Sleep** - Last 7 days with scores
 - **Nightly Recharge** - HRV, ANS charge, recovery status
@@ -87,22 +88,103 @@ The admin panel at `/admin/dashboard` shows:
 
 ## Configuration
 
-Environment variables (see `.env.example`):
+### Required Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes |
+| `ENCRYPTION_KEY` | 32-byte Fernet key for token encryption | **Yes (production)** |
+
+Generate an encryption key:
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+### Optional Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEPLOYMENT_MODE` | `self_hosted` or `saas` | `self_hosted` |
+| `SYNC_INTERVAL_HOURS` | Auto-sync frequency | `1` |
+| `SYNC_ON_STARTUP` | Sync when server starts | `false` |
+| `SYNC_DAYS_LOOKBACK` | Days of history to sync | `28` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+| `API_KEY` | Master API key (bypasses rate limits) | None |
+
+## API Authentication
+
+The server supports per-user API keys with rate limiting.
+
+### Authentication Methods
+
+1. **Per-User API Keys** (recommended) - Each user gets their own API key via OAuth
+2. **Master API Key** - Set `API_KEY` env var for full access (bypasses rate limits)
+3. **Open Access** - If no `API_KEY` is set and no key provided, endpoints are open
+
+### Using API Keys
 
 ```bash
-# Database
-DATABASE_URL=postgresql+asyncpg://polar:polar@postgres:5432/polar
+# With per-user API key (includes rate limit headers)
+curl -H "X-API-Key: pfk_your_api_key_here" \
+  http://localhost:8000/users/{user_id}/sleep?days=7
 
-# Deployment mode
-DEPLOYMENT_MODE=self_hosted
+# Response headers include:
+# X-RateLimit-Limit: 1000
+# X-RateLimit-Remaining: 999
+# X-RateLimit-Reset: 1704067200
+```
 
-# Sync settings
-SYNC_INTERVAL_HOURS=1
-SYNC_ON_STARTUP=false
-SYNC_DAYS_LOOKBACK=28
+### Rate Limiting
 
-# Optional: Set explicit encryption key (auto-generated otherwise)
-# ENCRYPTION_KEY=your-32-byte-fernet-key
+- Default: 1000 requests per hour per API key
+- Rate limits reset hourly
+- Master API key (`API_KEY` env var) bypasses rate limiting
+- Rate limit info returned in response headers
+
+## OAuth Integration
+
+For applications that need to integrate with polar-flow-server (e.g., mobile apps, web frontends):
+
+### OAuth Flow
+
+1. **Start OAuth** - Redirect user to `/oauth/start?client_id=YOUR_CLIENT_ID`
+2. **User Authorizes** - User logs into Polar and grants access
+3. **Callback** - Server receives auth code, creates user, generates temp code
+4. **Exchange** - Your app exchanges temp code for API key:
+
+```bash
+POST /oauth/exchange
+Content-Type: application/json
+
+{
+  "code": "temp_code_from_callback",
+  "client_id": "YOUR_CLIENT_ID"
+}
+
+# Response:
+{
+  "api_key": "pfk_...",
+  "user_id": "polar_user_id",
+  "expires_in": null
+}
+```
+
+5. **Use API Key** - Make authenticated requests with the API key
+
+### Key Management
+
+```bash
+# Get key info
+GET /users/{user_id}/api-key/info
+X-API-Key: pfk_...
+
+# Regenerate key (invalidates old key)
+POST /users/{user_id}/api-key/regenerate
+X-API-Key: pfk_...
+
+# Revoke key
+POST /users/{user_id}/api-key/revoke
+X-API-Key: pfk_...
 ```
 
 ## API Endpoints
@@ -112,22 +194,25 @@ SYNC_DAYS_LOOKBACK=28
 curl http://localhost:8000/health
 
 # Get sleep data (last 7 days)
-curl "http://localhost:8000/users/{user_id}/sleep?days=7"
+curl -H "X-API-Key: pfk_..." \
+  "http://localhost:8000/users/{user_id}/sleep?days=7"
 
 # Get activity data
-curl "http://localhost:8000/users/{user_id}/activity?days=7"
+curl -H "X-API-Key: pfk_..." \
+  "http://localhost:8000/users/{user_id}/activity?days=7"
 
 # Get nightly recharge (HRV)
-curl "http://localhost:8000/users/{user_id}/recharge?days=7"
+curl -H "X-API-Key: pfk_..." \
+  "http://localhost:8000/users/{user_id}/recharge?days=7"
 
 # Get exercises
-curl "http://localhost:8000/users/{user_id}/exercises?days=30"
+curl -H "X-API-Key: pfk_..." \
+  "http://localhost:8000/users/{user_id}/exercises?days=30"
 
 # Export summary
-curl "http://localhost:8000/users/{user_id}/export/summary?days=30"
+curl -H "X-API-Key: pfk_..." \
+  "http://localhost:8000/users/{user_id}/export/summary?days=30"
 ```
-
-**Optional Authentication:** Set `API_KEY` environment variable to require `X-API-Key` header on all data endpoints. If not set, endpoints are open.
 
 ## Development
 
@@ -163,15 +248,11 @@ docker-compose -f docker-compose.prod.yml up -d
 
 **Coolify, Railway, Render, etc.** - Point at the GitHub repo, it builds from the Dockerfile.
 
+**Required for production:**
+- Set `ENCRYPTION_KEY` environment variable (tokens won't persist across restarts otherwise)
+- Set `DATABASE_URL` to your PostgreSQL instance
+
 **Database migrations** run automatically on startup.
-
-### Optional Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `API_KEY` | Require authentication on data endpoints | None (open) |
-| `SYNC_INTERVAL_HOURS` | Auto-sync frequency | 1 |
-| `LOG_LEVEL` | Logging verbosity | INFO |
 
 ## Multi-Tenancy
 
@@ -179,8 +260,9 @@ The server supports multiple users out of the box:
 
 - Every table includes `user_id` column
 - All queries scoped by `user_id`
+- Per-user API keys ensure users can only access their own data
 - Self-hosted: typically one user
-- SaaS: many users, same codebase
+- Multi-user: many users, same codebase
 
 ## Built With
 
