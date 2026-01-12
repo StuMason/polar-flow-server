@@ -1,8 +1,10 @@
 """Database initialization and session management."""
 
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,7 +13,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from polar_flow_server.core.config import settings
-from polar_flow_server.models.base import Base
+
+logger = logging.getLogger(__name__)
 
 
 def create_engine() -> AsyncEngine:
@@ -39,13 +42,37 @@ async_session_maker = async_sessionmaker(
 
 
 async def init_database() -> None:
-    """Initialize database tables.
+    """Verify database is ready and migrations have been applied.
 
-    Creates all tables defined in models if they don't exist.
-    Safe to run multiple times (idempotent).
+    Checks that the database is accessible and the alembic_version table exists,
+    indicating migrations have been run. Does NOT create tables - use Alembic
+    migrations for schema management.
+
+    Raises:
+        RuntimeError: If migrations have not been applied
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.connect() as conn:
+        # Check if alembic_version table exists (migrations have been run)
+        result = await conn.execute(
+            text(
+                "SELECT EXISTS ("
+                "SELECT FROM information_schema.tables "
+                "WHERE table_name = 'alembic_version'"
+                ")"
+            )
+        )
+        has_migrations = result.scalar()
+
+        if not has_migrations:
+            logger.warning(
+                "Database migrations have not been applied. "
+                "Run 'alembic upgrade head' to initialize the database schema."
+            )
+        else:
+            # Check current migration version
+            result = await conn.execute(text("SELECT version_num FROM alembic_version"))
+            version = result.scalar()
+            logger.info(f"Database initialized with migration version: {version}")
 
 
 @asynccontextmanager

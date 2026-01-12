@@ -2,6 +2,7 @@
 
 from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
+from polar_flow_server.models.api_key import APIKey
 from polar_flow_server.models.base import Base
 from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
@@ -17,6 +18,7 @@ from polar_flow_server.models.temperature import BodyTemperature, SkinTemperatur
 from polar_flow_server.models.user import User
 
 __all__ = [
+    "APIKey",
     "Base",
     "Activity",
     "ActivitySamples",

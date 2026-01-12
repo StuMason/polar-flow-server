@@ -1,3 +1,7 @@
+# Production Docker Compose
+# Just run: docker-compose -f docker-compose.prod.yml up -d
+# Then visit: http://localhost:8000/admin to configure
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -6,35 +10,21 @@ services:
       POSTGRES_PASSWORD: polar
       POSTGRES_DB: polar
     volumes:
-      - polar-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U polar"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   polar-flow-server:
-    build: .
+    image: stumason/polar-flow-server:latest
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
-      DEPLOYMENT_MODE: self_hosted
-      SYNC_ON_STARTUP: "false"
-      SYNC_INTERVAL_HOURS: 1
-      LOG_LEVEL: DEBUG
-      API_KEY: pfs_test_key_for_development_only
-    volumes:
-      - ~/.polar-flow:/root/.polar-flow
-      - ./src:/app/src  # Mount source for hot reload
-      - ./alembic:/app/alembic  # Mount alembic for migrations
-      - ./alembic.ini:/app/alembic.ini  # Mount alembic config
-    command: uv run uvicorn polar_flow_server.app:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     healthcheck:
@@ -46,4 +36,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  polar-data:
+  postgres-data:
