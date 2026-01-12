@@ -23,9 +23,6 @@ from polar_flow_server.models.api_key import APIKey
 
 logger = logging.getLogger(__name__)
 
-# API key prefix for identification (legacy - now using pfk_)
-API_KEY_PREFIX = "pfs_"
-
 # Connection state key for storing validated API key
 API_KEY_STATE_KEY = "api_key"
 RATE_LIMIT_STATE_KEY = "rate_limit_info"
@@ -41,20 +38,6 @@ class RateLimitExceeded(NotAuthorizedException):
         super().__init__(f"Rate limit exceeded. Retry after {retry_after} seconds.")
         self.retry_after = retry_after
         self.extra = {"Retry-After": str(retry_after)}
-
-
-def generate_api_key() -> tuple[str, str]:
-    """Generate a new API key and its hash.
-
-    Returns:
-        Tuple of (raw_key, key_hash) where raw_key is the user-facing key
-        and key_hash is what gets stored in the database.
-    """
-    # Generate 32 bytes of random data, encode as hex (64 chars)
-    random_part = secrets.token_hex(32)
-    raw_key = f"{API_KEY_PREFIX}{random_part}"
-    key_hash = hash_api_key(raw_key)
-    return raw_key, key_hash
 
 
 def hash_api_key(key: str) -> str:
