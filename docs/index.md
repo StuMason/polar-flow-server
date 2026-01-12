@@ -81,9 +81,7 @@ curl -X POST \
 ## Links
 
 - [Quick Start Guide](quickstart.md)
+- [Architecture](architecture.md)
 - [API Reference](api/overview.md)
-- [Analytics Documentation](analytics.md)
-- [Deployment Guide](deployment/self-hosted.md)
 - [GitHub Repository](https://github.com/StuMason/polar-flow-server)
-
-For a managed service with dashboards and mobile apps, see [stumason.dev](https://stumason.dev).
+- [polar-flow SDK](https://stumason.github.io/polar-flow/)
