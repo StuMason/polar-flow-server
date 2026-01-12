@@ -148,7 +148,7 @@ async def oauth_start_saas(
     scheme = request_scheme or "https"
     host = request_host or "localhost:8000"
     base_url = f"{scheme}://{host}"
-    redirect_uri = f"{base_url}/api/v1/oauth/callback"
+    redirect_uri = f"{base_url}/oauth/callback"
 
     params = {
         "client_id": app_settings.polar_client_id,
@@ -158,7 +158,7 @@ async def oauth_start_saas(
     }
     auth_url = f"https://flow.polar.com/oauth2/authorization?{urlencode(params)}"
 
-    logger.info(f"Starting SaaS OAuth flow, callback_url={callback_url}")
+    logger.info(f"Starting SaaS OAuth flow, callback_url={callback_url}, redirect_uri={redirect_uri}")
 
     return Redirect(path=auth_url, status_code=HTTP_303_SEE_OTHER)
 
@@ -226,7 +226,7 @@ async def oauth_callback_saas(
     scheme = request_scheme or "https"
     host = request_host or "localhost:8000"
     base_url = f"{scheme}://{host}"
-    redirect_uri = f"{base_url}/api/v1/oauth/callback"
+    redirect_uri = f"{base_url}/oauth/callback"
 
     try:
         async with httpx.AsyncClient() as client:
