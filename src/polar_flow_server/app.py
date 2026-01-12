@@ -5,10 +5,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
+from advanced_alchemy.config.asyncio import AsyncSessionConfig
 from litestar import Litestar
+from litestar.config.csrf import CSRFConfig
 from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
+from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
+from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
 
 from polar_flow_server import __version__
@@ -71,6 +75,29 @@ def create_app() -> Litestar:
     # Get templates directory path
     templates_dir = Path(__file__).parent / "templates"
 
+    # Session store for admin authentication
+    # In production with multiple instances, use Redis instead
+    session_store = MemoryStore()
+
+    # Session middleware config
+    session_config = ServerSideSessionConfig(
+        key=settings.get_session_secret(),
+        store="session_store",
+        max_age=86400,  # 24 hours
+    )
+
+    # CSRF protection config
+    csrf_config = CSRFConfig(
+        secret=settings.get_session_secret(),
+        cookie_name="csrf_token",
+        header_name="X-CSRF-Token",
+        exclude=[
+            "/admin/oauth/callback",  # OAuth callback from Polar
+            "/api/",  # API routes use API key auth, not sessions
+            "/health",
+        ],
+    )
+
     return Litestar(
         route_handlers=[root_redirect, *api_routers, admin_router],
         lifespan=[lifespan],
@@ -88,9 +115,13 @@ def create_app() -> Litestar:
                 config=SQLAlchemyAsyncConfig(
                     engine_instance=engine,
                     session_dependency_key="session",
+                    session_config=AsyncSessionConfig(expire_on_commit=False),
                 ),
             ),
         ],
+        middleware=[session_config.middleware],
+        csrf_config=csrf_config,
+        stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",
     )
 

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000, description="API port")
     api_prefix: str = Field(default="/api/v1", description="API prefix")
 
+    # Base URL for OAuth callbacks and external links
+    # Auto-detected from request if not set, but should be set in production
+    base_url: str | None = Field(
+        default=None,
+        description="Base URL for OAuth callbacks (e.g., https://polar.example.com)",
+    )
+
     # Database
     database_url: str = Field(
         default="postgresql+asyncpg://polar:polar@localhost:5432/polar",
@@ -50,6 +57,10 @@ class Settings(BaseSettings):
     encryption_key: str | None = Field(
         default=None,
         description="Encryption key for Polar tokens (base64 encoded)",
+    )
+    session_secret: str | None = Field(
+        default=None,
+        description="Secret key for session cookies (auto-generated if not set)",
     )
     jwt_secret: str | None = Field(
         default=None,
@@ -129,6 +140,31 @@ class Settings(BaseSettings):
         key_file.write_bytes(key)
         key_file.chmod(0o600)  # Owner read/write only
         return key
+
+    def get_session_secret(self) -> str:
+        """Get session secret for admin cookies.
+
+        In self-hosted mode, generates and persists secret to ~/.polar-flow/session.key
+        to ensure sessions survive server restarts.
+        """
+        if self.session_secret:
+            return self.session_secret
+
+        # Self-hosted: persist secret to file so sessions survive restarts
+        import secrets
+        from pathlib import Path
+
+        secret_file = Path.home() / ".polar-flow" / "session.key"
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if secret_file.exists():
+            return secret_file.read_text().strip()
+
+        # Generate new secret and persist
+        secret = secrets.token_urlsafe(32)
+        secret_file.write_text(secret)
+        secret_file.chmod(0o600)  # Owner read/write only
+        return secret
 
 
 # Global settings instance
