@@ -2,6 +2,7 @@
 
 from polar_flow_server.api.data import data_router
 from polar_flow_server.api.health import health_router
+from polar_flow_server.api.keys import keys_router, oauth_router
 from polar_flow_server.api.sleep import sleep_router
 from polar_flow_server.api.sync import sync_router
 
@@ -11,6 +12,8 @@ api_routers = [
     sleep_router,
     sync_router,
     data_router,
+    oauth_router,  # OAuth flow and code exchange
+    keys_router,  # Key management (regenerate, revoke, status)
 ]
 
 __all__ = ["api_routers"]
