@@ -20,6 +20,7 @@ from polar_flow_server.admin import admin_router
 from polar_flow_server.api import api_routers
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.database import close_database, engine, init_database
+from polar_flow_server.middleware import RateLimitHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 
 # Configure structured logging
@@ -120,7 +121,7 @@ def create_app() -> Litestar:
                 ),
             ),
         ],
-        middleware=[session_config.middleware],
+        middleware=[session_config.middleware, RateLimitHeadersMiddleware],
         csrf_config=csrf_config,
         stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",
