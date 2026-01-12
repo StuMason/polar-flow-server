@@ -795,6 +795,44 @@ async def admin_settings(
     )
 
 
+@post("/settings/reset-oauth", sync_to_thread=False, status_code=HTTP_200_OK)
+async def reset_oauth_credentials(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+) -> Template:
+    """Reset OAuth credentials - clears client ID and secret from database."""
+    # Auth check
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
+    try:
+        # Get app settings and clear OAuth credentials
+        stmt = select(AppSettings).where(AppSettings.id == 1)
+        result = await session.execute(stmt)
+        app_settings = result.scalar_one_or_none()
+
+        if app_settings:
+            app_settings.polar_client_id = None
+            app_settings.polar_client_secret_encrypted = None
+            await session.commit()
+
+        # Return the "no credentials" state HTML
+        return Template(
+            template_name="admin/partials/oauth_reset_success.html",
+            context={},
+        )
+
+    except Exception as e:
+        await session.rollback()
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": f"Failed to reset credentials: {str(e)}"},
+        )
+
+
 # ============================================================================
 # Chart Data API Routes (JSON endpoints for Chart.js)
 # ============================================================================
