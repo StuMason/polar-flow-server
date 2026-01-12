@@ -1,11 +1,15 @@
 """User model for storing OAuth connections."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from polar_flow_server.models.base import Base, TimestampMixin, generate_uuid
+
+if TYPE_CHECKING:
+    from polar_flow_server.models.api_key import APIKey
 
 
 class User(Base, TimestampMixin):
@@ -45,6 +49,14 @@ class User(Base, TimestampMixin):
     # Connection status
     is_active: Mapped[bool] = mapped_column(default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Relationship to API keys (user-scoped keys for this user)
+    api_keys: Mapped[list["APIKey"]] = relationship(
+        "APIKey",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:
         """String representation."""

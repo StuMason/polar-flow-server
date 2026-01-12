@@ -92,8 +92,9 @@ def create_app() -> Litestar:
         cookie_name="csrf_token",
         header_name="X-CSRF-Token",
         exclude=[
-            "/admin/oauth/callback",  # OAuth callback from Polar
-            "/api/",  # API routes use API key auth, not sessions
+            "/admin/oauth/callback",  # OAuth callback from Polar (admin dashboard)
+            "/oauth/",  # OAuth endpoints for SaaS (callback, exchange, start)
+            "/users/",  # API routes use API key auth, not sessions
             "/health",
         ],
     )

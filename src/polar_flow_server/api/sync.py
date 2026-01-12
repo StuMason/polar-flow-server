@@ -7,7 +7,7 @@ from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from polar_flow_server.core.auth import api_key_guard
+from polar_flow_server.core.auth import per_user_api_key_guard
 from polar_flow_server.services.sync import SyncService
 
 
@@ -53,6 +53,6 @@ async def trigger_sync(
 
 sync_router = Router(
     path="/",
-    guards=[api_key_guard],
+    guards=[per_user_api_key_guard],
     route_handlers=[trigger_sync],
 )

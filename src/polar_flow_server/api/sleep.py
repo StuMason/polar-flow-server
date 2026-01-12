@@ -9,7 +9,7 @@ from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from polar_flow_server.core.auth import api_key_guard
+from polar_flow_server.core.auth import per_user_api_key_guard
 from polar_flow_server.models.sleep import Sleep
 
 
@@ -141,6 +141,6 @@ async def get_sleep_by_date(
 
 sleep_router = Router(
     path="/",
-    guards=[api_key_guard],
+    guards=[per_user_api_key_guard],
     route_handlers=[get_sleep_list, get_sleep_by_date],
 )
