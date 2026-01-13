@@ -876,6 +876,178 @@ GET /users/{user_id}/insights
 
 ---
 
+## Data Readiness Convention
+
+**Problem:** Users won't have 60-90 days of data on day one. The API must gracefully
+communicate what's available and what's coming.
+
+### Feature Unlock Timeline
+
+| Days of Data | Features Available |
+|--------------|-------------------|
+| 0-6 | Raw data only, no analytics |
+| 7-13 | 7-day baselines (partial) |
+| 14-20 | 7-day baselines, basic trends |
+| 21-29 | Patterns unlock (correlations), anomaly detection |
+| 30-59 | Full baselines (30-day), all patterns |
+| 60+ | ML predictions unlock |
+| 90+ | Full ML with seasonal patterns |
+
+### API Response Convention
+
+Every analytics endpoint returns a consistent structure:
+
+```json
+{
+  "status": "partial",  // "ready", "partial", "unavailable"
+  "data_age_days": 12,
+  "user_id": "12345678",
+  "generated_at": "2024-01-15T10:30:00Z",
+
+  "feature_availability": {
+    "baselines_7d": {"available": true, "message": null},
+    "baselines_30d": {"available": false, "message": "Unlocks in 18 days", "unlock_at_days": 30},
+    "patterns": {"available": false, "message": "Unlocks in 9 days", "unlock_at_days": 21},
+    "anomaly_detection": {"available": false, "message": "Unlocks in 9 days", "unlock_at_days": 21},
+    "ml_predictions": {"available": false, "message": "Unlocks in 48 days", "unlock_at_days": 60}
+  },
+
+  "unlock_progress": {
+    "next_unlock": "patterns",
+    "days_until_next": 9,
+    "percent_to_next": 57
+  },
+
+  "baselines": {
+    "hrv_rmssd": {
+      "current": 45,
+      "baseline_7d": 48.5,
+      "baseline_30d": null,
+      "status": "partial",
+      "message": "30-day baseline available in 18 days"
+    }
+  },
+
+  "patterns": null,
+
+  "observations": [
+    {
+      "category": "onboarding",
+      "priority": "info",
+      "fact": "Building your personal baselines",
+      "context": "Pattern detection unlocks in 9 days. Keep wearing your device!",
+      "trend": null
+    },
+    {
+      "category": "recovery",
+      "priority": "medium",
+      "fact": "HRV is 7% below your 7-day average",
+      "context": "Based on limited data - accuracy improves over time",
+      "trend": "declining"
+    }
+  ]
+}
+```
+
+### Coach Integration Notes
+
+The coaching layer should:
+
+1. **Check `status` first** - if `"unavailable"`, show onboarding message
+2. **Use `feature_availability`** to know what data to request
+3. **Show `unlock_progress`** to encourage continued use ("2 more days until we can detect patterns!")
+4. **Adjust confidence language** based on data age:
+   - < 14 days: "Based on early data..."
+   - 14-30 days: "Based on your recent patterns..."
+   - 30+ days: "Based on your established baseline..."
+
+### Status Endpoint
+
+```
+GET /users/{user_id}/status
+
+{
+  "user_id": "12345678",
+  "data_age_days": 12,
+  "first_sync": "2024-01-03T08:00:00Z",
+  "last_sync": "2024-01-15T06:00:00Z",
+  "sync_status": "healthy",
+
+  "data_counts": {
+    "sleep_records": 12,
+    "recharge_records": 12,
+    "activity_records": 12,
+    "exercise_records": 8
+  },
+
+  "feature_availability": { ... },
+  "unlock_progress": { ... }
+}
+```
+
+---
+
+## Implementation Plan
+
+### Sprint 1: Foundation (Phase 1)
+
+**Goal:** Baselines API working end-to-end
+
+| Step | Task | Depends On |
+|------|------|------------|
+| 1.1 | Create `UserBaseline` model | - |
+| 1.2 | Add Alembic migration with indices | 1.1 |
+| 1.3 | Implement `BaselineService.calculate_hrv_baseline()` | 1.1 |
+| 1.4 | Implement remaining baseline calculations | 1.3 |
+| 1.5 | Create `/users/{id}/baselines` endpoint | 1.4 |
+| 1.6 | Create `/users/{id}/status` endpoint | 1.1 |
+| 1.7 | Add background task for daily recalculation | 1.4 |
+| 1.8 | **Seed test data fixtures** (90 days) | 1.1 |
+| 1.9 | Write tests against seeded data | 1.8 |
+
+### Sprint 2: Patterns (Phase 2)
+
+**Goal:** Pattern detection and anomalies working
+
+| Step | Task | Depends On |
+|------|------|------------|
+| 2.1 | Create `PatternAnalysis` model | 1.2 |
+| 2.2 | Implement Spearman correlation detection | 2.1 |
+| 2.3 | Implement IQR anomaly detection | 1.4 |
+| 2.4 | Implement overtraining risk score | 1.4, 2.2 |
+| 2.5 | Create `/users/{id}/patterns` endpoint | 2.4 |
+| 2.6 | Create `/users/{id}/anomalies` endpoint | 2.3 |
+| 2.7 | Write tests with seeded edge cases | 2.5, 2.6 |
+
+### Sprint 3: Insights API (Phase 4)
+
+**Goal:** Unified insights endpoint for coach consumption
+
+| Step | Task | Depends On |
+|------|------|------------|
+| 3.1 | Create Pydantic response schemas | - |
+| 3.2 | Implement `InsightsService` aggregation | 1.4, 2.4 |
+| 3.3 | Implement `ObservationGenerator` | 3.2 |
+| 3.4 | Implement data readiness checks | 3.2 |
+| 3.5 | Create `/users/{id}/insights` endpoint | 3.4 |
+| 3.6 | Test with various data ages (7, 14, 30, 60 days) | 3.5 |
+| 3.7 | Document for Laravel integration | 3.5 |
+
+### Sprint 4: ML (Phase 3) - Optional
+
+**Goal:** Predictive capabilities
+
+| Step | Task | Depends On |
+|------|------|------------|
+| 4.1 | Create `UserModel` with JSON params storage | - |
+| 4.2 | Implement model training service | 4.1 |
+| 4.3 | Implement model loading with whitelist | 4.2 |
+| 4.4 | Create `/users/{id}/predictions` endpoint | 4.3 |
+| 4.5 | Add ONNX export option | 4.2 |
+| 4.6 | Test with 90-day seeded data | 4.4 |
+
+---
+
 ## Implementation Priority
 
 ### Immediate (Phase 1) - Foundation
@@ -929,6 +1101,149 @@ GET /users/{user_id}/insights
 
 ## Testing Strategy
 
+### Test Data Seeding
+
+**Critical:** Tests MUST use realistic seeded data to prove endpoints work.
+
+#### Seed Data Generator
+
+```python
+# tests/fixtures/seed_data.py
+from datetime import date, timedelta
+import random
+
+def generate_realistic_hrv_data(days: int = 90, base_hrv: float = 50) -> list[dict]:
+    """Generate realistic HRV data with weekly patterns and natural variation."""
+    data = []
+    current_date = date.today() - timedelta(days=days)
+
+    for day in range(days):
+        # Weekly pattern: lower HRV on Monday (after weekend activities)
+        day_of_week = (current_date + timedelta(days=day)).weekday()
+        weekly_factor = 0.95 if day_of_week == 0 else 1.0
+
+        # Natural daily variation (±10%)
+        daily_variation = random.gauss(1.0, 0.05)
+
+        # Gradual trend (slight improvement over time)
+        trend = 1 + (day / days) * 0.05
+
+        hrv = base_hrv * weekly_factor * daily_variation * trend
+
+        data.append({
+            "date": current_date + timedelta(days=day),
+            "hrv": round(hrv, 1),
+            "ans_charge": random.randint(3, 5),
+            "recovery_status": "ok" if hrv > 45 else "compromised"
+        })
+
+    return data
+
+
+def generate_sleep_data(days: int = 90) -> list[dict]:
+    """Generate realistic sleep data with consistency patterns."""
+    data = []
+    current_date = date.today() - timedelta(days=days)
+    base_bedtime_hour = 23  # 11 PM
+
+    for day in range(days):
+        # Weekend: later bedtime
+        day_of_week = (current_date + timedelta(days=day)).weekday()
+        is_weekend = day_of_week >= 5
+
+        bedtime_variation = random.gauss(0, 0.5)  # ±30 min typical
+        if is_weekend:
+            bedtime_variation += 1.0  # Later on weekends
+
+        sleep_score = random.gauss(78, 8)  # Mean 78, std 8
+        if is_weekend:
+            sleep_score -= 5  # Worse sleep on weekends (staying up late)
+
+        data.append({
+            "date": current_date + timedelta(days=day),
+            "sleep_score": max(40, min(100, round(sleep_score))),
+            "total_sleep_seconds": random.randint(6*3600, 9*3600),
+            "light_sleep_seconds": random.randint(2*3600, 4*3600),
+            "deep_sleep_seconds": random.randint(1*3600, 2*3600),
+            "rem_sleep_seconds": random.randint(1*3600, 2*3600),
+        })
+
+    return data
+
+
+def generate_overtraining_scenario(days: int = 30) -> dict:
+    """Generate data showing classic overtraining pattern."""
+    # First 20 days: normal
+    # Last 10 days: declining HRV, rising RHR, declining sleep
+    return {
+        "hrv": [50]*20 + [48, 46, 44, 42, 40, 38, 36, 35, 34, 33],
+        "rhr": [55]*20 + [56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
+        "sleep_score": [80]*20 + [78, 76, 74, 72, 70, 68, 66, 65, 64, 62],
+        "expected_risk_score": 75  # High risk
+    }
+
+
+def generate_anomaly_scenario() -> dict:
+    """Generate data with known anomalies for testing IQR detection."""
+    # 30 days of normal data, then an anomaly
+    normal_hrv = [50 + random.gauss(0, 3) for _ in range(30)]
+    return {
+        "hrv": normal_hrv,
+        "anomaly_value": 25,  # Way below normal - should trigger critical
+        "expected_severity": "critical"
+    }
+```
+
+#### Seeding Fixtures for Pytest
+
+```python
+# tests/conftest.py
+import pytest
+from tests.fixtures.seed_data import (
+    generate_realistic_hrv_data,
+    generate_sleep_data,
+    generate_overtraining_scenario
+)
+
+@pytest.fixture
+async def seeded_user_90_days(session):
+    """Create a test user with 90 days of realistic data."""
+    user_id = "test_user_90d"
+
+    # Seed all data types
+    hrv_data = generate_realistic_hrv_data(days=90)
+    sleep_data = generate_sleep_data(days=90)
+
+    for record in hrv_data:
+        await session.execute(
+            insert(NightlyRecharge).values(user_id=user_id, **record)
+        )
+    for record in sleep_data:
+        await session.execute(
+            insert(Sleep).values(user_id=user_id, **record)
+        )
+
+    await session.commit()
+    return user_id
+
+
+@pytest.fixture
+async def seeded_user_14_days(session):
+    """Create a test user with only 14 days - partial features."""
+    user_id = "test_user_14d"
+    # ... seed 14 days
+    return user_id
+
+
+@pytest.fixture
+async def overtraining_user(session):
+    """Create user showing overtraining pattern."""
+    user_id = "test_overtrained"
+    scenario = generate_overtraining_scenario()
+    # ... seed the scenario data
+    return user_id, scenario["expected_risk_score"]
+```
+
 ### Unit Tests
 
 | Component | Test Approach |
@@ -942,16 +1257,36 @@ GET /users/{user_id}/insights
 
 ```python
 # Example: Test baseline calculation end-to-end
-async def test_hrv_baseline_calculation():
-    # Arrange: Insert 30 days of known HRV values
-    await insert_test_recharge_data(user_id="test", hrv_values=[45, 50, 48, ...])
-
+async def test_hrv_baseline_calculation(seeded_user_90_days, session):
     # Act: Calculate baselines
-    result = await baseline_service.calculate_hrv_baseline("test", session)
+    result = await baseline_service.calculate_hrv_baseline(seeded_user_90_days, session)
 
-    # Assert: Known statistical properties
-    assert result["baseline_30d"] == pytest.approx(47.5, rel=0.01)
-    assert result["sample_count"] == 30
+    # Assert: Should have all baselines with 90 days of data
+    assert result["status"] == "ready"
+    assert result["baseline_7d"] is not None
+    assert result["baseline_30d"] is not None
+    assert result["baseline_90d"] is not None
+    assert result["sample_count"] == 90
+
+
+async def test_partial_data_response(seeded_user_14_days, session):
+    """Test that 14-day user gets partial response."""
+    result = await insights_service.get_insights(seeded_user_14_days, session)
+
+    assert result["status"] == "partial"
+    assert result["feature_availability"]["baselines_7d"]["available"] is True
+    assert result["feature_availability"]["patterns"]["available"] is False
+    assert result["unlock_progress"]["next_unlock"] == "patterns"
+
+
+async def test_overtraining_detection(overtraining_user, session):
+    """Test that overtraining pattern is correctly detected."""
+    user_id, expected_score = overtraining_user
+    result = await pattern_service.detect_overtraining_risk(user_id, session)
+
+    assert result["score"] >= expected_score - 10  # Allow some tolerance
+    assert result["significance"] == "high"
+    assert "HRV declining" in result["details"]["risk_factors"]
 ```
 
 ### ML Model Tests
@@ -960,6 +1295,18 @@ async def test_hrv_baseline_calculation():
 - Test model reconstruction from JSON params
 - Verify ONNX export/import produces same predictions
 - Test with edge cases (missing data, outliers)
+
+### Data Age Scenario Tests
+
+| Scenario | Days | Expected Behavior |
+|----------|------|-------------------|
+| Brand new user | 0 | `status: "unavailable"`, onboarding message |
+| Week 1 | 7 | 7-day baselines only, everything else locked |
+| Week 2 | 14 | Trends available, patterns locked |
+| Week 3 | 21 | Patterns unlock, correlations work |
+| Month 1 | 30 | Full baselines, all patterns |
+| Month 2 | 60 | ML predictions unlock |
+| Month 3+ | 90 | Full functionality |
 
 ---
 
