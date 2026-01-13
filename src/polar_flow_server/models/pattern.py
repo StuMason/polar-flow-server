@@ -90,7 +90,7 @@ class PatternAnalysis(Base, UserScopedMixin, TimestampMixin):
     metrics_involved: Mapped[list[str]] = mapped_column(
         JSON,
         nullable=False,
-        default=list,
+        default=lambda: [],  # Explicit factory to avoid mutable default concerns
         comment="List of metrics used in this analysis",
     )
 
@@ -161,5 +161,6 @@ class PatternAnalysis(Base, UserScopedMixin, TimestampMixin):
         """Get human-readable interpretation from details."""
         if self.details and "interpretation" in self.details:
             value = self.details["interpretation"]
-            return str(value) if value is not None else None
+            if isinstance(value, str):
+                return value
         return None

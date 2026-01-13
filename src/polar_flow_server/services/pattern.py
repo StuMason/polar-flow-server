@@ -1,5 +1,6 @@
 """Pattern detection service for correlations and composite scores."""
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from statistics import mean
@@ -158,6 +159,22 @@ class PatternService:
         result = stats.spearmanr(sleep_values, hrv_values)
         correlation = float(result.statistic)
         p_value = float(result.pvalue)
+
+        # Handle NaN results (can occur with constant arrays or insufficient variance)
+        if math.isnan(correlation) or math.isnan(p_value):
+            self.logger.warning(
+                "Spearman correlation returned NaN",
+                user_id=user_id,
+                sample_count=len(common_dates),
+            )
+            return PatternResult(
+                pattern_type=PatternType.CORRELATION.value,
+                pattern_name=PatternName.SLEEP_HRV_CORRELATION.value,
+                significance=Significance.INSUFFICIENT.value,
+                sample_count=len(common_dates),
+                metrics_involved=["sleep_score", "hrv_rmssd"],
+                details={"reason": "Could not compute correlation - data may lack variance"},
+            )
 
         # Determine significance
         if p_value < 0.01:
@@ -432,10 +449,10 @@ class PatternService:
         if len(data) < MIN_SAMPLES_TREND:
             return None
 
-        # Split into recent (7d) and baseline (30d)
+        # Split into recent (7d) and baseline (older than 7d)
         recent_cutoff = today - timedelta(days=7)
         recent = [v for d, v in data if d >= recent_cutoff]
-        baseline = [v for d, v in data]
+        baseline = [v for d, v in data if d < recent_cutoff]  # Exclude recent days
 
         if len(recent) < 3 or len(baseline) < MIN_SAMPLES_TREND:
             return None
