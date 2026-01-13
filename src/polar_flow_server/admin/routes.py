@@ -484,8 +484,9 @@ async def admin_dashboard(
     result = await session.execute(recent_sleep_stmt)
     recent_sleep = result.scalars().all()
 
-    # Get latest HRV from Nightly Recharge (not Sleep - Sleep API doesn't return HRV)
+    # Get latest HRV and Resting HR from Nightly Recharge (measured during sleep)
     latest_hrv = None
+    latest_resting_hr = None
     latest_recharge_stmt = (
         select(NightlyRecharge)
         .where(NightlyRecharge.hrv_avg.isnot(None))
@@ -496,6 +497,7 @@ async def admin_dashboard(
     latest_recharge = recharge_result.scalar_one_or_none()
     if latest_recharge:
         latest_hrv = latest_recharge.hrv_avg
+        latest_resting_hr = latest_recharge.heart_rate_avg
 
     # Get latest cardio load
     latest_cardio_stmt = select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1)
@@ -634,6 +636,7 @@ async def admin_dashboard(
             "recent_sleep": recent_sleep,
             "recent_recharge": recent_recharge,
             "latest_hrv": latest_hrv,
+            "latest_resting_hr": latest_resting_hr,
             "latest_cardio": latest_cardio,
             "latest_hr": latest_hr,
             "latest_alertness": latest_alertness,
