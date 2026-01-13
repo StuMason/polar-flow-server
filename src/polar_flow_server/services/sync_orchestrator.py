@@ -255,8 +255,17 @@ class SyncOrchestrator:
             )
 
             # Mark sync successful
-            api_calls = sum(results.values()) + 1  # +1 for initial call
+            # API calls = number of data types with records (each requires 1+ API call)
+            api_calls = len([v for v in results.values() if v > 0])
             sync_log.complete_success(records=results, api_calls=api_calls)
+
+            # Update user's last_synced_at timestamp
+            user_result = await self.session.execute(
+                select(User).where(User.polar_user_id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if user:
+                user.last_synced_at = datetime.now(UTC)
 
             log.info("Sync completed successfully", records_synced=results, api_calls=api_calls)
 
@@ -280,9 +289,8 @@ class SyncOrchestrator:
                 is_transient=sync_error.is_transient,
             )
 
-        # Update rate limits from response (if available)
-        # Note: This would require the sync service to capture headers
-        # For now, we track what we can
+        # Note: Rate limit tracking from Polar API headers would require
+        # SDK-level changes. Current implementation uses conservative estimates.
 
         # Commit the sync log
         await self.session.commit()
