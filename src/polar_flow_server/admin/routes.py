@@ -469,12 +469,8 @@ async def admin_dashboard(
     # Biosensing counts (v1.4.0)
     spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
     ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
-    body_temp_count = (
-        await session.execute(select(func.count(BodyTemperature.id)))
-    ).scalar() or 0
-    skin_temp_count = (
-        await session.execute(select(func.count(SkinTemperature.id)))
-    ).scalar() or 0
+    body_temp_count = (await session.execute(select(func.count(BodyTemperature.id)))).scalar() or 0
+    skin_temp_count = (await session.execute(select(func.count(SkinTemperature.id)))).scalar() or 0
 
     # Analytics counts
     baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
@@ -524,7 +520,9 @@ async def admin_dashboard(
     latest_spo2 = spo2_result.scalar_one_or_none()
 
     # Get latest skin temperature (night-time, has baseline deviation)
-    latest_skin_temp_stmt = select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
+    latest_skin_temp_stmt = (
+        select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
+    )
     skin_temp_result = await session.execute(latest_skin_temp_stmt)
     latest_skin_temp = skin_temp_result.scalar_one_or_none()
 
@@ -552,14 +550,18 @@ async def admin_dashboard(
 
     # Get scheduler status
     scheduler = get_scheduler()
-    scheduler_status = scheduler.get_status() if scheduler else {
-        "enabled": settings.sync_enabled,
-        "is_running": False,
-        "interval_minutes": settings.sync_interval_minutes,
-        "next_run_at": None,
-        "last_run_at": None,
-        "last_run_stats": None,
-    }
+    scheduler_status = (
+        scheduler.get_status()
+        if scheduler
+        else {
+            "enabled": settings.sync_enabled,
+            "is_running": False,
+            "interval_minutes": settings.sync_interval_minutes,
+            "next_run_at": None,
+            "last_run_at": None,
+            "last_run_stats": None,
+        }
+    )
 
     # Get recent sync logs
     sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
