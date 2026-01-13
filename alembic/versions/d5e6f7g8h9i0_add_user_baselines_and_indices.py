@@ -75,18 +75,14 @@ def upgrade() -> None:
     )
 
     # Indices for user_baselines
-    op.create_index(
-        op.f("ix_user_baselines_user_id"), "user_baselines", ["user_id"], unique=False
-    )
+    op.create_index(op.f("ix_user_baselines_user_id"), "user_baselines", ["user_id"], unique=False)
     op.create_index(
         op.f("ix_user_baselines_metric_name"),
         "user_baselines",
         ["metric_name"],
         unique=False,
     )
-    op.create_index(
-        op.f("ix_user_baselines_status"), "user_baselines", ["status"], unique=False
-    )
+    op.create_index(op.f("ix_user_baselines_status"), "user_baselines", ["status"], unique=False)
 
     # Composite indices on existing tables for efficient baseline calculations
     # These support queries like: WHERE user_id = ? AND date >= ? ORDER BY date

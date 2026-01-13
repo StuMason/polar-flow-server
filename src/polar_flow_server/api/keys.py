@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
-from litestar import Router, get, post, Request
+from litestar import Request, Router, get, post
 from litestar.exceptions import NotAuthorizedException, NotFoundException
 from litestar.params import Parameter
 from litestar.response import Redirect
@@ -157,7 +157,9 @@ async def oauth_start_saas(
     }
     auth_url = f"https://flow.polar.com/oauth2/authorization?{urlencode(params)}"
 
-    logger.info(f"Starting SaaS OAuth flow, callback_url={callback_url}, redirect_uri={redirect_uri}")
+    logger.info(
+        f"Starting SaaS OAuth flow, callback_url={callback_url}, redirect_uri={redirect_uri}"
+    )
 
     return Redirect(path=auth_url, status_code=HTTP_303_SEE_OTHER)
 
