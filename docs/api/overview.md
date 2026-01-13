@@ -332,6 +332,163 @@ curl -X POST \
 
 ---
 
+### Baselines & Analytics
+
+Personal baselines computed from historical data. Use these for anomaly detection and personalized insights.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users/{user_id}/baselines` | Get all computed baselines |
+| GET | `/users/{user_id}/baselines/{metric_name}` | Get specific baseline |
+| POST | `/users/{user_id}/baselines/calculate` | Trigger baseline calculation |
+| GET | `/users/{user_id}/baselines/check/{metric_name}/{value}` | Check if value is anomalous |
+| GET | `/users/{user_id}/analytics/status` | Get analytics readiness status |
+
+**Valid Metric Names:**
+- `hrv_rmssd` - Heart Rate Variability (RMSSD)
+- `sleep_score` - Overall sleep quality score
+- `resting_hr` - Resting heart rate
+- `training_load` - Training load (cardio load)
+- `training_load_ratio` - Acute:chronic load ratio
+
+#### Get All Baselines
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/baselines
+```
+
+**Response:**
+```json
+[
+  {
+    "metric_name": "hrv_rmssd",
+    "baseline_value": 42.5,
+    "baseline_7d": 44.2,
+    "baseline_30d": 41.8,
+    "baseline_90d": 40.5,
+    "median": 42.0,
+    "q1": 38.5,
+    "q3": 48.2,
+    "iqr": 9.7,
+    "std_dev": 8.3,
+    "min": 28.0,
+    "max": 65.0,
+    "lower_bound": 24.0,
+    "upper_bound": 62.8,
+    "sample_count": 45,
+    "status": "ready",
+    "data_start_date": "2025-11-01",
+    "data_end_date": "2026-01-11",
+    "calculated_at": "2026-01-11T08:00:00Z"
+  }
+]
+```
+
+**Baseline Status:**
+- `ready` - Full baseline (21+ days of data)
+- `partial` - Limited baseline (7-20 days)
+- `insufficient` - Not enough data (<7 days)
+
+#### Check for Anomaly
+
+Uses IQR-based anomaly detection:
+- **Warning**: value outside Q1 - 1.5×IQR to Q3 + 1.5×IQR
+- **Critical**: value outside Q1 - 3×IQR to Q3 + 3×IQR
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/baselines/check/hrv_rmssd/25.5
+```
+
+**Response:**
+```json
+{
+  "value": 25.5,
+  "metric_name": "hrv_rmssd",
+  "is_anomaly": true,
+  "severity": "warning",
+  "baseline": 42.5,
+  "baseline_7d": 44.2,
+  "lower_bound": 24.0,
+  "upper_bound": 62.8,
+  "status": "ready"
+}
+```
+
+#### Calculate Baselines
+
+Trigger baseline recalculation from historical data:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users/12345/baselines/calculate
+```
+
+**Response:**
+```json
+{
+  "user_id": "12345",
+  "baselines_calculated": {
+    "hrv_rmssd": "ready",
+    "sleep_score": "ready",
+    "resting_hr": "ready",
+    "training_load": "partial",
+    "training_load_ratio": "partial"
+  }
+}
+```
+
+#### Analytics Status
+
+Check feature availability based on data history:
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/analytics/status
+```
+
+**Response:**
+```json
+{
+  "user_id": "12345",
+  "data_days": {
+    "sleep": 45,
+    "recharge": 45,
+    "activity": 45,
+    "cardio_load": 30
+  },
+  "min_data_days": 30,
+  "features_available": {
+    "basic_stats": true,
+    "trend_analysis": true,
+    "personalized_baselines": true,
+    "predictive_models": true,
+    "advanced_ml": false,
+    "long_term_patterns": false
+  },
+  "unlock_progress": {
+    "advanced_ml": {
+      "unlocked": false,
+      "days_required": 60,
+      "days_remaining": 30,
+      "progress_percent": 50.0
+    }
+  },
+  "recommendations": [
+    "Great progress! Advanced ML features unlock after 60 days of data."
+  ]
+}
+```
+
+**Feature Unlock Timeline:**
+| Days | Features Unlocked |
+|------|-------------------|
+| 7 | Basic statistics, daily tracking |
+| 14 | Trend analysis, basic anomaly alerts |
+| 21 | Reliable correlations, personalized baselines |
+| 30 | Predictive models, outcome forecasting |
+| 60 | Advanced ML models, behavior patterns |
+| 90 | Long-term pattern recognition |
+
+---
+
 ### Health
 
 | Method | Endpoint | Description |

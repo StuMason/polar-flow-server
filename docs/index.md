@@ -21,10 +21,11 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 - Exercises/workouts with detailed metrics
 
 **Analytics:**
-- HRV baselines (7-day, 30-day, 60-day rolling medians)
-- Recovery status calculation
-- Sleep debt tracking
-- Training load analysis
+- Personal baselines with IQR-based anomaly detection
+- Rolling averages (7-day, 30-day, 90-day)
+- Automatic anomaly alerts (warning/critical severity)
+- Analytics readiness tracking (feature unlock by data availability)
+- Training load ratio monitoring
 
 **Deployment:**
 - Self-hosted mode: Single user, DuckDB, Docker
@@ -71,6 +72,15 @@ docker run -d \
 ```bash
 # Get sleep data
 curl http://localhost:8000/api/v1/users/12345/sleep?days=30
+
+# Get personal baselines
+curl http://localhost:8000/api/v1/users/12345/baselines
+
+# Check if HRV is anomalous
+curl http://localhost:8000/api/v1/users/12345/baselines/check/hrv_rmssd/25.5
+
+# Check analytics feature availability
+curl http://localhost:8000/api/v1/users/12345/analytics/status
 
 # Trigger sync
 curl -X POST \
