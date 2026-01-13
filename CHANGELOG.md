@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+**Automatic Background Sync**
+- Smart sync scheduler with APScheduler for automatic background syncing
+- Rate-limit-aware orchestration respecting Polar API limits (15-min and 24-hour windows)
+- Priority queue system for efficient multi-user sync:
+  - CRITICAL: Users who haven't synced in 48h+ or have expiring tokens
+  - HIGH: Active users, hasn't synced in 12h+
+  - NORMAL: Regular users, hasn't synced in 24h+
+  - LOW: Dormant users, hasn't synced in 7d+
+- Comprehensive `SyncLog` model for complete audit trail of every sync operation
+- Consistent error classification with `SyncErrorType` enum covering:
+  - Authentication errors (TOKEN_EXPIRED, TOKEN_INVALID, TOKEN_REVOKED)
+  - Rate limiting (RATE_LIMITED_15M, RATE_LIMITED_24H)
+  - API errors (API_UNAVAILABLE, API_TIMEOUT, API_ERROR)
+  - Data errors (INVALID_RESPONSE, TRANSFORM_ERROR)
+  - Internal errors (DATABASE_ERROR, INTERNAL_ERROR)
+- Post-sync analytics: Automatic baseline recalculation and pattern detection
+
+**Configuration**
+- `SYNC_ENABLED`: Enable/disable automatic syncing (default: true)
+- `SYNC_INTERVAL_MINUTES`: Sync cycle interval (default: 60)
+- `SYNC_ON_STARTUP`: Run sync immediately on startup (default: true)
+- `SYNC_MAX_USERS_PER_RUN`: Maximum users per sync cycle (default: rate-limit aware)
+- `SYNC_STAGGER_SECONDS`: Delay between user syncs (default: 5)
+
+**Database**
+- New `sync_logs` table with comprehensive fields for audit and debugging
+- Composite indexes for efficient querying by user, status, and error type
+
+---
+
 ## [1.0.0] - 2025-01-13
 
 First stable release of polar-flow-server - a self-hosted health analytics server for Polar devices.

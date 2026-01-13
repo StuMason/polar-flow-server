@@ -537,7 +537,7 @@ async def admin_dashboard(
             "latest_cardio": latest_cardio,
             "latest_hr": latest_hr,
             "latest_alertness": latest_alertness,
-            "sync_interval_hours": settings.sync_interval_hours,
+            "sync_interval_minutes": settings.sync_interval_minutes,
             "recovery_status": recovery_status,
             "api_keys": api_keys,
             "csrf_token": _get_csrf_token(request),

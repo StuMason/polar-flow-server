@@ -22,6 +22,13 @@ from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
 from polar_flow_server.models.spo2 import SpO2
+from polar_flow_server.models.sync_log import (
+    SyncErrorType,
+    SyncLog,
+    SyncPriority,
+    SyncStatus,
+    SyncTrigger,
+)
 from polar_flow_server.models.temp_auth_code import TempAuthCode
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.models.user import User
@@ -50,6 +57,11 @@ __all__ = [
     "SleepWiseAlertness",
     "SleepWiseBedtime",
     "SpO2",
+    "SyncErrorType",
+    "SyncLog",
+    "SyncPriority",
+    "SyncStatus",
+    "SyncTrigger",
     "TempAuthCode",
     "User",
     "UserBaseline",

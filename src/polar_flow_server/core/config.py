@@ -70,11 +70,29 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = Field(default=15, description="JWT access token expiry")
 
     # Sync settings
-    sync_interval_hours: int = Field(default=1, description="How often to sync data")
-    sync_on_startup: bool = Field(default=True, description="Sync immediately on startup")
+    sync_enabled: bool = Field(
+        default=True,
+        description="Enable automatic background syncing",
+    )
+    sync_interval_minutes: int = Field(
+        default=60,
+        description="How often to run sync cycle (minutes)",
+    )
+    sync_on_startup: bool = Field(
+        default=True,
+        description="Sync immediately on startup",
+    )
     sync_days_lookback: int = Field(
         default=30,
         description="How many days of data to fetch on sync",
+    )
+    sync_max_users_per_run: int | None = Field(
+        default=None,
+        description="Maximum users per sync cycle (None = rate limit aware auto)",
+    )
+    sync_stagger_seconds: int = Field(
+        default=5,
+        description="Seconds to wait between user syncs (rate limit protection)",
     )
 
     # Polar OAuth app credentials (app-level, not user-level)
