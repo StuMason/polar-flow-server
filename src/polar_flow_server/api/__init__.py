@@ -1,5 +1,6 @@
 """API routes."""
 
+from polar_flow_server.api.baselines import baselines_router
 from polar_flow_server.api.data import data_router
 from polar_flow_server.api.health import health_router
 from polar_flow_server.api.keys import keys_router, oauth_router
@@ -12,6 +13,7 @@ api_routers = [
     sleep_router,
     sync_router,
     data_router,
+    baselines_router,  # Analytics baselines
     oauth_router,  # OAuth flow and code exchange
     keys_router,  # Key management (regenerate, revoke, status)
 ]
