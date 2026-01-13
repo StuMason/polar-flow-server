@@ -484,20 +484,31 @@ async def admin_dashboard(
     result = await session.execute(recent_sleep_stmt)
     recent_sleep = result.scalars().all()
 
-    # Get latest HRV and Resting HR from Nightly Recharge (measured during sleep)
+    # Get latest HRV from Nightly Recharge
     latest_hrv = None
-    latest_resting_hr = None
-    latest_recharge_stmt = (
+    latest_hrv_stmt = (
         select(NightlyRecharge)
         .where(NightlyRecharge.hrv_avg.isnot(None))
         .order_by(NightlyRecharge.date.desc())
         .limit(1)
     )
-    recharge_result = await session.execute(latest_recharge_stmt)
-    latest_recharge = recharge_result.scalar_one_or_none()
+    hrv_result = await session.execute(latest_hrv_stmt)
+    latest_recharge = hrv_result.scalar_one_or_none()
     if latest_recharge:
         latest_hrv = latest_recharge.hrv_avg
-        latest_resting_hr = latest_recharge.heart_rate_avg
+
+    # Get latest Resting HR from Nightly Recharge (separate query - may be different record)
+    latest_resting_hr = None
+    resting_hr_stmt = (
+        select(NightlyRecharge)
+        .where(NightlyRecharge.heart_rate_avg.isnot(None))
+        .order_by(NightlyRecharge.date.desc())
+        .limit(1)
+    )
+    resting_hr_result = await session.execute(resting_hr_stmt)
+    resting_hr_record = resting_hr_result.scalar_one_or_none()
+    if resting_hr_record:
+        latest_resting_hr = resting_hr_record.heart_rate_avg
 
     # Get latest cardio load
     latest_cardio_stmt = select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1)
