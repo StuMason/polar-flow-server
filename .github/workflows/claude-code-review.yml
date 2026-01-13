@@ -28,21 +28,24 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
           claude_args: |
-            --allowedTools "Bash(gh pr diff *),Bash(gh pr view *),Read,Glob,Grep,Write"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Glob,Grep"
           prompt: |
-            Review PR #${{ github.event.pull_request.number }} thoroughly.
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request thoroughly.
 
             First, run `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
 
-            Then for each changed file, analyze:
+            Then analyze each changed file for:
             1. **Summary**: What does this change do?
             2. **Security**: Any security concerns (auth, injection, secrets)?
             3. **Bugs**: Logic errors, edge cases, error handling?
             4. **Style**: Consistency with codebase patterns?
             5. **Improvements**: Suggestions for better approaches?
 
-            Be specific. Reference line numbers.
+            Be specific. Reference file paths and line numbers.
 
-            IMPORTANT: Do NOT try to post comments using `gh pr comment`. Instead, output your complete review directly as your final response. The GitHub Action will automatically post it as a PR comment.
+            When your review is complete, use `gh pr comment ${{ github.event.pull_request.number }} --body "YOUR_REVIEW"` to post your findings as a PR comment.
 
             Format your review with clear markdown sections and provide an overall recommendation (approve, request changes, or comment).

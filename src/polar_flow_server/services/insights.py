@@ -327,7 +327,7 @@ class InsightsService:
             )
         elif metric_name == "sleep_score":
             stmt = (
-                select(Sleep.sleep_score)
+                select(Sleep.sleep_score)  # type: ignore[assignment]
                 .where(Sleep.user_id == user_id)
                 .order_by(Sleep.date.desc())
                 .limit(1)
@@ -357,7 +357,8 @@ class InsightsService:
             return None
 
         result = await self.session.execute(stmt)
-        return result.scalar()
+        value = result.scalar()
+        return float(value) if value is not None else None
 
     def _calculate_trend(self, baseline: UserBaseline) -> TrendDirection | None:
         """Calculate trend direction from baseline data."""
