@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
-# Install system dependencies (curl for health checks, psycopg dependencies)
+# Install system dependencies (curl/wget for health checks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
