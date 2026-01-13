@@ -124,7 +124,7 @@
         <div class="p-4">
             <div class="text-amber-100 text-xs font-medium uppercase">Load Ratio</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if latest_cardio and latest_cardio.cardio_load_ratio %}{{ latest_cardio.cardio_load_ratio|round(2) }}{% else %}--{% endif %}
+                {% if latest_cardio and latest_cardio.cardio_load_ratio and latest_cardio.cardio_load_ratio > 0 %}{{ latest_cardio.cardio_load_ratio|round(2) }}{% else %}--{% endif %}
             </div>
         </div>
     </div>
