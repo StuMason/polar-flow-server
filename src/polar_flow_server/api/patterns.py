@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from litestar import Router, get, post
-from litestar.exceptions import ValidationException
+from litestar.exceptions import NotFoundException, ValidationException
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,7 +78,7 @@ async def get_pattern_by_name(
     user_id: str,
     pattern_name: str,
     session: AsyncSession,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Get a specific pattern by name.
 
     Valid pattern names:
@@ -86,20 +86,24 @@ async def get_pattern_by_name(
     - overtraining_risk: Multi-metric overtraining risk score
     - hrv_trend: 7-day HRV trend vs 30-day baseline
     - sleep_trend: 7-day sleep score trend vs 30-day baseline
+
+    Raises:
+        NotFoundException: If pattern name is invalid or pattern not found
     """
     validate_user_id(user_id)
 
     # Validate pattern name
-    try:
-        PatternName(pattern_name)
-    except ValueError:
-        return None
+    valid_names = [p.value for p in PatternName]
+    if pattern_name not in valid_names:
+        raise NotFoundException(
+            f"Invalid pattern name '{pattern_name}'. Valid names: {', '.join(valid_names)}"
+        )
 
     service = PatternService(session)
     pattern = await service.get_pattern(user_id, pattern_name)
 
     if not pattern:
-        return None
+        raise NotFoundException(f"Pattern '{pattern_name}' not found for user")
 
     return {
         "pattern_type": pattern.pattern_type,

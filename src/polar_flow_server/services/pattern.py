@@ -69,31 +69,39 @@ class PatternService:
 
         Returns:
             Dict mapping pattern names to their significance
+
+        Raises:
+            Exception: Re-raises after rollback if pattern detection fails
         """
         self.logger.info("Detecting all patterns", user_id=user_id)
 
         results = {}
 
-        # Correlations
-        sleep_hrv = await self.detect_sleep_hrv_correlation(user_id)
-        results[sleep_hrv.pattern_name] = sleep_hrv.significance
-        await self._upsert_pattern(user_id, sleep_hrv)
+        try:
+            # Correlations
+            sleep_hrv = await self.detect_sleep_hrv_correlation(user_id)
+            results[sleep_hrv.pattern_name] = sleep_hrv.significance
+            await self._upsert_pattern(user_id, sleep_hrv)
 
-        # Composite scores
-        overtraining = await self.detect_overtraining_risk(user_id)
-        results[overtraining.pattern_name] = overtraining.significance
-        await self._upsert_pattern(user_id, overtraining)
+            # Composite scores
+            overtraining = await self.detect_overtraining_risk(user_id)
+            results[overtraining.pattern_name] = overtraining.significance
+            await self._upsert_pattern(user_id, overtraining)
 
-        # Trends
-        hrv_trend = await self.detect_hrv_trend(user_id)
-        results[hrv_trend.pattern_name] = hrv_trend.significance
-        await self._upsert_pattern(user_id, hrv_trend)
+            # Trends
+            hrv_trend = await self.detect_hrv_trend(user_id)
+            results[hrv_trend.pattern_name] = hrv_trend.significance
+            await self._upsert_pattern(user_id, hrv_trend)
 
-        sleep_trend = await self.detect_sleep_trend(user_id)
-        results[sleep_trend.pattern_name] = sleep_trend.significance
-        await self._upsert_pattern(user_id, sleep_trend)
+            sleep_trend = await self.detect_sleep_trend(user_id)
+            results[sleep_trend.pattern_name] = sleep_trend.significance
+            await self._upsert_pattern(user_id, sleep_trend)
 
-        await self.session.commit()
+            await self.session.commit()
+        except Exception as e:
+            await self.session.rollback()
+            self.logger.error("Pattern detection failed", user_id=user_id, error=str(e))
+            raise
 
         self.logger.info("Pattern detection complete", user_id=user_id, results=results)
         return results
