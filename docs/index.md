@@ -29,6 +29,7 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 - Sleep-HRV correlation analysis (Spearman)
 - Overtraining risk scoring (multi-metric composite)
 - Trend detection (7-day vs 30-day baseline)
+- Unified insights API with natural language observations
 
 **Deployment:**
 - Self-hosted mode: Single user, DuckDB, Docker
@@ -90,6 +91,9 @@ curl -X POST http://localhost:8000/api/v1/users/12345/patterns/detect
 
 # Scan all metrics for anomalies
 curl http://localhost:8000/api/v1/users/12345/anomalies
+
+# Get unified insights (baselines + patterns + observations)
+curl http://localhost:8000/api/v1/users/12345/insights
 
 # Check analytics feature availability
 curl http://localhost:8000/api/v1/users/12345/analytics/status

@@ -4,6 +4,19 @@ REST API for accessing synced Polar health data.
 
 Base URL: `http://localhost:8000/api/v1`
 
+## OpenAPI Specification
+
+The full OpenAPI 3.1 specification is available at:
+
+- **JSON**: `GET /schema/openapi.json`
+- **Interactive Docs**: `GET /schema/swagger` (Swagger UI)
+- **ReDoc**: `GET /schema/redoc`
+
+```bash
+# Download OpenAPI spec
+curl http://localhost:8000/schema/openapi.json > openapi.json
+```
+
 ## Authentication
 
 All data endpoints require a `user_id` in the URL path. For self-hosted deployments, this is your Polar user ID. For SaaS integrations, this is your application's user identifier.
@@ -629,6 +642,227 @@ curl http://localhost:8000/api/v1/users/12345/anomalies
 **Anomaly Severity:**
 - `warning` - Value outside Q1 - 1.5×IQR to Q3 + 1.5×IQR
 - `critical` - Value outside Q1 - 3×IQR to Q3 + 3×IQR
+
+---
+
+### Unified Insights
+
+The unified insights endpoint aggregates all analytics into a single response optimized for downstream consumers (dashboards, coaching apps, etc.).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users/{user_id}/insights` | Get complete insights package |
+
+**Response includes:**
+- Current metric values
+- Personal baseline comparisons
+- Detected patterns (correlations, trends, risk scores)
+- Anomalies (values outside normal bounds)
+- Natural language observations
+- Actionable suggestions
+- Feature availability based on data history
+
+#### Feature Unlock Timeline
+
+Features unlock progressively as more data becomes available:
+
+| Days of Data | Features Available |
+|--------------|-------------------|
+| 0-6 | Raw data only, no analytics |
+| 7+ | 7-day baselines |
+| 21+ | Pattern detection, anomaly detection |
+| 30+ | Full 30-day baselines |
+| 60+ | ML predictions (future) |
+
+#### Example Request
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/insights
+```
+
+#### Example Response (30+ days of data)
+
+```json
+{
+  "user_id": "12345",
+  "generated_at": "2026-01-13T10:30:00Z",
+  "data_freshness": "2026-01-13T06:00:00Z",
+  "data_age_days": 45,
+  "status": "ready",
+
+  "feature_availability": {
+    "baselines_7d": {"available": true, "message": null},
+    "baselines_30d": {"available": true, "message": null},
+    "patterns": {"available": true, "message": null},
+    "anomaly_detection": {"available": true, "message": null},
+    "ml_predictions": {"available": false, "message": "Unlocks in 15 days", "unlock_at_days": 60}
+  },
+
+  "unlock_progress": {
+    "next_unlock": "ml_predictions",
+    "days_until_next": 15,
+    "percent_to_next": 75.0
+  },
+
+  "current_metrics": {
+    "hrv": 45.2,
+    "sleep_score": 78,
+    "resting_hr": 52,
+    "training_load_ratio": 1.1
+  },
+
+  "baselines": {
+    "hrv_rmssd": {
+      "current": 45.2,
+      "baseline": 52.0,
+      "baseline_7d": 48.5,
+      "baseline_30d": 52.0,
+      "percent_of_baseline": 86.9,
+      "trend": "declining",
+      "status": "ready"
+    },
+    "sleep_score": {
+      "current": 78,
+      "baseline": 82.0,
+      "percent_of_baseline": 95.1,
+      "trend": "stable",
+      "status": "ready"
+    }
+  },
+
+  "patterns": [
+    {
+      "name": "sleep_hrv_correlation",
+      "pattern_type": "correlation",
+      "score": 0.72,
+      "significance": "high",
+      "factors": [],
+      "interpretation": "Strong positive correlation between sleep quality and HRV"
+    },
+    {
+      "name": "overtraining_risk",
+      "pattern_type": "composite",
+      "score": 35,
+      "significance": "medium",
+      "factors": ["HRV trending below baseline"],
+      "interpretation": null
+    }
+  ],
+
+  "anomalies": [],
+
+  "observations": [
+    {
+      "category": "recovery",
+      "priority": "high",
+      "fact": "HRV is 13% below personal baseline",
+      "context": "Current: 45ms, Baseline: 52ms",
+      "trend": "declining"
+    },
+    {
+      "category": "recovery",
+      "priority": "info",
+      "fact": "Strong connection between your sleep quality and HRV detected",
+      "context": "Better sleep directly improves your recovery metrics",
+      "trend": null
+    }
+  ],
+
+  "suggestions": [
+    {
+      "action": "prioritize_recovery",
+      "description": "Prioritize sleep and recovery today",
+      "confidence": 0.85,
+      "reason": "HRV is 13% below baseline"
+    }
+  ]
+}
+```
+
+#### Example Response (New User - 5 days)
+
+```json
+{
+  "user_id": "12345",
+  "generated_at": "2026-01-13T10:30:00Z",
+  "data_age_days": 5,
+  "status": "unavailable",
+
+  "feature_availability": {
+    "baselines_7d": {"available": false, "message": "Unlocks in 2 days", "unlock_at_days": 7},
+    "baselines_30d": {"available": false, "message": "Unlocks in 25 days", "unlock_at_days": 30},
+    "patterns": {"available": false, "message": "Unlocks in 16 days", "unlock_at_days": 21},
+    "anomaly_detection": {"available": false, "message": "Unlocks in 16 days", "unlock_at_days": 21},
+    "ml_predictions": {"available": false, "message": "Unlocks in 55 days", "unlock_at_days": 60}
+  },
+
+  "unlock_progress": {
+    "next_unlock": "baselines_7d",
+    "days_until_next": 2,
+    "percent_to_next": 71.4
+  },
+
+  "current_metrics": {
+    "hrv": 48.0,
+    "sleep_score": 75,
+    "resting_hr": 55,
+    "training_load_ratio": null
+  },
+
+  "baselines": {},
+  "patterns": [],
+  "anomalies": [],
+
+  "observations": [
+    {
+      "category": "onboarding",
+      "priority": "info",
+      "fact": "Building your personal baselines (5/7 days)",
+      "context": "Keep wearing your device. Basic insights unlock in 2 days.",
+      "trend": null
+    }
+  ],
+
+  "suggestions": []
+}
+```
+
+#### Response Fields
+
+| Field | Description |
+|-------|-------------|
+| `status` | Overall status: `ready`, `partial`, or `unavailable` |
+| `data_age_days` | Number of days of data available |
+| `feature_availability` | Which analytics features are unlocked |
+| `unlock_progress` | Progress toward unlocking the next feature |
+| `current_metrics` | Most recent values of key health metrics |
+| `baselines` | Personal baseline comparisons by metric |
+| `patterns` | Detected patterns (correlations, trends, risk scores) |
+| `anomalies` | Values outside normal IQR bounds |
+| `observations` | Natural language observations for coaching |
+| `suggestions` | Actionable suggestions based on current state |
+
+#### Observation Categories
+
+| Category | Description |
+|----------|-------------|
+| `recovery` | Recovery and HRV-related observations |
+| `sleep` | Sleep quality observations |
+| `training` | Training load and overtraining observations |
+| `anomaly` | Detected anomalies in metrics |
+| `onboarding` | New user guidance |
+| `trend` | Trend-related observations |
+
+#### Observation Priorities
+
+| Priority | Description |
+|----------|-------------|
+| `critical` | Requires immediate attention |
+| `high` | Important observation |
+| `medium` | Moderate importance |
+| `low` | Minor observation |
+| `info` | Informational |
+| `positive` | Good news |
 
 ---
 
