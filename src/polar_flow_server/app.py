@@ -19,9 +19,15 @@ from polar_flow_server import __version__
 from polar_flow_server.admin import admin_router
 from polar_flow_server.api import api_routers
 from polar_flow_server.core.config import settings
-from polar_flow_server.core.database import close_database, engine, init_database
+from polar_flow_server.core.database import (
+    async_session_maker,
+    close_database,
+    engine,
+    init_database,
+)
 from polar_flow_server.middleware import RateLimitHeadersMiddleware
 from polar_flow_server.routes import root_redirect
+from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
 
 # Configure structured logging
 structlog.configure(
@@ -48,21 +54,33 @@ async def lifespan(app: Litestar) -> AsyncIterator[None]:
 
     Handles startup and shutdown tasks:
     - Initialize database on startup
+    - Start background sync scheduler
     - Close database connections on shutdown
+    - Stop scheduler on shutdown
     """
     logger.info(
         "Starting polar-flow-server",
         version=__version__,
         mode=settings.deployment_mode.value,
+        sync_enabled=settings.sync_enabled,
+        sync_interval=settings.sync_interval_minutes,
     )
 
     # Initialize database tables
     await init_database()
     logger.info("Database initialized")
 
+    # Start background sync scheduler
+    scheduler = SyncScheduler(async_session_maker)
+    set_scheduler(scheduler)
+    await scheduler.start()
+
     yield
 
-    # Cleanup
+    # Stop scheduler
+    await scheduler.stop()
+
+    # Cleanup database
     await close_database()
     logger.info("Shutdown complete")
 
