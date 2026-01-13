@@ -34,12 +34,12 @@
     </div>
 </div>
 
-<!-- Key Metrics Row (Latest Values) -->
-<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-6" id="stats-container">
+<!-- Key Metrics Row 1 (Heart & Recovery) -->
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-4" id="stats-container">
     <!-- Latest HRV -->
     <div class="bg-gradient-to-br from-purple-500 to-purple-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-purple-100 text-xs font-medium uppercase">HRV (last night)</div>
+            <div class="text-purple-100 text-xs font-medium uppercase">HRV (RMSSD)</div>
             <div class="text-white text-2xl font-bold mt-1">
                 {% if latest_hrv %}{{ latest_hrv|round(0) }}<span class="text-sm font-normal ml-1">ms</span>{% else %}--{% endif %}
             </div>
@@ -51,7 +51,7 @@
         <div class="p-4">
             <div class="text-red-100 text-xs font-medium uppercase">Resting HR</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if latest_resting_hr %}{{ latest_resting_hr }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
+                {% if latest_resting_hr %}{{ latest_resting_hr|round(0) }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
             </div>
         </div>
     </div>
@@ -66,12 +66,22 @@
         </div>
     </div>
 
-    <!-- Cardio Load -->
-    <div class="bg-gradient-to-br from-orange-500 to-orange-600 overflow-hidden shadow rounded-lg">
+    <!-- Breathing Rate -->
+    <div class="bg-gradient-to-br from-teal-500 to-teal-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-orange-100 text-xs font-medium uppercase">7-Day Strain</div>
+            <div class="text-teal-100 text-xs font-medium uppercase">Breathing Rate</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
+                {% if latest_breathing_rate %}{{ latest_breathing_rate|round(1) }}<span class="text-sm font-normal ml-1">/min</span>{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Sleep Score (latest) -->
+    <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-indigo-100 text-xs font-medium uppercase">Sleep Score</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}<span class="text-sm font-normal ml-1">/100</span>{% else %}--{% endif %}
             </div>
         </div>
     </div>
@@ -85,13 +95,68 @@
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Sleep Score (latest) -->
-    <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 overflow-hidden shadow rounded-lg">
+<!-- Key Metrics Row 2 (Activity & Training) -->
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6 mb-6">
+    <!-- Steps -->
+    <div class="bg-gradient-to-br from-green-500 to-green-600 overflow-hidden shadow rounded-lg">
         <div class="p-4">
-            <div class="text-indigo-100 text-xs font-medium uppercase">Sleep Score</div>
+            <div class="text-green-100 text-xs font-medium uppercase">Steps</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}<span class="text-sm font-normal ml-1">/100</span>{% else %}--{% endif %}
+                {% if latest_activity and latest_activity.steps %}{{ "{:,}".format(latest_activity.steps) }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 7-Day Strain -->
+    <div class="bg-gradient-to-br from-orange-500 to-orange-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-orange-100 text-xs font-medium uppercase">7-Day Strain</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Ratio -->
+    <div class="bg-gradient-to-br from-amber-500 to-amber-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-amber-100 text-xs font-medium uppercase">Load Ratio</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_cardio and latest_cardio.cardio_load_ratio %}{{ latest_cardio.cardio_load_ratio|round(2) }}{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- SpO2 -->
+    <div class="bg-gradient-to-br from-cyan-500 to-cyan-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-cyan-100 text-xs font-medium uppercase">SpO2</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_spo2 and latest_spo2.spo2_avg %}{{ latest_spo2.spo2_avg|round(0) }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Skin Temp Deviation -->
+    <div class="bg-gradient-to-br from-rose-500 to-rose-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-rose-100 text-xs font-medium uppercase">Skin Temp Δ</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_skin_temp and latest_skin_temp.deviation_from_baseline is not none %}
+                    {% if latest_skin_temp.deviation_from_baseline >= 0 %}+{% endif %}{{ latest_skin_temp.deviation_from_baseline|round(1) }}<span class="text-sm font-normal ml-1">°C</span>
+                {% else %}--{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Calories -->
+    <div class="bg-gradient-to-br from-lime-500 to-lime-600 overflow-hidden shadow rounded-lg">
+        <div class="p-4">
+            <div class="text-lime-100 text-xs font-medium uppercase">Active Cal</div>
+            <div class="text-white text-2xl font-bold mt-1">
+                {% if latest_activity and latest_activity.calories_active %}{{ "{:,}".format(latest_activity.calories_active) }}{% else %}--{% endif %}
             </div>
         </div>
     </div>

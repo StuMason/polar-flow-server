@@ -539,6 +539,24 @@ async def admin_dashboard(
     skin_temp_result = await session.execute(latest_skin_temp_stmt)
     latest_skin_temp = skin_temp_result.scalar_one_or_none()
 
+    # Get latest activity (for steps)
+    latest_activity_stmt = select(Activity).order_by(Activity.date.desc()).limit(1)
+    activity_result = await session.execute(latest_activity_stmt)
+    latest_activity = activity_result.scalar_one_or_none()
+
+    # Get latest breathing rate from Nightly Recharge
+    latest_breathing_rate = None
+    breathing_stmt = (
+        select(NightlyRecharge)
+        .where(NightlyRecharge.breathing_rate_avg.isnot(None))
+        .order_by(NightlyRecharge.date.desc())
+        .limit(1)
+    )
+    breathing_result = await session.execute(breathing_stmt)
+    breathing_record = breathing_result.scalar_one_or_none()
+    if breathing_record:
+        latest_breathing_rate = breathing_record.breathing_rate_avg
+
     # Get recent recharge data (last 7 days)
     recent_recharge_stmt = (
         select(NightlyRecharge)
@@ -653,6 +671,8 @@ async def admin_dashboard(
             "latest_alertness": latest_alertness,
             "latest_spo2": latest_spo2,
             "latest_skin_temp": latest_skin_temp,
+            "latest_activity": latest_activity,
+            "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,
             # API keys
