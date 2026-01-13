@@ -174,19 +174,16 @@ def upgrade() -> None:
         "ix_sync_logs_user_started",
         "sync_logs",
         ["user_id", "started_at"],
-        comment="For user-specific sync history queries",
     )
     op.create_index(
         "ix_sync_logs_status_started",
         "sync_logs",
         ["status", "started_at"],
-        comment="For filtering syncs by status over time",
     )
     op.create_index(
         "ix_sync_logs_error_type_started",
         "sync_logs",
         ["error_type", "started_at"],
-        comment="For analyzing error patterns over time",
     )
 
 

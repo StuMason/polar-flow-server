@@ -29,15 +29,22 @@ from polar_flow_server.core.security import token_encryption
 from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
 from polar_flow_server.models.api_key import APIKey
+from polar_flow_server.models.baseline import UserBaseline
 from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
+from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.pattern import PatternAnalysis
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.settings import AppSettings
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
+from polar_flow_server.models.spo2 import SpO2
+from polar_flow_server.models.sync_log import SyncLog
+from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.models.user import User
+from polar_flow_server.services.scheduler import get_scheduler
 from polar_flow_server.services.sync import SyncService
 
 # In-memory OAuth state storage (for self-hosted single-instance use)
@@ -459,6 +466,20 @@ async def admin_dashboard(
         await session.execute(select(func.count(ContinuousHeartRate.id)))
     ).scalar() or 0
 
+    # Biosensing counts (v1.4.0)
+    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
+    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
+    body_temp_count = (
+        await session.execute(select(func.count(BodyTemperature.id)))
+    ).scalar() or 0
+    skin_temp_count = (
+        await session.execute(select(func.count(SkinTemperature.id)))
+    ).scalar() or 0
+
+    # Analytics counts
+    baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
+    pattern_count = (await session.execute(select(func.count(PatternAnalysis.id)))).scalar() or 0
+
     # Get latest sleep data (last 7 days)
     since_date = date.today() - timedelta(days=7)
     recent_sleep_stmt = (
@@ -497,6 +518,16 @@ async def admin_dashboard(
     alertness_result = await session.execute(latest_alertness_stmt)
     latest_alertness = alertness_result.scalar_one_or_none()
 
+    # Get latest SpO2
+    latest_spo2_stmt = select(SpO2).order_by(SpO2.test_time.desc()).limit(1)
+    spo2_result = await session.execute(latest_spo2_stmt)
+    latest_spo2 = spo2_result.scalar_one_or_none()
+
+    # Get latest skin temperature (night-time, has baseline deviation)
+    latest_skin_temp_stmt = select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
+    skin_temp_result = await session.execute(latest_skin_temp_stmt)
+    latest_skin_temp = skin_temp_result.scalar_one_or_none()
+
     # Get recent recharge data (last 7 days)
     recent_recharge_stmt = (
         select(NightlyRecharge)
@@ -519,9 +550,39 @@ async def admin_dashboard(
     api_keys_result = await session.execute(api_keys_stmt)
     api_keys = api_keys_result.scalars().all()
 
+    # Get scheduler status
+    scheduler = get_scheduler()
+    scheduler_status = scheduler.get_status() if scheduler else {
+        "enabled": settings.sync_enabled,
+        "is_running": False,
+        "interval_minutes": settings.sync_interval_minutes,
+        "next_run_at": None,
+        "last_run_at": None,
+        "last_run_stats": None,
+    }
+
+    # Get recent sync logs
+    sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
+    sync_logs_result = await session.execute(sync_logs_stmt)
+    recent_sync_logs = sync_logs_result.scalars().all()
+
+    # Calculate sync stats
+    last_24h = datetime.now(UTC) - timedelta(hours=24)
+    sync_stats_stmt = select(SyncLog).where(SyncLog.started_at >= last_24h)
+    sync_stats_result = await session.execute(sync_stats_stmt)
+    recent_syncs = sync_stats_result.scalars().all()
+
+    sync_stats = {
+        "total_24h": len(recent_syncs),
+        "successful_24h": sum(1 for s in recent_syncs if s.status == "success"),
+        "failed_24h": sum(1 for s in recent_syncs if s.status == "failed"),
+        "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
+    }
+
     return Template(
         template_name="admin/dashboard.html",
         context={
+            # Core data counts
             "sleep_count": sleep_count,
             "exercise_count": exercise_count,
             "activity_count": activity_count,
@@ -531,15 +592,33 @@ async def admin_dashboard(
             "bedtime_count": bedtime_count,
             "activity_samples_count": activity_samples_count,
             "continuous_hr_count": continuous_hr_count,
+            # Biosensing counts
+            "spo2_count": spo2_count,
+            "ecg_count": ecg_count,
+            "body_temp_count": body_temp_count,
+            "skin_temp_count": skin_temp_count,
+            # Analytics counts
+            "baseline_count": baseline_count,
+            "pattern_count": pattern_count,
+            # Latest data
             "recent_sleep": recent_sleep,
             "recent_recharge": recent_recharge,
             "latest_hrv": latest_hrv,
             "latest_cardio": latest_cardio,
             "latest_hr": latest_hr,
             "latest_alertness": latest_alertness,
-            "sync_interval_minutes": settings.sync_interval_minutes,
+            "latest_spo2": latest_spo2,
+            "latest_skin_temp": latest_skin_temp,
+            # Recovery
             "recovery_status": recovery_status,
+            # API keys
             "api_keys": api_keys,
+            # Sync scheduler
+            "sync_interval_minutes": settings.sync_interval_minutes,
+            "scheduler_status": scheduler_status,
+            "recent_sync_logs": recent_sync_logs,
+            "sync_stats": sync_stats,
+            # CSRF
             "csrf_token": _get_csrf_token(request),
         },
     )

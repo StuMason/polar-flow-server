@@ -71,7 +71,7 @@
         <div class="p-4">
             <div class="text-blue-100 text-xs font-medium uppercase">Alertness</div>
             <div class="text-white text-2xl font-bold mt-1">
-                {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}<span class="text-sm font-normal ml-1">/5</span>{% else %}--{% endif %}
+                {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}<span class="text-sm font-normal ml-1">/10</span>{% else %}--{% endif %}
             </div>
         </div>
     </div>
@@ -137,7 +137,8 @@
 <!-- Data Record Counts -->
 <div class="bg-white shadow rounded-lg p-4 mb-6">
     <div class="text-xs text-gray-500 uppercase tracking-wide mb-3">Records in Database</div>
-    <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9">
+    <!-- Core Data -->
+    <div class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-9 mb-4">
         <div class="text-center">
             <div class="text-gray-900 text-lg font-semibold">{{ sleep_count }}</div>
             <div class="text-gray-500 text-xs">nights</div>
@@ -173,6 +174,35 @@
         <div class="text-center">
             <div class="text-gray-900 text-lg font-semibold">{{ continuous_hr_count }}</div>
             <div class="text-gray-500 text-xs">HR days</div>
+        </div>
+    </div>
+    <!-- Biosensing & Analytics -->
+    <div class="border-t border-gray-200 pt-3">
+        <div class="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            <div class="text-center">
+                <div class="text-purple-600 text-lg font-semibold">{{ spo2_count }}</div>
+                <div class="text-gray-500 text-xs">SpO2</div>
+            </div>
+            <div class="text-center">
+                <div class="text-purple-600 text-lg font-semibold">{{ ecg_count }}</div>
+                <div class="text-gray-500 text-xs">ECG</div>
+            </div>
+            <div class="text-center">
+                <div class="text-purple-600 text-lg font-semibold">{{ body_temp_count }}</div>
+                <div class="text-gray-500 text-xs">body temp</div>
+            </div>
+            <div class="text-center">
+                <div class="text-purple-600 text-lg font-semibold">{{ skin_temp_count }}</div>
+                <div class="text-gray-500 text-xs">skin temp</div>
+            </div>
+            <div class="text-center">
+                <div class="text-indigo-600 text-lg font-semibold">{{ baseline_count }}</div>
+                <div class="text-gray-500 text-xs">baselines</div>
+            </div>
+            <div class="text-center">
+                <div class="text-indigo-600 text-lg font-semibold">{{ pattern_count }}</div>
+                <div class="text-gray-500 text-xs">patterns</div>
+            </div>
         </div>
     </div>
 </div>
@@ -262,28 +292,124 @@
     {% endif %}
 </div>
 
-<!-- Sync Control -->
+<!-- Sync Scheduler Status & Control -->
 <div class="bg-white shadow rounded-lg p-6 mb-6">
     <div class="flex items-center justify-between mb-4">
         <div>
-            <h2 class="text-lg font-semibold text-gray-900">Data Sync</h2>
-            <p class="text-sm text-gray-600">Auto-sync runs every {{ sync_interval_minutes }} minutes. Syncs all 9 endpoints.</p>
+            <h2 class="text-lg font-semibold text-gray-900">Background Sync</h2>
+            <p class="text-sm text-gray-600">Automatic sync every {{ sync_interval_minutes }} minutes</p>
         </div>
-        <button
-            hx-post="/admin/sync"
-            hx-target="#sync-result"
-            hx-swap="innerHTML"
-            hx-indicator="#sync-spinner"
-            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-            <svg id="sync-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Sync Now
-        </button>
+        <div class="flex items-center gap-3">
+            {% if scheduler_status.is_running %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span class="w-2 h-2 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
+                Running
+            </span>
+            {% elif scheduler_status.enabled %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                Enabled (not started)
+            </span>
+            {% else %}
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                Disabled
+            </span>
+            {% endif %}
+            <button
+                hx-post="/admin/sync"
+                hx-target="#sync-result"
+                hx-swap="innerHTML"
+                hx-indicator="#sync-spinner"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+                <svg id="sync-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Sync Now
+            </button>
+        </div>
     </div>
+
+    <!-- Scheduler Stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+        <div>
+            <div class="text-xs text-gray-500 uppercase">Next Run</div>
+            <div class="text-sm font-medium text-gray-900">
+                {% if scheduler_status.next_run_at %}{{ scheduler_status.next_run_at }}{% else %}--{% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="text-xs text-gray-500 uppercase">Last Run</div>
+            <div class="text-sm font-medium text-gray-900">
+                {% if scheduler_status.last_run_at %}{{ scheduler_status.last_run_at }}{% else %}Never{% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="text-xs text-gray-500 uppercase">24h Success</div>
+            <div class="text-sm font-medium text-green-600">{{ sync_stats.successful_24h }}/{{ sync_stats.total_24h }}</div>
+        </div>
+        <div>
+            <div class="text-xs text-gray-500 uppercase">24h Failed</div>
+            <div class="text-sm font-medium {% if sync_stats.failed_24h > 0 %}text-red-600{% else %}text-gray-900{% endif %}">{{ sync_stats.failed_24h }}</div>
+        </div>
+    </div>
+
     <div id="sync-result"></div>
+
+    <!-- Recent Sync Logs -->
+    {% if recent_sync_logs %}
+    <div class="mt-4">
+        <h3 class="text-sm font-medium text-gray-700 mb-2">Recent Sync History</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">User</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Records</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for log in recent_sync_logs %}
+                    <tr>
+                        <td class="px-3 py-2 whitespace-nowrap text-gray-500">
+                            {{ log.started_at.strftime('%m/%d %H:%M') }}
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            <code class="text-xs bg-gray-100 px-1 rounded">{{ log.user_id[:12] }}{% if log.user_id|length > 12 %}...{% endif %}</code>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            {% if log.status == 'success' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Success</span>
+                            {% elif log.status == 'partial' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Partial</span>
+                            {% elif log.status == 'failed' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="{{ log.error_message }}">Failed</span>
+                            {% elif log.status == 'started' %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Running</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{{ log.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-gray-500 text-xs">{{ log.trigger }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-gray-500">
+                            {% if log.duration_ms %}{{ (log.duration_ms / 1000)|round(1) }}s{% else %}--{% endif %}
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-gray-500 text-xs">
+                            {% if log.records_synced %}
+                            {{ log.records_synced|length }} types
+                            {% else %}--{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Two Column Layout for Tables -->
@@ -481,7 +607,7 @@
 
 <!-- Continuous HR Details -->
 {% if latest_hr %}
-<div class="bg-white shadow rounded-lg p-6">
+<div class="bg-white shadow rounded-lg p-6 mb-6">
     <h2 class="text-lg font-semibold text-gray-900 mb-4">Heart Rate ({{ latest_hr.date }})</h2>
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div>
@@ -499,6 +625,52 @@
         <div>
             <div class="text-gray-500 text-xs uppercase">Samples</div>
             <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Biosensing Data (SpO2, Temperature) -->
+{% if latest_spo2 or latest_skin_temp %}
+<div class="bg-gradient-to-r from-purple-50 to-indigo-50 shadow rounded-lg p-6 mb-6">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">
+        <span class="inline-flex items-center">
+            <svg class="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+            Biosensing
+        </span>
+    </h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {% if latest_spo2 %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">SpO2 ({{ latest_spo2.test_time.strftime('%m/%d') }})</div>
+            <div class="text-xl font-bold text-purple-700">
+                {{ latest_spo2.spo2_avg|round(1) if latest_spo2.spo2_avg else '--' }}<span class="text-sm font-normal ml-1">%</span>
+            </div>
+            {% if latest_spo2.spo2_min %}
+            <div class="text-xs text-gray-500">Min: {{ latest_spo2.spo2_min }}%</div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if latest_skin_temp %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Skin Temp ({{ latest_skin_temp.sleep_date }})</div>
+            <div class="text-xl font-bold text-purple-700">
+                {{ latest_skin_temp.temperature_celsius|round(1) }}<span class="text-sm font-normal ml-1">°C</span>
+            </div>
+            <div class="text-xs {% if latest_skin_temp.is_elevated %}text-red-600{% else %}text-gray-500{% endif %}">
+                {% if latest_skin_temp.deviation_from_baseline > 0 %}+{% endif %}{{ latest_skin_temp.deviation_from_baseline|round(2) }}° from baseline
+            </div>
+        </div>
+        {% endif %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">SpO2 Records</div>
+            <div class="text-xl font-bold text-gray-900">{{ spo2_count }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">ECG Records</div>
+            <div class="text-xl font-bold text-gray-900">{{ ecg_count }}</div>
         </div>
     </div>
 </div>
