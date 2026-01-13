@@ -305,11 +305,11 @@ class BaselineService:
             median_value = median(values)
 
             # Calculate quartiles (returns list with n-1 cut points)
-            # quantiles with n=4 returns [Q1, Q2, Q3]
+            # quantiles(n=4) always returns exactly [Q1, Q2, Q3]
             if sample_count >= 4:
                 qs = quantiles(values, n=4)
                 q1 = qs[0]
-                q3 = qs[2] if len(qs) > 2 else None
+                q3 = qs[2]
 
             # Standard deviation (requires at least 2 values)
             if sample_count >= 2:

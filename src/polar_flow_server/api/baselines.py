@@ -1,9 +1,12 @@
 """Baseline analytics API endpoints."""
 
+import math
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from litestar import Router, get, post
+from litestar.exceptions import ValidationException
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +18,47 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.services.baseline import BaselineService
+
+# Regex for valid user_id format (alphanumeric, underscores, hyphens)
+USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def validate_user_id(user_id: str) -> str:
+    """Validate user_id format to prevent injection attacks.
+
+    Args:
+        user_id: The user identifier to validate
+
+    Returns:
+        The validated user_id
+
+    Raises:
+        ValidationException: If user_id format is invalid
+    """
+    if not user_id or len(user_id) > 100:
+        raise ValidationException("Invalid user_id: must be 1-100 characters")
+    if not USER_ID_PATTERN.match(user_id):
+        raise ValidationException("Invalid user_id: must be alphanumeric with _ or - only")
+    return user_id
+
+
+def validate_float_value(value: float, field_name: str = "value") -> float:
+    """Validate that a float value is finite (not inf, -inf, or NaN).
+
+    Args:
+        value: The float value to validate
+        field_name: Name of the field for error messages
+
+    Returns:
+        The validated value
+
+    Raises:
+        ValidationException: If value is not finite
+    """
+    if not math.isfinite(value):
+        raise ValidationException(f"Invalid {field_name}: must be a finite number")
+    return value
+
 
 # Feature unlock thresholds (days of data required)
 FEATURE_THRESHOLDS = {
@@ -43,6 +87,7 @@ async def get_baselines(
     - IQR statistics (Q1, Q3, median) for anomaly detection
     - Status (ready, partial, insufficient based on data availability)
     """
+    validate_user_id(user_id)
     service = BaselineService(session)
     baselines = await service.get_user_baselines(user_id)
 
@@ -87,6 +132,7 @@ async def get_baseline_by_metric(
     - training_load: Training load (cardio load)
     - training_load_ratio: Acute:chronic load ratio
     """
+    validate_user_id(user_id)
     try:
         metric = MetricName(metric_name)
     except ValueError:
@@ -136,6 +182,7 @@ async def calculate_baselines(
 
     Returns the status of each calculated baseline.
     """
+    validate_user_id(user_id)
     service = BaselineService(session)
     results = await service.calculate_all_baselines(user_id)
 
@@ -172,13 +219,14 @@ async def check_anomaly(
             "upper_bound": 56.5
         }
     """
+    validate_user_id(user_id)
+    validate_float_value(value, "value")
+
     try:
         metric = MetricName(metric_name)
     except ValueError:
-        return {
-            "error": f"Unknown metric: {metric_name}",
-            "valid_metrics": [m.value for m in MetricName],
-        }
+        # Don't reveal all valid metrics to prevent information disclosure
+        raise ValidationException(f"Unknown metric: {metric_name}") from None
 
     service = BaselineService(session)
     baseline = await service.get_baseline(user_id, metric)
@@ -225,6 +273,7 @@ async def get_analytics_status(
     - 60 days: Advanced ML models, behavior patterns
     - 90 days: Long-term pattern recognition
     """
+    validate_user_id(user_id)
     today = datetime.now(UTC).date()
 
     # Count days of data for each data type

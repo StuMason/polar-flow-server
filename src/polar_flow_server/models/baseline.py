@@ -174,19 +174,22 @@ class UserBaseline(Base, UserScopedMixin, TimestampMixin):
         Returns:
             Tuple of (is_anomaly, severity) where severity is 'warning' or 'critical'
         """
-        if self.lower_bound is None or self.upper_bound is None:
+        # Need all three: q1, q3, and derived iqr for anomaly detection
+        if self.q1 is None or self.q3 is None or self.iqr is None:
             return False, None
 
-        # Extreme bounds (3 * IQR)
-        if self.iqr is not None:
-            extreme_lower = self.q1 - 3 * self.iqr  # type: ignore
-            extreme_upper = self.q3 + 3 * self.iqr  # type: ignore
+        # Calculate bounds locally (now type-safe since we checked above)
+        lower_bound = self.q1 - 1.5 * self.iqr
+        upper_bound = self.q3 + 1.5 * self.iqr
+        extreme_lower = self.q1 - 3 * self.iqr
+        extreme_upper = self.q3 + 3 * self.iqr
 
-            if value < extreme_lower or value > extreme_upper:
-                return True, "critical"
+        # Critical: outside 3 * IQR
+        if value < extreme_lower or value > extreme_upper:
+            return True, "critical"
 
-        # Standard bounds (1.5 * IQR)
-        if value < self.lower_bound or value > self.upper_bound:
+        # Warning: outside 1.5 * IQR
+        if value < lower_bound or value > upper_bound:
             return True, "warning"
 
         return False, None

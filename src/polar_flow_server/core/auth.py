@@ -214,6 +214,14 @@ async def per_user_api_key_guard(
     2. Checks rate limits
     3. For user-scoped keys, verifies access to the requested user
 
+    Authorization Model:
+    - **User-scoped keys** (user_id set): Can ONLY access their own data.
+      These are issued to end users via OAuth flow.
+    - **Service-level keys** (user_id=None): Can access ANY user's data.
+      These are intentionally for admin/backend use (e.g., Laravel SaaS
+      backend making requests on behalf of users). Service keys should
+      only be issued to trusted backend systems, never to end users.
+
     Args:
         connection: The ASGI connection
         _: The route handler (unused)
@@ -261,7 +269,9 @@ async def per_user_api_key_guard(
             retry_after = rate_limit_info["reset"] - int(datetime.now(UTC).timestamp())
             raise RateLimitExceeded(retry_after=max(1, retry_after))
 
-        # If user-scoped key, verify access to requested user
+        # Authorization check: user-scoped keys can only access their own data.
+        # Service-level keys (user_id=None) intentionally skip this check -
+        # they can access any user's data for admin/backend operations.
         path_user_id = connection.path_params.get("user_id")
         if api_key.user_id is not None and path_user_id:
             if api_key.user_id != path_user_id:
