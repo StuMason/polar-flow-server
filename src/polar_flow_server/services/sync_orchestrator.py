@@ -266,6 +266,8 @@ class SyncOrchestrator:
             user = user_result.scalar_one_or_none()
             if user:
                 user.last_synced_at = datetime.now(UTC)
+            else:
+                log.warning("User not found after successful sync - cannot update last_synced_at")
 
             log.info("Sync completed successfully", records_synced=results, api_calls=api_calls)
 

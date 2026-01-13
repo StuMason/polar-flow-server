@@ -85,6 +85,7 @@ class SyncScheduler:
         self.last_run_at: datetime | None = None
         self.last_run_stats: dict[str, object] | None = None
         self._sync_job: Job | None = None
+        self._startup_task: asyncio.Task[None] | None = None
         self.logger = logger.bind(component="sync_scheduler")
 
     async def start(self) -> None:
@@ -126,8 +127,8 @@ class SyncScheduler:
         # Run immediately if configured
         if settings.sync_on_startup:
             self.logger.info("Running startup sync")
-            # Run in background to not block startup
-            asyncio.create_task(self._run_startup_sync())
+            # Run in background to not block startup, but track the task
+            self._startup_task = asyncio.create_task(self._run_startup_sync())
 
     async def stop(self) -> None:
         """Stop the background scheduler gracefully."""
@@ -135,6 +136,14 @@ class SyncScheduler:
             return
 
         self.logger.info("Stopping sync scheduler")
+
+        # Cancel startup task if still running
+        if self._startup_task and not self._startup_task.done():
+            self._startup_task.cancel()
+            try:
+                await self._startup_task
+            except asyncio.CancelledError:
+                self.logger.info("Startup sync task cancelled")
 
         self.scheduler.shutdown(wait=True)
         self.is_running = False
