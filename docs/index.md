@@ -2,6 +2,8 @@
 
 Self-hosted health analytics server for Polar devices.
 
+![Dashboard](assets/dashboard.png)
+
 ## What This Does
 
 Polar devices collect health data: sleep, HRV, activity, exercises. The Polar API provides access to this data, but only for the last 28-30 days. This server:

@@ -2,6 +2,13 @@
 
 Self-hosted health analytics server for Polar devices. Own your data, analyze it yourself.
 
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://stumason.github.io/polar-flow-server/)
+[![Docker](https://img.shields.io/docker/v/stumason/polar-flow-server?label=docker)](https://hub.docker.com/r/stumason/polar-flow-server)
+
+![Dashboard](docs/assets/dashboard.png)
+
+**[Full Documentation](https://stumason.github.io/polar-flow-server/)** · [Integration Guide](https://stumason.github.io/polar-flow-server/integration/) · [API Reference](https://stumason.github.io/polar-flow-server/api/overview/)
+
 ## What This Does
 
 Polar devices collect health data: sleep, HRV, activity, exercises. The Polar API provides access to this data, but only for the last 28-30 days.
