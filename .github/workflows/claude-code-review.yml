@@ -26,8 +26,9 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          use_sticky_comment: true
           claude_args: |
-            --allowedTools "Bash(gh pr diff *),Bash(gh pr view *),Bash(gh pr comment *),Read,Glob,Grep"
+            --allowedTools "Bash(gh pr diff *),Bash(gh pr view *),Read,Glob,Grep,Write"
           prompt: |
             Review PR #${{ github.event.pull_request.number }} thoroughly.
 
@@ -40,4 +41,8 @@ jobs:
             4. **Style**: Consistency with codebase patterns?
             5. **Improvements**: Suggestions for better approaches?
 
-            Be specific. Reference line numbers. Post your review as a PR comment using `gh pr comment`.
+            Be specific. Reference line numbers.
+
+            IMPORTANT: Do NOT try to post comments using `gh pr comment`. Instead, output your complete review directly as your final response. The GitHub Action will automatically post it as a PR comment.
+
+            Format your review with clear markdown sections and provide an overall recommendation (approve, request changes, or comment).
