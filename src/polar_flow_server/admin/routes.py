@@ -581,6 +581,34 @@ async def admin_dashboard(
         "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
     }
 
+    # Get analytics data: baselines and patterns for the connected user
+    user_baselines: list[UserBaseline] = []
+    user_patterns: list[PatternAnalysis] = []
+
+    # Get connected user
+    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+    connected_user_result = await session.execute(connected_user_stmt)
+    connected_user = connected_user_result.scalar_one_or_none()
+
+    if connected_user:
+        # Fetch baselines for this user
+        baselines_stmt = (
+            select(UserBaseline)
+            .where(UserBaseline.user_id == connected_user.polar_user_id)
+            .order_by(UserBaseline.metric_name)
+        )
+        baselines_result = await session.execute(baselines_stmt)
+        user_baselines = list(baselines_result.scalars().all())
+
+        # Fetch patterns for this user
+        patterns_stmt = (
+            select(PatternAnalysis)
+            .where(PatternAnalysis.user_id == connected_user.polar_user_id)
+            .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
+        )
+        patterns_result = await session.execute(patterns_stmt)
+        user_patterns = list(patterns_result.scalars().all())
+
     return Template(
         template_name="admin/dashboard.html",
         context={
@@ -620,6 +648,9 @@ async def admin_dashboard(
             "scheduler_status": scheduler_status,
             "recent_sync_logs": recent_sync_logs,
             "sync_stats": sync_stats,
+            # Analytics
+            "user_baselines": user_baselines,
+            "user_patterns": user_patterns,
             # CSRF
             "csrf_token": _get_csrf_token(request),
         },

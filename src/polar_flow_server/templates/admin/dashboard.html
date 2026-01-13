@@ -676,6 +676,160 @@
 </div>
 {% endif %}
 
+<!-- Personal Baselines (Analytics) -->
+{% if user_baselines %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">
+            <span class="inline-flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Personal Baselines
+            </span>
+        </h2>
+        <span class="text-xs text-gray-500">Calculated from your historical data</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Baseline</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">7-Day Avg</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">30-Day Avg</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Range</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for baseline in user_baselines %}
+                <tr>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm font-medium text-gray-900">{{ baseline.metric_name|replace('_', ' ')|title }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="text-sm font-bold text-indigo-600">{{ baseline.baseline_value|round(1) }}</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {% if baseline.baseline_7d %}
+                        {{ baseline.baseline_7d|round(1) }}
+                        {% if baseline.baseline_value %}
+                        <span class="text-xs {% if baseline.baseline_7d > baseline.baseline_value %}text-green-600{% elif baseline.baseline_7d < baseline.baseline_value %}text-red-600{% else %}text-gray-500{% endif %}">
+                            ({% if baseline.baseline_7d > baseline.baseline_value %}+{% endif %}{{ ((baseline.baseline_7d - baseline.baseline_value) / baseline.baseline_value * 100)|round(0) }}%)
+                        </span>
+                        {% endif %}
+                        {% else %}--{% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {% if baseline.baseline_30d %}{{ baseline.baseline_30d|round(1) }}{% else %}--{% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {% if baseline.min_value and baseline.max_value %}
+                        {{ baseline.min_value|round(0) }} - {{ baseline.max_value|round(0) }}
+                        {% else %}--{% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ baseline.sample_count }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                            {% if baseline.status == 'ready' %}bg-green-100 text-green-800
+                            {% elif baseline.status == 'partial' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ baseline.status|title }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Detected Patterns (Analytics) -->
+{% if user_patterns %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">
+            <span class="inline-flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+                Detected Patterns
+            </span>
+        </h2>
+        <span class="text-xs text-gray-500">Correlations, trends & risk scores</span>
+    </div>
+    <div class="space-y-4">
+        {% for pattern in user_patterns %}
+        <div class="border rounded-lg p-4 {% if pattern.significance == 'high' %}border-red-200 bg-red-50{% elif pattern.significance == 'medium' %}border-yellow-200 bg-yellow-50{% else %}border-gray-200{% endif %}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-medium text-gray-900">{{ pattern.pattern_name|replace('_', ' ')|title }}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">{{ pattern.pattern_type }}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                            {% if pattern.significance == 'high' %}bg-red-100 text-red-800
+                            {% elif pattern.significance == 'medium' %}bg-yellow-100 text-yellow-800
+                            {% elif pattern.significance == 'low' %}bg-green-100 text-green-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ pattern.significance|title }}
+                        </span>
+                    </div>
+                    {% if pattern.interpretation %}
+                    <p class="text-sm text-gray-600">{{ pattern.interpretation }}</p>
+                    {% endif %}
+                    <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                        {% if pattern.metrics_involved %}
+                        <span>Metrics: {{ pattern.metrics_involved|join(', ') }}</span>
+                        {% endif %}
+                        <span>•</span>
+                        <span>Window: {{ pattern.analysis_window_days }} days</span>
+                        <span>•</span>
+                        <span>Samples: {{ pattern.sample_count }}</span>
+                    </div>
+                </div>
+                <div class="ml-4 flex-shrink-0 text-right">
+                    {% if pattern.score is not none %}
+                    <div class="text-2xl font-bold {% if pattern.significance == 'high' %}text-red-600{% elif pattern.significance == 'medium' %}text-yellow-600{% else %}text-gray-900{% endif %}">
+                        {% if pattern.pattern_type == 'correlation' %}
+                        {{ pattern.score|round(2) }}
+                        {% elif pattern.pattern_type == 'composite' %}
+                        {{ pattern.score|round(0) }}%
+                        {% else %}
+                        {{ pattern.score|round(1) }}
+                        {% endif %}
+                    </div>
+                    <div class="text-xs text-gray-500">
+                        {% if pattern.pattern_type == 'correlation' %}coefficient{% elif pattern.pattern_type == 'composite' %}risk{% else %}score{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Analytics Empty State -->
+{% if not user_baselines and not user_patterns %}
+<div class="bg-gradient-to-r from-indigo-50 to-purple-50 shadow rounded-lg p-6 mb-6">
+    <div class="text-center py-6">
+        <svg class="mx-auto h-12 w-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+        </svg>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No Analytics Yet</h3>
+        <p class="mt-1 text-sm text-gray-500">Personal baselines and pattern detection require at least 7 days of data.</p>
+        <p class="mt-2 text-xs text-gray-400">
+            Baselines calculate rolling averages of your metrics. Patterns detect correlations (e.g., sleep→HRV),
+            trends, and composite risk scores (e.g., overtraining risk). These power the <code class="bg-gray-100 px-1 rounded">/insights</code> API endpoint.
+        </p>
+    </div>
+</div>
+{% endif %}
+
 <!-- Chart.js Initialization -->
 <script>
 // Chart instances (for cleanup on refresh)

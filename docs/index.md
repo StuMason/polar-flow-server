@@ -37,10 +37,14 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 
 ## Architecture
 
-```
-Polar API → polar-flow-sdk → Sync Service → Database → Analytics → REST API
-                                                                        ↓
-                                                              Dashboard/App
+```mermaid
+flowchart LR
+    A[Polar API] --> B[polar-flow SDK]
+    B --> C[Sync Service]
+    C --> D[(Database)]
+    D --> E[Analytics Engine]
+    E --> F[REST API]
+    F --> G[Dashboard/App]
 ```
 
 Python data analytics engine:
@@ -107,7 +111,9 @@ curl -X POST \
 ## Links
 
 - [Quick Start Guide](quickstart.md)
+- [Integration Guide](integration.md) - Laravel/SaaS integration
 - [Architecture](architecture.md)
 - [API Reference](api/overview.md)
 - [GitHub Repository](https://github.com/StuMason/polar-flow-server)
 - [polar-flow SDK](https://stumason.github.io/polar-flow/)
+- [LLM-Friendly Docs](https://raw.githubusercontent.com/StuMason/polar-flow-server/main/llms.txt) - Aggregated text for AI tools

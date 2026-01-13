@@ -23,6 +23,7 @@ plugins:
 nav:
   - Home: index.md
   - Quick Start: quickstart.md
+  - Integration Guide: integration.md
   - Architecture: architecture.md
   - API Reference: api/overview.md
   - ADRs:
@@ -30,7 +31,11 @@ nav:
 
 markdown_extensions:
   - pymdownx.highlight
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - admonition

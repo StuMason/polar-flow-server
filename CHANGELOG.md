@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-01-13
+
+### Added
+
+**Admin Dashboard Analytics**
+- Personal Baselines section displaying:
+  - All calculated baselines (HRV, sleep score, resting HR, training load, etc.)
+  - Rolling averages (7-day, 30-day) with percentage change from baseline
+  - Min/max range and sample counts
+  - Status indicators (ready, partial, insufficient)
+- Detected Patterns section displaying:
+  - Correlations (sleep-HRV, training-recovery, activity-sleep)
+  - Composite scores (overtraining risk, recovery readiness)
+  - Trends (HRV, sleep, fitness)
+  - Statistical significance levels (high/medium/low)
+  - Pattern interpretations and contributing factors
+- Empty state guidance explaining analytics requirements (7+ days of data)
+
+### Documentation
+- This release makes analytics features visible in the admin dashboard
+- Analytics power the `/users/{user_id}/insights` API endpoint for downstream consumers
+
+---
+
 ## [1.1.0] - 2026-01-13
 
 ### Added
@@ -140,6 +164,7 @@ First stable release of polar-flow-server - a self-hosted health analytics serve
 - Database models for Polar data types
 - Sync service foundation
 
+[1.2.0]: https://github.com/StuMason/polar-flow-server/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/StuMason/polar-flow-server/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/StuMason/polar-flow-server/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/StuMason/polar-flow-server/compare/v0.1.0...v0.2.0
