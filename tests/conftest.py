@@ -135,3 +135,62 @@ async def temp_auth_code(async_session: AsyncSession, test_user):
     )
     await async_session.commit()
     return temp_code, raw_code
+
+
+# =============================================================================
+# Analytics Test Data Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+async def analytics_user_90d(async_session: AsyncSession, test_user):
+    """Create test user with 90 days of analytics data (full baseline status)."""
+    from tests.fixtures.analytics_seed import seed_analytics_data
+
+    counts = await seed_analytics_data(
+        session=async_session,
+        user_id=test_user.polar_user_id,
+        days=90,
+        include_anomalies=True,
+    )
+    return test_user, counts
+
+
+@pytest.fixture
+async def analytics_user_21d(async_session: AsyncSession, test_user):
+    """Create test user with 21 days of analytics data (ready baseline status)."""
+    from tests.fixtures.analytics_seed import seed_analytics_data
+
+    counts = await seed_analytics_data(
+        session=async_session,
+        user_id=test_user.polar_user_id,
+        days=21,
+        include_anomalies=False,
+    )
+    return test_user, counts
+
+
+@pytest.fixture
+async def analytics_user_7d(async_session: AsyncSession, test_user):
+    """Create test user with 7 days of analytics data (partial baseline status)."""
+    from tests.fixtures.analytics_seed import seed_minimal_data
+
+    counts = await seed_minimal_data(
+        session=async_session,
+        user_id=test_user.polar_user_id,
+        days=7,
+    )
+    return test_user, counts
+
+
+@pytest.fixture
+async def analytics_user_3d(async_session: AsyncSession, test_user):
+    """Create test user with 3 days of analytics data (insufficient baseline status)."""
+    from tests.fixtures.analytics_seed import seed_insufficient_data
+
+    counts = await seed_insufficient_data(
+        session=async_session,
+        user_id=test_user.polar_user_id,
+        days=3,
+    )
+    return test_user, counts
