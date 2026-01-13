@@ -1,0 +1,130 @@
+"""Add pattern_analyses table for correlations and composite scores.
+
+Revision ID: e6f7g8h9i0j1
+Revises: d5e6f7g8h9i0
+Create Date: 2026-01-13 10:00:00.000000
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = "e6f7g8h9i0j1"
+down_revision: str | None = "d5e6f7g8h9i0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    """Create pattern_analyses table."""
+    op.create_table(
+        "pattern_analyses",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("user_id", sa.String(50), nullable=False, index=True),
+        # Pattern identification
+        sa.Column(
+            "pattern_type",
+            sa.String(50),
+            nullable=False,
+            index=True,
+            comment="Type of pattern (correlation, trend, composite, etc.)",
+        ),
+        sa.Column(
+            "pattern_name",
+            sa.String(100),
+            nullable=False,
+            index=True,
+            comment="Specific pattern identifier (e.g., sleep_hrv_correlation)",
+        ),
+        # Metrics involved
+        sa.Column(
+            "metrics_involved",
+            postgresql.JSON(),
+            nullable=False,
+            server_default="[]",
+            comment="List of metrics used in this analysis",
+        ),
+        # Analysis window
+        sa.Column(
+            "analysis_window_days",
+            sa.Integer(),
+            nullable=False,
+            server_default="30",
+            comment="Number of days of data used in analysis",
+        ),
+        # Results
+        sa.Column(
+            "score",
+            sa.Float(),
+            nullable=True,
+            comment="Primary score (correlation coefficient, risk score, etc.)",
+        ),
+        sa.Column(
+            "confidence",
+            sa.Float(),
+            nullable=True,
+            comment="Confidence level (1 - p_value for correlations)",
+        ),
+        sa.Column(
+            "significance",
+            sa.String(20),
+            nullable=False,
+            server_default="insufficient",
+            comment="Statistical significance (high, medium, low, insufficient)",
+        ),
+        sa.Column(
+            "details",
+            postgresql.JSON(),
+            nullable=True,
+            comment="Additional analysis details (interpretation, factors, etc.)",
+        ),
+        # Sample info
+        sa.Column(
+            "sample_count",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+            comment="Number of data points used in analysis",
+        ),
+        # Timestamps
+        sa.Column(
+            "analyzed_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            comment="When this analysis was performed",
+        ),
+        sa.Column(
+            "valid_until",
+            sa.DateTime(timezone=True),
+            nullable=True,
+            comment="When this analysis expires",
+        ),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+        ),
+        # Unique constraint
+        sa.UniqueConstraint("user_id", "pattern_type", "pattern_name", name="uq_user_pattern"),
+        comment="Detected patterns and correlations for analytics",
+    )
+
+    # Index for efficient pattern lookups
+    op.create_index(
+        "ix_pattern_user_type_name",
+        "pattern_analyses",
+        ["user_id", "pattern_type", "pattern_name"],
+    )
+
+
+def downgrade() -> None:
+    """Drop pattern_analyses table."""
+    op.drop_index("ix_pattern_user_type_name", table_name="pattern_analyses")
+    op.drop_table("pattern_analyses")

@@ -489,6 +489,149 @@ curl http://localhost:8000/api/v1/users/12345/analytics/status
 
 ---
 
+### Patterns & Anomalies
+
+Advanced pattern detection for correlations, trends, and risk assessment.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users/{user_id}/patterns` | Get all detected patterns |
+| GET | `/users/{user_id}/patterns/{pattern_name}` | Get specific pattern |
+| POST | `/users/{user_id}/patterns/detect` | Trigger pattern detection |
+| GET | `/users/{user_id}/anomalies` | Scan all metrics for anomalies |
+
+**Pattern Types:**
+- `correlation` - Statistical relationships between metrics
+- `trend` - Directional changes over time
+- `composite` - Multi-metric risk scores
+
+**Available Patterns:**
+- `sleep_hrv_correlation` - Correlation between sleep quality and HRV
+- `overtraining_risk` - Multi-metric overtraining risk score (0-100)
+- `hrv_trend` - 7-day HRV trend vs 30-day baseline
+- `sleep_trend` - 7-day sleep score trend vs 30-day baseline
+
+#### Get All Patterns
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/patterns
+```
+
+**Response:**
+```json
+[
+  {
+    "pattern_type": "correlation",
+    "pattern_name": "sleep_hrv_correlation",
+    "score": 0.72,
+    "confidence": 0.95,
+    "significance": "high",
+    "metrics_involved": ["sleep_score", "hrv_rmssd"],
+    "sample_count": 28,
+    "details": {
+      "correlation_coefficient": 0.72,
+      "p_value": 0.001,
+      "interpretation": "Strong positive correlation between sleep quality and HRV"
+    },
+    "analyzed_at": "2026-01-13T08:00:00Z"
+  },
+  {
+    "pattern_type": "composite",
+    "pattern_name": "overtraining_risk",
+    "score": 35,
+    "confidence": 0.88,
+    "significance": "medium",
+    "metrics_involved": ["hrv_rmssd", "sleep_score", "resting_hr", "training_load_ratio"],
+    "sample_count": 7,
+    "details": {
+      "risk_factors": ["HRV trending 8% below baseline"],
+      "recommendations": [
+        "Monitor your body's response to training",
+        "Consider adding an extra recovery day this week"
+      ]
+    },
+    "analyzed_at": "2026-01-13T08:00:00Z"
+  }
+]
+```
+
+**Significance Levels:**
+- `high` - Statistically significant pattern (p < 0.01)
+- `medium` - Moderate significance (p < 0.05)
+- `low` - Weak pattern (p < 0.1)
+- `insufficient` - Not enough data for reliable analysis
+
+#### Get Specific Pattern
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/patterns/overtraining_risk
+```
+
+#### Trigger Pattern Detection
+
+Analyzes historical data and stores pattern results:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/users/12345/patterns/detect
+```
+
+**Response:**
+```json
+{
+  "user_id": "12345",
+  "patterns_detected": {
+    "sleep_hrv_correlation": "high",
+    "overtraining_risk": "medium",
+    "hrv_trend": "low",
+    "sleep_trend": "insufficient"
+  }
+}
+```
+
+#### Bulk Anomaly Scan
+
+Scans all metrics against stored baselines and returns any values outside normal bounds:
+
+```bash
+curl http://localhost:8000/api/v1/users/12345/anomalies
+```
+
+**Response:**
+```json
+{
+  "user_id": "12345",
+  "anomaly_count": 2,
+  "anomalies": [
+    {
+      "metric_name": "hrv_rmssd",
+      "current_value": 22.5,
+      "baseline_value": 42.5,
+      "lower_bound": 24.0,
+      "upper_bound": 62.8,
+      "severity": "critical",
+      "direction": "below",
+      "deviation_percent": -47.1
+    },
+    {
+      "metric_name": "resting_hr",
+      "current_value": 68,
+      "baseline_value": 55,
+      "lower_bound": 48,
+      "upper_bound": 65,
+      "severity": "warning",
+      "direction": "above",
+      "deviation_percent": 23.6
+    }
+  ]
+}
+```
+
+**Anomaly Severity:**
+- `warning` - Value outside Q1 - 1.5×IQR to Q3 + 1.5×IQR
+- `critical` - Value outside Q1 - 3×IQR to Q3 + 3×IQR
+
+---
+
 ### Health
 
 | Method | Endpoint | Description |
