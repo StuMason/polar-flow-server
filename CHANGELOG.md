@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] - 2026-01-13
+
 ### Added
 
 **Automatic Background Sync**
@@ -26,16 +30,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Internal errors (DATABASE_ERROR, INTERNAL_ERROR)
 - Post-sync analytics: Automatic baseline recalculation and pattern detection
 
+**Admin Dashboard**
+- Sync scheduler status section (running state, next run, 24h stats)
+- Recent sync history table with status, duration, records synced
+- Biosensing data counts (SpO2, ECG, Temperature)
+- Analytics counts (Baselines, Patterns)
+
 **Configuration**
 - `SYNC_ENABLED`: Enable/disable automatic syncing (default: true)
 - `SYNC_INTERVAL_MINUTES`: Sync cycle interval (default: 60)
-- `SYNC_ON_STARTUP`: Run sync immediately on startup (default: true)
-- `SYNC_MAX_USERS_PER_RUN`: Maximum users per sync cycle (default: rate-limit aware)
+- `SYNC_ON_STARTUP`: Run sync immediately on startup (default: false)
+- `SYNC_MAX_USERS_PER_RUN`: Maximum users per sync cycle (default: 10)
 - `SYNC_STAGGER_SECONDS`: Delay between user syncs (default: 5)
 
 **Database**
 - New `sync_logs` table with comprehensive fields for audit and debugging
 - Composite indexes for efficient querying by user, status, and error type
+
+### Fixed
+- Alertness scale display corrected from /5 to /10 (Polar API uses 0-10 scale)
 
 ---
 
@@ -127,6 +140,7 @@ First stable release of polar-flow-server - a self-hosted health analytics serve
 - Database models for Polar data types
 - Sync service foundation
 
+[1.1.0]: https://github.com/StuMason/polar-flow-server/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/StuMason/polar-flow-server/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/StuMason/polar-flow-server/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/StuMason/polar-flow-server/releases/tag/v0.1.0
