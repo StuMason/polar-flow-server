@@ -140,20 +140,40 @@ class UserBaseline(Base):
 | Active Calories Baseline | `Activity.calories` | 30-day avg | Energy expenditure |
 | Sleep Consistency Score | `Sleep.sleep_start` | Std dev of bedtimes | Circadian health |
 
-### 1.3 Baseline Calculation Service
+### 1.3 Performance Considerations
+
+**Database indices required** (add in migration):
+```sql
+CREATE INDEX idx_nightly_recharge_user_date ON nightly_recharge(user_id, date);
+CREATE INDEX idx_sleep_user_date ON sleep(user_id, date);
+CREATE INDEX idx_activity_user_date ON activity(user_id, date);
+CREATE INDEX idx_cardio_load_user_date ON cardio_load(user_id, date);
+```
+
+**Incremental calculation strategy:**
+- Don't recalculate from scratch each time
+- Store last calculation date, only process new data
+- Use materialized views for complex aggregations if needed
+
+### 1.4 Baseline Calculation Service
 
 ```python
+from datetime import datetime, timezone
+
 class BaselineService:
     """Calculate and update user baselines."""
 
     async def calculate_hrv_baseline(self, user_id: str, session: AsyncSession) -> dict:
         """Calculate HRV baselines from nightly recharge data."""
 
+        # Use UTC for consistent timezone handling
+        today_utc = datetime.now(timezone.utc).date()
+
         # Fetch last 90 days of HRV data
         stmt = select(NightlyRecharge.hrv, NightlyRecharge.date).where(
             NightlyRecharge.user_id == user_id,
             NightlyRecharge.hrv.isnot(None),
-            NightlyRecharge.date >= date.today() - timedelta(days=90)
+            NightlyRecharge.date >= today_utc - timedelta(days=90)
         ).order_by(NightlyRecharge.date)
 
         result = await session.execute(stmt)
@@ -194,7 +214,7 @@ class BaselineService:
             await self.upsert_baseline(user_id, metric_name, result, session)
 ```
 
-### 1.4 API Endpoints
+### 1.5 API Endpoints
 
 ```
 GET /users/{user_id}/baselines
@@ -216,7 +236,7 @@ GET /users/{user_id}/metrics/current
   }
 ```
 
-### 1.5 Files to Create
+### 1.6 Files to Create
 
 | File | Purpose |
 |------|---------|
@@ -288,11 +308,14 @@ class PatternService:
         # Align by date
         aligned = self.align_time_series(sleep_data, hrv_data)
 
-        if len(aligned) < 14:
+        # Require minimum 21 samples for statistical significance
+        # (14 was too small - need n >= 20 for reliable correlation)
+        if len(aligned) < 21:
             return PatternResult(status="insufficient_data")
 
-        # Calculate correlation
-        r, p_value = scipy.stats.pearsonr(aligned.sleep, aligned.hrv)
+        # Use Spearman correlation - more robust for non-normal distributions
+        # (HRV and sleep scores often have non-linear relationships)
+        r, p_value = scipy.stats.spearmanr(aligned.sleep, aligned.hrv)
 
         return PatternResult(
             pattern_type="correlation",
@@ -356,35 +379,54 @@ class PatternService:
 
 ### 2.4 Anomaly Detection
 
+**Important:** Health metrics like HRV are often right-skewed (not normally distributed).
+Z-score based detection produces too many false positives. Use IQR (Interquartile Range)
+which is robust to non-normal distributions.
+
 ```python
 async def detect_anomalies(self, user_id: str, session: AsyncSession) -> list[Anomaly]:
-    """Identify unusual values based on personal baselines."""
+    """Identify unusual values using IQR method (robust to non-normal distributions)."""
 
     anomalies = []
 
-    # Get baselines
-    baselines = await self.baseline_service.get_all_baselines(user_id, session)
+    # Get historical data for IQR calculation
+    history = await self.get_metric_history(user_id, days=90, session=session)
 
     # Get latest values
     latest = await self.get_latest_metrics(user_id, session)
 
-    for metric_name, baseline in baselines.items():
+    for metric_name, values in history.items():
         current = latest.get(metric_name)
-        if current is None or baseline.std_dev is None:
+        if current is None or len(values) < 14:
             continue
 
-        # Z-score calculation
-        z_score = (current - baseline.baseline_value) / baseline.std_dev
+        # Calculate IQR (robust to outliers and non-normal distributions)
+        q1 = statistics.quantiles(values, n=4)[0]  # 25th percentile
+        q3 = statistics.quantiles(values, n=4)[2]  # 75th percentile
+        iqr = q3 - q1
+        median = statistics.median(values)
 
-        if abs(z_score) > 2:  # More than 2 std devs from mean
-            anomalies.append(Anomaly(
-                metric=metric_name,
-                current_value=current,
-                baseline_value=baseline.baseline_value,
-                z_score=z_score,
-                direction="above" if z_score > 0 else "below",
-                severity="critical" if abs(z_score) > 3 else "warning"
-            ))
+        # IQR bounds (1.5 * IQR is standard, 3 * IQR for extreme)
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        extreme_lower = q1 - 3 * iqr
+        extreme_upper = q3 + 3 * iqr
+
+        if current < extreme_lower or current > extreme_upper:
+            severity = "critical"
+        elif current < lower_bound or current > upper_bound:
+            severity = "warning"
+        else:
+            continue  # Not an anomaly
+
+        anomalies.append(Anomaly(
+            metric=metric_name,
+            current_value=current,
+            median_value=median,
+            iqr_bounds=(lower_bound, upper_bound),
+            direction="above" if current > median else "below",
+            severity=severity
+        ))
 
     return anomalies
 ```
@@ -403,6 +445,9 @@ async def detect_anomalies(self, user_id: str, session: AsyncSession) -> list[An
 ## Phase 3: ML Models (Optional Enhancement)
 
 **Goal:** Add predictive capabilities using scikit-learn and Prophet.
+
+> **Security Note:** This phase requires careful implementation. See section 3.3 for
+> secure model storage approach that avoids pickle/joblib deserialization risks.
 
 ### 3.1 Prediction Types
 
@@ -430,7 +475,7 @@ class MLService:
         # Gather training data (historical features + outcomes)
         features, targets = await self.prepare_readiness_dataset(user_id, session)
 
-        if len(features) < 30:  # Need minimum data
+        if len(features) < 60:  # Need minimum 60 days to avoid overfitting
             return ModelTrainingResult(status="insufficient_data")
 
         # Train model
@@ -490,7 +535,7 @@ class MLService:
         # Get historical HRV
         hrv_history = await self.get_hrv_history(user_id, days=90, session=session)
 
-        if len(hrv_history) < 30:
+        if len(hrv_history) < 60:  # Need 60+ days for reliable forecasting
             return HRVForecast(status="insufficient_data")
 
         # Prepare for Prophet
@@ -525,11 +570,18 @@ class MLService:
         )
 ```
 
-### 3.3 Model Storage
+### 3.3 Model Storage (Security-First Approach)
+
+> **Why not pickle/joblib?** Pickle-based serialization (including joblib) can execute
+> arbitrary code during deserialization. If an attacker gains database write access,
+> they could inject malicious serialized objects. Loading with `joblib.load()` would
+> execute the attack.
+
+**Secure approach: Store model parameters as JSON, reconstruct on load.**
 
 ```python
 class UserModel(Base):
-    """Stored ML models for users."""
+    """Stored ML models for users - parameters only, no serialized objects."""
 
     __tablename__ = "user_models"
 
@@ -537,36 +589,101 @@ class UserModel(Base):
     user_id: Mapped[str] = mapped_column(String(50), index=True)
     model_type: Mapped[str] = mapped_column(String(50))  # "readiness", "hrv_forecast"
 
-    # Model data (serialized with joblib - safe for sklearn models)
-    model_data: Mapped[bytes] = mapped_column(LargeBinary)
+    # Model architecture and hyperparameters (safe JSON, no code execution)
+    model_class: Mapped[str] = mapped_column(String(100))  # "GradientBoostingRegressor"
+    hyperparameters: Mapped[dict] = mapped_column(JSON)  # {"n_estimators": 100, ...}
+
+    # For tree-based models: store the learned structure
+    # sklearn trees can export/import via get_params() and set_params()
+    learned_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Metadata
     trained_at: Mapped[datetime] = mapped_column(server_default=func.now())
     training_samples: Mapped[int] = mapped_column(default=0)
     cv_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     feature_importance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    feature_names: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("user_id", "model_type", name="uq_user_model"),
     )
+
+
+# Whitelist of allowed model classes (prevents arbitrary class instantiation)
+ALLOWED_MODELS = {
+    "GradientBoostingRegressor": GradientBoostingRegressor,
+    "RandomForestRegressor": RandomForestRegressor,
+    "RandomForestClassifier": RandomForestClassifier,
+}
+
+
+async def load_model(user_id: str, model_type: str, session: AsyncSession):
+    """Reconstruct model from stored parameters (no deserialization)."""
+    record = await get_model_record(user_id, model_type, session)
+    if not record:
+        return None
+
+    # Only allow whitelisted model classes
+    if record.model_class not in ALLOWED_MODELS:
+        raise ValueError(f"Unknown model class: {record.model_class}")
+
+    # Reconstruct model from parameters (safe - no code execution)
+    model_cls = ALLOWED_MODELS[record.model_class]
+    model = model_cls(**record.hyperparameters)
+
+    # For production: consider ONNX export for truly portable, safe models
+    return model
 ```
 
-**Note:** Model serialization uses `joblib` (scikit-learn's recommended serializer) which is safe for sklearn models. Models are only loaded from the database for the same user who created them.
+**Alternative: ONNX format** for maximum safety and portability:
+```python
+# Export trained model to ONNX (framework-agnostic, no code execution)
+import skl2onnx
+onnx_model = skl2onnx.convert_sklearn(model, initial_types=input_types)
 
-### 3.4 Dependencies to Add
+# Store as bytes (safe binary format, not executable)
+model_onnx_bytes: Mapped[bytes] = mapped_column(LargeBinary)
+
+# Load with ONNX Runtime (sandboxed execution)
+import onnxruntime as ort
+session = ort.InferenceSession(onnx_bytes)
+```
+
+### 3.4 Minimum Data Requirements
+
+| Model | Minimum Days | Recommended | Notes |
+|-------|--------------|-------------|-------|
+| Readiness prediction | 60 | 90+ | 30 days causes overfitting |
+| HRV forecast | 60 | 90+ | Prophet needs seasonal patterns |
+| Sleep prediction | 45 | 60+ | Weekly patterns important |
+
+### 3.5 Dependencies to Add
 
 ```toml
 # pyproject.toml additions
 [project.optional-dependencies]
 ml = [
     "scikit-learn>=1.4.0",
-    "prophet>=1.1.5",
     "pandas>=2.0.0",
-    "joblib>=1.3.0",  # Safe model serialization
+]
+
+# Optional: ONNX for secure model serialization
+ml-onnx = [
+    "skl2onnx>=1.16.0",
+    "onnxruntime>=1.17.0",
+]
+
+# Optional: Prophet for time series (heavyweight - 10GB+ RAM for training)
+ml-prophet = [
+    "prophet>=1.1.5",
 ]
 ```
 
-### 3.5 Files to Create
+> **Note on Prophet:** Requires Stan/PyTorch backend and 10GB+ RAM during training.
+> Consider lighter alternatives like `statsmodels` or `pmdarima` for resource-constrained
+> deployments.
+
+### 3.6 Files to Create
 
 | File | Purpose |
 |------|---------|
@@ -802,11 +919,81 @@ GET /users/{user_id}/insights
 | Component | Choice | Reason |
 |-----------|--------|--------|
 | Statistics | Python `statistics` | No deps, simple |
-| Correlations | `scipy.stats` | Industry standard |
+| Correlations | `scipy.stats` | Industry standard, Spearman for non-normal |
 | Data manipulation | `polars` (existing) | Fast, memory-efficient |
 | ML (optional) | `scikit-learn` | Proven, well-documented |
-| Time series (optional) | `prophet` | Facebook's proven forecasting |
-| Model serialization | `joblib` | Safe, sklearn-native |
+| Time series (optional) | `prophet` or `statsmodels` | Prophet powerful but heavy |
+| Model serialization | JSON params or ONNX | Secure - no pickle/joblib |
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+| Component | Test Approach |
+|-----------|---------------|
+| Baseline calculations | Known inputs → expected outputs |
+| IQR anomaly detection | Synthetic data with known outliers |
+| Correlation detection | Pre-computed datasets with known r-values |
+| Observation generation | Mock insights → expected text |
+
+### Integration Tests
+
+```python
+# Example: Test baseline calculation end-to-end
+async def test_hrv_baseline_calculation():
+    # Arrange: Insert 30 days of known HRV values
+    await insert_test_recharge_data(user_id="test", hrv_values=[45, 50, 48, ...])
+
+    # Act: Calculate baselines
+    result = await baseline_service.calculate_hrv_baseline("test", session)
+
+    # Assert: Known statistical properties
+    assert result["baseline_30d"] == pytest.approx(47.5, rel=0.01)
+    assert result["sample_count"] == 30
+```
+
+### ML Model Tests
+
+- Use synthetic datasets with known patterns
+- Test model reconstruction from JSON params
+- Verify ONNX export/import produces same predictions
+- Test with edge cases (missing data, outliers)
+
+---
+
+## Data Privacy & Compliance
+
+### GDPR Considerations
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Right to access | `/users/{id}/export` endpoint exists |
+| Right to deletion | Cascade delete baselines, patterns, models when user deleted |
+| Data minimization | Only store computed insights, not raw analysis |
+| Purpose limitation | Analytics only used for user's own coaching |
+
+### Right to Deletion
+
+When user requests deletion:
+```python
+async def delete_user_analytics(user_id: str, session: AsyncSession):
+    """Delete all analytics data for user (GDPR compliance)."""
+    await session.execute(delete(UserBaseline).where(UserBaseline.user_id == user_id))
+    await session.execute(delete(PatternAnalysis).where(PatternAnalysis.user_id == user_id))
+    await session.execute(delete(UserModel).where(UserModel.user_id == user_id))
+    # Note: Raw data (sleep, activity, etc.) handled separately
+```
+
+### Data Retention
+
+| Data Type | Retention | Reason |
+|-----------|-----------|--------|
+| Raw sync data | User-controlled | Their data |
+| Baselines | Recalculated daily | Derived, not stored long-term |
+| Patterns | 90 days | Historical context |
+| ML Models | Until retrained | Requires user data to exist |
 
 ---
 
