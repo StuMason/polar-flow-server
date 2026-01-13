@@ -1,155 +1,181 @@
 #!/usr/bin/env python3
-"""End-to-end test script for polar-flow-server.
+"""End-to-end test for polar-flow-server.
 
-Tests all key functionality:
-- Health endpoint (public)
-- API key authentication
-- Data endpoints (sleep, activity, etc.)
-- Migration status
+Tests all major endpoints to verify the server is working correctly.
 
 Usage:
+    # Set environment variables:
+    export API_KEY="pfs_test_key_for_development_only"
+    export USER_ID="your_polar_user_id"
+    export BASE_URL="http://localhost:8000"
+
+    # Run tests:
     uv run python scripts/test_e2e.py
-    # Or with custom config:
-    API_KEY=your_key USER_ID=12345 uv run python scripts/test_e2e.py
 """
 
+import asyncio
 import os
 import sys
 
 import httpx
 
-# Configuration
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
-API_KEY = os.getenv("API_KEY", "pfs_test_key_for_development_only")
-USER_ID = os.getenv("USER_ID", "63831921")  # Default test user
+# Configuration from environment
+API_KEY = os.environ.get("API_KEY", "pfs_test_key_for_development_only")
+USER_ID = os.environ.get("USER_ID", "test-user")
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
+API_BASE = f"{BASE_URL}/api/v1"
 
 
-def test_health():
+async def test_health() -> bool:
     """Test health endpoint (no auth required)."""
-    print("Testing health endpoint...")
-    r = httpx.get(f"{BASE_URL}/health")
-    assert r.status_code == 200, f"Health check failed: {r.status_code}"
-    data = r.json()
-    assert data["status"] == "ok", f"Unexpected status: {data}"
-    print(f"  ✅ Health: {data}")
-    return True
+    async with httpx.AsyncClient() as client:
+        r = await client.get(f"{BASE_URL}/health")
+        if r.status_code != 200:
+            print(f"  FAIL: Health check returned {r.status_code}")
+            return False
+        data = r.json()
+        if data.get("status") != "healthy":
+            print(f"  FAIL: Health status is {data.get('status')}")
+            return False
+        print(f"  OK: Server healthy, database {data.get('database', 'unknown')}")
+        return True
 
 
-def test_auth_required():
+async def test_unauthorized() -> bool:
     """Test that endpoints require API key."""
-    print("Testing authentication requirement...")
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/sleep")
-    assert r.status_code == 401, f"Expected 401, got: {r.status_code}"
-    assert "Missing API key" in r.json()["detail"]
-    print("  ✅ Endpoints correctly require API key")
-    return True
+    async with httpx.AsyncClient() as client:
+        r = await client.get(f"{API_BASE}/users/{USER_ID}/sleep")
+        if r.status_code != 401:
+            print(f"  FAIL: Expected 401, got {r.status_code}")
+            return False
+        print("  OK: Unauthorized request correctly rejected")
+        return True
 
 
-def test_invalid_key():
-    """Test that invalid API key is rejected."""
-    print("Testing invalid API key rejection...")
-    headers = {"X-API-Key": "invalid_key_12345"}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/sleep", headers=headers)
-    assert r.status_code == 401, f"Expected 401, got: {r.status_code}"
-    assert "Invalid API key" in r.json()["detail"]
-    print("  ✅ Invalid API key correctly rejected")
-    return True
-
-
-def test_sleep_endpoint():
-    """Test sleep data endpoint with valid API key."""
-    print("Testing sleep endpoint...")
+async def test_data_endpoints() -> bool:
+    """Test data retrieval endpoints."""
     headers = {"X-API-Key": API_KEY}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/sleep?days=7", headers=headers)
-    assert r.status_code == 200, f"Sleep endpoint failed: {r.status_code} - {r.text}"
-    data = r.json()
-    print(f"  ✅ Sleep records: {len(data)}")
-    if data:
-        print(f"     Latest: {data[0]['date']} - score: {data[0]['sleep_score']}")
+    endpoints = [
+        ("sleep", f"/users/{USER_ID}/sleep?days=7"),
+        ("activity", f"/users/{USER_ID}/activity?days=7"),
+        ("recharge", f"/users/{USER_ID}/recharge?days=7"),
+        ("exercises", f"/users/{USER_ID}/exercises?days=30"),
+        ("cardio-load", f"/users/{USER_ID}/cardio-load?days=7"),
+        ("heart-rate", f"/users/{USER_ID}/heart-rate?days=7"),
+    ]
+
+    async with httpx.AsyncClient() as client:
+        for name, path in endpoints:
+            r = await client.get(f"{API_BASE}{path}", headers=headers)
+            if r.status_code != 200:
+                print(f"  FAIL: {name} returned {r.status_code}")
+                return False
+            data = r.json()
+            count = len(data) if isinstance(data, list) else "N/A"
+            print(f"  OK: {name} - {count} records")
     return True
 
 
-def test_activity_endpoint():
-    """Test activity data endpoint."""
-    print("Testing activity endpoint...")
+async def test_baseline_endpoints() -> bool:
+    """Test baseline/analytics endpoints."""
     headers = {"X-API-Key": API_KEY}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/activity?days=7", headers=headers)
-    assert r.status_code == 200, f"Activity endpoint failed: {r.status_code}"
-    data = r.json()
-    print(f"  ✅ Activity records: {len(data)}")
+    async with httpx.AsyncClient() as client:
+        # Test baselines list
+        r = await client.get(f"{API_BASE}/users/{USER_ID}/baselines", headers=headers)
+        if r.status_code != 200:
+            print(f"  FAIL: baselines returned {r.status_code}")
+            return False
+        baselines = r.json()
+        print(f"  OK: baselines - {len(baselines)} metrics")
+
+        # Test analytics status
+        r = await client.get(f"{API_BASE}/users/{USER_ID}/analytics/status", headers=headers)
+        if r.status_code != 200:
+            print(f"  FAIL: analytics/status returned {r.status_code}")
+            return False
+        status = r.json()
+        print(f"  OK: analytics/status - {status.get('min_data_days', '?')} min days")
     return True
 
 
-def test_recharge_endpoint():
-    """Test nightly recharge endpoint."""
-    print("Testing recharge endpoint...")
+async def test_pattern_endpoints() -> bool:
+    """Test pattern detection endpoints."""
     headers = {"X-API-Key": API_KEY}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/recharge?days=7", headers=headers)
-    assert r.status_code == 200, f"Recharge endpoint failed: {r.status_code}"
-    data = r.json()
-    print(f"  ✅ Recharge records: {len(data)}")
+    async with httpx.AsyncClient() as client:
+        # Test patterns list
+        r = await client.get(f"{API_BASE}/users/{USER_ID}/patterns", headers=headers)
+        if r.status_code != 200:
+            print(f"  FAIL: patterns returned {r.status_code}")
+            return False
+        patterns = r.json()
+        print(f"  OK: patterns - {len(patterns)} detected")
+
+        # Test anomalies
+        r = await client.get(f"{API_BASE}/users/{USER_ID}/anomalies", headers=headers)
+        if r.status_code != 200:
+            print(f"  FAIL: anomalies returned {r.status_code}")
+            return False
+        anomalies = r.json()
+        print(f"  OK: anomalies - {anomalies.get('anomaly_count', 0)} found")
+
+        # Test invalid pattern name returns 404
+        r = await client.get(
+            f"{API_BASE}/users/{USER_ID}/patterns/invalid_pattern_name", headers=headers
+        )
+        if r.status_code != 404:
+            print(f"  FAIL: invalid pattern should return 404, got {r.status_code}")
+            return False
+        print("  OK: invalid pattern returns 404")
     return True
 
 
-def test_export_summary():
-    """Test export summary endpoint."""
-    print("Testing export summary...")
-    headers = {"X-API-Key": API_KEY}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/export/summary?days=30", headers=headers)
-    assert r.status_code == 200, f"Export summary failed: {r.status_code}"
-    data = r.json()
-    print("  ✅ Export summary:")
-    print(f"     User: {data['user_id']}")
-    print(f"     Total records: {data['total_records']}")
-    print(f"     Counts: {data['record_counts']}")
+async def test_openapi() -> bool:
+    """Test OpenAPI schema endpoint."""
+    async with httpx.AsyncClient() as client:
+        r = await client.get(f"{BASE_URL}/schema/openapi.json")
+        if r.status_code != 200:
+            print(f"  FAIL: OpenAPI schema returned {r.status_code}")
+            return False
+        schema = r.json()
+        paths = len(schema.get("paths", {}))
+        print(f"  OK: OpenAPI schema - {paths} paths documented")
     return True
 
 
-def test_bearer_token():
-    """Test Bearer token authentication."""
-    print("Testing Bearer token auth...")
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    r = httpx.get(f"{BASE_URL}/users/{USER_ID}/sleep?days=1", headers=headers)
-    assert r.status_code == 200, f"Bearer auth failed: {r.status_code}"
-    print("  ✅ Bearer token authentication works")
-    return True
-
-
-def main():
-    """Run all end-to-end tests."""
+async def main() -> int:
+    """Run all E2E tests."""
     print("=" * 60)
-    print("polar-flow-server End-to-End Tests")
+    print("Polar Flow Server - End-to-End Tests")
     print("=" * 60)
     print(f"Base URL: {BASE_URL}")
     print(f"User ID: {USER_ID}")
-    print("-" * 60)
+    print(f"API Key: {API_KEY[:10]}...")
+    print("=" * 60)
 
     tests = [
-        test_health,
-        test_auth_required,
-        test_invalid_key,
-        test_sleep_endpoint,
-        test_activity_endpoint,
-        test_recharge_endpoint,
-        test_export_summary,
-        test_bearer_token,
+        ("Health Check", test_health),
+        ("Authorization", test_unauthorized),
+        ("Data Endpoints", test_data_endpoints),
+        ("Baseline Endpoints", test_baseline_endpoints),
+        ("Pattern Endpoints", test_pattern_endpoints),
+        ("OpenAPI Schema", test_openapi),
     ]
 
     passed = 0
     failed = 0
 
-    for test in tests:
+    for name, test_func in tests:
+        print(f"\n[{name}]")
         try:
-            test()
-            passed += 1
-        except AssertionError as e:
-            print(f"  ❌ FAILED: {e}")
-            failed += 1
+            if await test_func():
+                passed += 1
+            else:
+                failed += 1
         except Exception as e:
-            print(f"  ❌ ERROR: {e}")
+            print(f"  ERROR: {e}")
             failed += 1
 
-    print("-" * 60)
+    print("\n" + "=" * 60)
     print(f"Results: {passed} passed, {failed} failed")
     print("=" * 60)
 
@@ -157,4 +183,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))

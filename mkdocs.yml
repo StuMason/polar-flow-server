@@ -25,6 +25,8 @@ nav:
   - Quick Start: quickstart.md
   - Architecture: architecture.md
   - API Reference: api/overview.md
+  - ADRs:
+    - Per-User API Keys: adr/001-per-user-api-keys.md
 
 markdown_extensions:
   - pymdownx.highlight
