@@ -3,14 +3,18 @@
 Adds X-RateLimit-* headers to responses for authenticated requests.
 """
 
+from typing import Any
+
 from litestar import Response
 from litestar.connection import ASGIConnection
-from litestar.types import Message, Receive, Scope, Send
+from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 from polar_flow_server.core.auth import RATE_LIMIT_STATE_KEY
 
 
-def add_rate_limit_headers(response: Response, connection: ASGIConnection) -> Response:
+def add_rate_limit_headers(
+    response: Response[Any], connection: ASGIConnection[Any, Any, Any, Any]
+) -> Response[Any]:
     """Add rate limit headers to the response.
 
     This is an after_request hook that reads rate limit info from
@@ -39,13 +43,13 @@ class RateLimitHeadersMiddleware:
     allowing it to access state set by guards during request processing.
     """
 
-    def __init__(self, app: "ASGIApp") -> None:  # noqa: F821
+    def __init__(self, app: ASGIApp) -> None:
         """Initialize middleware with the ASGI app."""
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Process the request and add rate limit headers to response."""
-        if scope["type"] != "http":
+        if scope["type"] != "http":  # type: ignore[comparison-overlap]
             await self.app(scope, receive, send)
             return
 

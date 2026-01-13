@@ -5,6 +5,7 @@ from polar_flow_server.models.activity_samples import ActivitySamples
 from polar_flow_server.models.admin_user import AdminUser
 from polar_flow_server.models.api_key import APIKey
 from polar_flow_server.models.base import Base
+from polar_flow_server.models.baseline import BaselineStatus, MetricName, UserBaseline
 from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
@@ -23,6 +24,7 @@ __all__ = [
     "AdminUser",
     "APIKey",
     "Base",
+    "BaselineStatus",
     "Activity",
     "ActivitySamples",
     "AppSettings",
@@ -31,6 +33,7 @@ __all__ = [
     "ContinuousHeartRate",
     "ECG",
     "Exercise",
+    "MetricName",
     "NightlyRecharge",
     "SkinTemperature",
     "Sleep",
@@ -39,4 +42,5 @@ __all__ = [
     "SpO2",
     "TempAuthCode",
     "User",
+    "UserBaseline",
 ]

@@ -20,6 +20,7 @@ from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
 from polar_flow_server.models.spo2 import SpO2
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
+from polar_flow_server.services.baseline import BaselineService
 from polar_flow_server.transformers import (
     ActivitySamplesTransformer,
     ActivityTransformer,
@@ -60,6 +61,7 @@ class SyncService:
         user_id: str,
         polar_token: str,
         days: int | None = None,
+        recalculate_baselines: bool = True,
     ) -> dict[str, int]:
         """Sync all data for a user from Polar API.
 
@@ -67,6 +69,7 @@ class SyncService:
             user_id: User identifier (Polar user ID or Laravel UUID)
             polar_token: Polar API access token
             days: Number of days to sync (default from config)
+            recalculate_baselines: Whether to recalculate baselines after sync
 
         Returns:
             Dict with counts of synced records per data type
@@ -149,6 +152,15 @@ class SyncService:
 
         # Commit all changes to database
         await self.session.commit()
+
+        # Recalculate baselines with new data
+        if recalculate_baselines:
+            self.logger.info("Recalculating baselines after sync", user_id=user_id)
+            baseline_service = BaselineService(self.session)
+            baseline_results = await baseline_service.calculate_all_baselines(user_id)
+            self.logger.info(
+                "Baseline recalculation complete", user_id=user_id, baselines=baseline_results
+            )
 
         self.logger.info("Sync completed", user_id=user_id, results=results)
         return results
