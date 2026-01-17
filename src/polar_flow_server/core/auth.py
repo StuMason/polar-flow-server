@@ -164,21 +164,15 @@ async def api_key_guard(
 ) -> None:
     """Litestar guard that validates API key from request header.
 
-    If no API_KEY is configured, authentication is skipped (open access).
-    Otherwise validates against config or database.
+    Validates against config-based master key or database keys.
 
     Args:
         connection: The ASGI connection
         _: The route handler (unused)
 
     Raises:
-        NotAuthorizedException: If API key is required but missing/invalid
+        NotAuthorizedException: If API key is missing or invalid
     """
-    # If no API_KEY configured, skip authentication (simple self-hosted mode)
-    if not settings.api_key:
-        logger.debug("No API_KEY configured - authentication disabled")
-        return
-
     # Extract API key from headers
     api_key = _extract_api_key(connection)
 
