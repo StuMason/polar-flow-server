@@ -1,0 +1,41 @@
+name: Bug Report
+description: Report something that's broken
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include relevant version info
+      placeholder: |
+        - Docker version:
+        - Deployment mode (docker-compose/standalone):
+        - OS:
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error messages
+      description: Include any relevant logs or error messages
+      render: shell
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
