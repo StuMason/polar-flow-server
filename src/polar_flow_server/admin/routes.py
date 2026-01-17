@@ -24,7 +24,11 @@ from polar_flow_server.admin.auth import (
     login_admin,
     logout_admin,
 )
-from polar_flow_server.core.api_keys import regenerate_api_key, revoke_api_key
+from polar_flow_server.core.api_keys import (
+    create_api_key_for_user,
+    regenerate_api_key,
+    revoke_api_key,
+)
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.models.activity import Activity
@@ -1095,6 +1099,72 @@ async def admin_revoke_api_key(
         )
 
 
+@post("/api-keys/create", sync_to_thread=False, status_code=HTTP_200_OK)
+async def admin_create_api_key(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+) -> Template:
+    """Create a new API key for the connected user from the admin panel.
+
+    Uses session authentication (admin login), not API key auth.
+    """
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
+    try:
+        # Get the connected user
+        stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": "No connected user found. Please connect via OAuth first."},
+            )
+
+        # Check if user already has an active key
+        key_stmt = select(APIKey).where(
+            APIKey.user_id == user.polar_user_id,
+            APIKey.is_active == True  # noqa: E712
+        )
+        key_result = await session.execute(key_stmt)
+        existing_key = key_result.scalar_one_or_none()
+
+        if existing_key:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": "User already has an active API key. Use regenerate instead."},
+            )
+
+        # Create the API key
+        api_key, raw_key = await create_api_key_for_user(
+            user_id=user.polar_user_id,
+            name=f"Admin-created key for {user.polar_user_id}",
+            session=session,
+        )
+        await session.commit()
+
+        return Template(
+            template_name="admin/partials/api_key_regenerated.html",
+            context={
+                "api_key": raw_key,
+                "key_prefix": api_key.key_prefix,
+                "key_name": api_key.name,
+            },
+        )
+
+    except Exception as e:
+        await session.rollback()
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": f"Failed to create key: {str(e)}"},
+        )
+
+
 # ============================================================================
 # Chart Data API Routes (JSON endpoints for Chart.js)
 # ============================================================================
@@ -1457,6 +1527,7 @@ admin_routes = [
     # API Key management
     admin_regenerate_api_key,
     admin_revoke_api_key,
+    admin_create_api_key,
     # Chart API endpoints
     chart_sleep_data,
     chart_activity_data,

@@ -289,9 +289,24 @@
             <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
             <p class="text-sm text-gray-600">Manage API keys for service-to-service authentication</p>
         </div>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            {{ api_keys|length }} key{% if api_keys|length != 1 %}s{% endif %}
-        </span>
+        <div class="flex items-center gap-3">
+            {% set has_active_key = api_keys|selectattr('is_active')|list|length > 0 %}
+            {% if not has_active_key %}
+            <button
+                type="button"
+                onclick="openCreateKeyModal()"
+                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create New Key
+            </button>
+            {% endif %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                {{ api_keys|length }} key{% if api_keys|length != 1 %}s{% endif %}
+            </span>
+        </div>
     </div>
 
     {% if api_keys %}
@@ -391,7 +406,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">No API keys</h3>
-        <p class="mt-1 text-sm text-gray-500">API keys are created when users connect via OAuth.</p>
+        <p class="mt-1 text-sm text-gray-500">Create an API key to access the REST API.</p>
+        <div class="mt-4">
+            <button
+                type="button"
+                onclick="openCreateKeyModal()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create API Key
+            </button>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -1403,6 +1430,12 @@ function loadServerPartial(container, html) {
     container.insertAdjacentHTML('beforeend', html);
 }
 
+// Get CSRF token from cookie
+function getCsrfToken() {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    return match ? match[1] : '';
+}
+
 async function confirmRegenerate() {
     if (!currentKeyId) return;
 
@@ -1418,6 +1451,7 @@ async function confirmRegenerate() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
             },
             credentials: 'same-origin'
         });
@@ -1453,6 +1487,7 @@ async function confirmRevoke() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
             },
             credentials: 'same-origin'
         });
@@ -1499,8 +1534,52 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeRegenerateModal();
         closeRevokeModal();
+        closeCreateKeyModal();
     }
 });
+
+// Create API Key Modal
+function openCreateKeyModal() {
+    document.getElementById('create-key-modal').classList.remove('hidden');
+}
+
+function closeCreateKeyModal() {
+    document.getElementById('create-key-modal').classList.add('hidden');
+}
+
+async function confirmCreateKey() {
+    const resultDiv = document.getElementById('create-key-result');
+    const confirmBtn = document.getElementById('create-key-confirm-btn');
+
+    // Show loading state
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Creating...';
+
+    try {
+        const response = await fetch('/admin/api-keys/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
+            },
+            credentials: 'same-origin'
+        });
+
+        const html = await response.text();
+        loadServerPartial(resultDiv, html);
+        resultDiv.classList.remove('hidden');
+
+        // Hide the confirmation buttons, show close button
+        document.getElementById('create-key-buttons').classList.add('hidden');
+        document.getElementById('create-key-close-btn').classList.remove('hidden');
+
+    } catch (error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+        resultDiv.className = 'mt-4 px-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Create Key';
+    }
+}
 </script>
 
 <!-- Regenerate API Key Modal -->
@@ -1613,6 +1692,63 @@ document.addEventListener('keydown', function(e) {
 
             <!-- Close button (shown after action) -->
             <div id="revoke-close-btn" class="hidden mt-4 flex justify-end px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeAndRefresh()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create API Key Modal -->
+<div id="create-key-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                </svg>
+            </div>
+            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
+            <div class="mt-2 px-4 py-3">
+                <p class="text-sm text-gray-500 text-center">
+                    Create a new API key for the connected Polar user. This key will allow access to the REST API.
+                </p>
+                <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p class="text-sm text-blue-800">
+                        <strong>Note:</strong> The key will only be shown once. Make sure to copy it and store it securely.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Result area (hidden initially) -->
+            <div id="create-key-result" class="hidden mt-4 px-4"></div>
+
+            <!-- Action buttons -->
+            <div id="create-key-buttons" class="mt-4 flex justify-end gap-3 px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeCreateKeyModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    id="create-key-confirm-btn"
+                    onclick="confirmCreateKey()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                    Create Key
+                </button>
+            </div>
+
+            <!-- Close button (shown after action) -->
+            <div id="create-key-close-btn" class="hidden mt-4 flex justify-end px-4 pb-4">
                 <button
                     type="button"
                     onclick="closeAndRefresh()"
