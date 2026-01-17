@@ -24,6 +24,7 @@ from polar_flow_server.admin.auth import (
     login_admin,
     logout_admin,
 )
+from polar_flow_server.core.api_keys import regenerate_api_key, revoke_api_key
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.models.activity import Activity
@@ -980,6 +981,121 @@ async def reset_oauth_credentials(
 
 
 # ============================================================================
+# API Key Management (Admin-authenticated, no API key required)
+# ============================================================================
+
+
+@post("/api-keys/{key_id:int}/regenerate", sync_to_thread=False, status_code=HTTP_200_OK)
+async def admin_regenerate_api_key(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    key_id: int,
+) -> Template:
+    """Regenerate an API key from the admin panel.
+
+    Uses session authentication (admin login), not API key auth.
+    This allows admins to regenerate keys when the original is lost.
+    """
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
+    try:
+        # Find the API key by ID
+        stmt = select(APIKey).where(APIKey.id == key_id)
+        result = await session.execute(stmt)
+        api_key = result.scalar_one_or_none()
+
+        if not api_key:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": f"API key with ID {key_id} not found."},
+            )
+
+        if not api_key.is_active:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": "Cannot regenerate a revoked key. The key must be active."},
+            )
+
+        # Regenerate the key
+        new_raw_key = await regenerate_api_key(api_key, session)
+        await session.commit()
+
+        return Template(
+            template_name="admin/partials/api_key_regenerated.html",
+            context={
+                "api_key": new_raw_key,
+                "key_prefix": api_key.key_prefix,
+                "key_name": api_key.name,
+            },
+        )
+
+    except Exception as e:
+        await session.rollback()
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": f"Failed to regenerate key: {str(e)}"},
+        )
+
+
+@post("/api-keys/{key_id:int}/revoke", sync_to_thread=False, status_code=HTTP_200_OK)
+async def admin_revoke_api_key(
+    request: Request[Any, Any, Any],
+    session: AsyncSession,
+    key_id: int,
+) -> Template:
+    """Revoke an API key from the admin panel.
+
+    Uses session authentication (admin login), not API key auth.
+    """
+    if not is_authenticated(request):
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": "Authentication required. Please log in."},
+        )
+
+    try:
+        # Find the API key by ID
+        stmt = select(APIKey).where(APIKey.id == key_id)
+        result = await session.execute(stmt)
+        api_key = result.scalar_one_or_none()
+
+        if not api_key:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": f"API key with ID {key_id} not found."},
+            )
+
+        if not api_key.is_active:
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": "Key is already revoked."},
+            )
+
+        # Revoke the key
+        await revoke_api_key(api_key, session)
+        await session.commit()
+
+        return Template(
+            template_name="admin/partials/api_key_revoked.html",
+            context={
+                "key_prefix": api_key.key_prefix,
+                "key_name": api_key.name,
+            },
+        )
+
+    except Exception as e:
+        await session.rollback()
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={"error": f"Failed to revoke key: {str(e)}"},
+        )
+
+
+# ============================================================================
 # Chart Data API Routes (JSON endpoints for Chart.js)
 # ============================================================================
 
@@ -1338,6 +1454,9 @@ admin_routes = [
     oauth_authorize,
     admin_settings,
     reset_oauth_credentials,
+    # API Key management
+    admin_regenerate_api_key,
+    admin_revoke_api_key,
     # Chart API endpoints
     chart_sleep_data,
     chart_activity_data,
