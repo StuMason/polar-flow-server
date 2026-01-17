@@ -1129,7 +1129,7 @@ async def admin_create_api_key(
         # Check if user already has an active key
         key_stmt = select(APIKey).where(
             APIKey.user_id == user.polar_user_id,
-            APIKey.is_active == True  # noqa: E712
+            APIKey.is_active == True,  # noqa: E712
         )
         key_result = await session.execute(key_stmt)
         existing_key = key_result.scalar_one_or_none()

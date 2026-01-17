@@ -120,13 +120,12 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## API Authentication
 
-The server supports per-user API keys with rate limiting.
+**API endpoints require authentication.** Health data should never be publicly accessible.
 
 ### Authentication Methods
 
-1. **Per-User API Keys** (recommended) - Each user gets their own API key via OAuth
+1. **Per-User API Keys** (recommended) - Create from the admin dashboard or via OAuth flow
 2. **Master API Key** - Set `API_KEY` env var for full access (bypasses rate limits)
-3. **Open Access** - If no `API_KEY` is set and no key provided, endpoints are open
 
 ### Using API Keys
 

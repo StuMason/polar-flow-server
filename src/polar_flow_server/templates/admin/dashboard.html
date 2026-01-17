@@ -1508,10 +1508,13 @@ async function confirmRevoke() {
     }
 }
 
+let keyWasCopied = false;
+
 function copyApiKey() {
     const keyElement = document.getElementById('new-api-key');
     if (keyElement) {
         navigator.clipboard.writeText(keyElement.textContent).then(() => {
+            keyWasCopied = true;
             const copyBtn = document.getElementById('copy-key-btn');
             copyBtn.textContent = 'Copied!';
             copyBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
@@ -1526,6 +1529,14 @@ function copyApiKey() {
 }
 
 function closeAndRefresh() {
+    // Check if a new key was generated but not copied
+    const newKeyElement = document.getElementById('new-api-key');
+    if (newKeyElement && !keyWasCopied) {
+        if (!confirm('You have not copied the new API key. It will NOT be shown again after closing. Are you sure you want to close?')) {
+            return;
+        }
+    }
+    keyWasCopied = false;
     window.location.reload();
 }
 
