@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}polar-flow-server{% endblock %}</title>
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <!-- HTMX with SRI integrity check -->
+    <script src="https://unpkg.com/htmx.org@2.0.4"
+            integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
+            crossorigin="anonymous"></script>
+    <!-- Tailwind CSS CDN (does not support SRI due to dynamic compilation) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         // Configure HTMX to include CSRF token from cookie in all requests
@@ -19,8 +23,13 @@
             }
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
+    <!-- Chart.js with SRI integrity check -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"
+            integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"
+            integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws"
+            crossorigin="anonymous"></script>
     <style>
         [x-cloak] { display: none !important; }
     </style>

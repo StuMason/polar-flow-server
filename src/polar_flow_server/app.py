@@ -98,28 +98,36 @@ def create_app() -> Litestar:
     # In production with multiple instances, use Redis instead
     session_store = MemoryStore()
 
-    # Session middleware config
+    # Session middleware config with explicit security settings
+    is_debug = settings.log_level == "DEBUG"
     session_config = ServerSideSessionConfig(
         key=settings.get_session_secret(),
         store="session_store",
         max_age=86400,  # 24 hours
+        secure=not is_debug,  # HTTPS only in production
+        httponly=True,  # Prevent JS access
+        samesite="lax",  # CSRF protection
     )
 
     # CSRF protection config
+    # Note: HTMX and our JS already send CSRF token in X-CSRF-Token header,
+    # so most admin routes can (and should) require CSRF validation.
     csrf_config = CSRFConfig(
         secret=settings.get_session_secret(),
         cookie_name="csrf_token",
         header_name="X-CSRF-Token",
         exclude=[
-            "/admin/login",  # Login form - entry point, no session yet
-            "/admin/setup",  # Setup flow - entry point, no session yet
-            "/admin/oauth/callback",  # OAuth callback from Polar (admin dashboard)
-            "/admin/settings",  # Settings pages (reset-oauth, etc.)
-            "/admin/sync",  # Sync trigger from dashboard
-            "/admin/logout",  # Logout action
-            "/admin/api-keys/",  # API key management (uses session auth)
-            "/oauth/",  # OAuth endpoints for SaaS (callback, exchange, start)
-            "/users/",  # API routes use API key auth, not sessions
+            # Entry points (no session yet)
+            "/admin/login",
+            "/admin/setup",
+            # External OAuth callbacks (redirects from Polar)
+            "/admin/oauth/callback",
+            "/oauth/",  # SaaS OAuth flow (callback, exchange, start)
+            # Safe to exclude (just destroys session)
+            "/admin/logout",
+            # API routes use API key auth, not CSRF
+            "/api/v1/users/",
+            # Health check (no auth needed)
             "/health",
         ],
     )
@@ -148,7 +156,7 @@ def create_app() -> Litestar:
         middleware=[session_config.middleware, RateLimitHeadersMiddleware],
         csrf_config=csrf_config,
         stores={"session_store": session_store},
-        debug=settings.log_level == "DEBUG",
+        debug=is_debug,
     )
 
 

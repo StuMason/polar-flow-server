@@ -8,11 +8,13 @@ Provides endpoints for:
 - SaaS OAuth start (for external clients like Laravel)
 """
 
+import asyncio
 import logging
 import secrets
+from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from litestar import Router, get, post
 from litestar.connection import Request
@@ -32,15 +34,123 @@ from polar_flow_server.core.api_keys import (
     revoke_api_key,
 )
 from polar_flow_server.core.auth import per_user_api_key_guard
+from polar_flow_server.core.config import settings
 from polar_flow_server.models.api_key import APIKey
 from polar_flow_server.models.settings import AppSettings
 from polar_flow_server.models.user import User
 
-# Store OAuth states with their callback URLs
-# Format: {state: {"expires_at": datetime, "callback_url": str, "client_id": str | None}}
-_saas_oauth_states: dict[str, dict[str, Any]] = {}
-
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Bounded TTL Cache for OAuth States (prevents memory exhaustion)
+# =============================================================================
+
+
+class BoundedOAuthStateCache:
+    """Bounded cache for SaaS OAuth states with TTL.
+
+    Prevents memory exhaustion attacks by limiting max entries.
+    Stores callback_url and client_id along with expiry.
+    Thread-safe via asyncio lock.
+    """
+
+    def __init__(self, maxsize: int = 100, ttl_minutes: int = 10) -> None:
+        self._cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
+        self._maxsize = maxsize
+        self._ttl = timedelta(minutes=ttl_minutes)
+        self._lock = asyncio.Lock()
+
+    async def set(self, key: str, callback_url: str, client_id: str | None = None) -> None:
+        """Add a new OAuth state with its associated data."""
+        async with self._lock:
+            self._cleanup_expired()
+            # If at max, evict oldest entry and log warning
+            if len(self._cache) >= self._maxsize:
+                logger.warning(
+                    f"SaaS OAuth state cache full ({self._maxsize}), evicting oldest entries"
+                )
+            while len(self._cache) >= self._maxsize:
+                self._cache.popitem(last=False)
+            self._cache[key] = {
+                "expires_at": datetime.now(UTC) + self._ttl,
+                "callback_url": callback_url,
+                "client_id": client_id,
+            }
+
+    async def get(self, key: str) -> dict[str, Any] | None:
+        """Get state data, or None if not found/expired."""
+        async with self._lock:
+            self._cleanup_expired()
+            return self._cache.get(key)
+
+    async def pop(self, key: str) -> dict[str, Any] | None:
+        """Remove and return state data."""
+        async with self._lock:
+            return self._cache.pop(key, None)
+
+    async def contains(self, key: str) -> bool:
+        """Check if key exists (async version of __contains__)."""
+        async with self._lock:
+            self._cleanup_expired()
+            return key in self._cache
+
+    def _cleanup_expired(self) -> None:
+        """Remove expired entries. Must be called with lock held."""
+        now = datetime.now(UTC)
+        # Use dict comprehension for atomic update
+        self._cache = OrderedDict((k, v) for k, v in self._cache.items() if v["expires_at"] >= now)
+
+
+# OAuth state storage with bounded size (prevents memory exhaustion)
+_saas_oauth_states = BoundedOAuthStateCache(maxsize=100, ttl_minutes=10)
+
+
+# =============================================================================
+# Callback URL Validation
+# =============================================================================
+
+
+def _is_localhost(netloc: str) -> bool:
+    """Check if netloc is localhost (with or without port)."""
+    # Remove port if present
+    host = netloc.split(":")[0].lower()
+    return host in {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def _validate_callback_url(callback_url: str) -> tuple[bool, str]:
+    """Validate that callback_url is well-formed and secure.
+
+    Returns (is_valid, error_message).
+    """
+    # Length check to prevent DoS via extremely long URLs
+    if len(callback_url) > 2048:
+        return False, "URL too long (max 2048 characters)"
+
+    try:
+        parsed = urlparse(callback_url)
+    except Exception:
+        return False, "Invalid URL format"
+
+    # Must have scheme and netloc
+    if not parsed.scheme or not parsed.netloc:
+        return False, "URL must include scheme and host (e.g., https://example.com/callback)"
+
+    # Only allow http and https schemes
+    if parsed.scheme not in {"http", "https"}:
+        return False, "Only http and https schemes are allowed"
+
+    # Production check: use deployment_mode or presence of base_url
+    is_production = settings.deployment_mode.value == "saas" or settings.base_url is not None
+
+    if parsed.scheme == "http":
+        if is_production:
+            return False, "HTTPS required for callback URLs in production"
+        # In development, only allow http for actual localhost
+        if not _is_localhost(parsed.netloc):
+            return False, "HTTP only allowed for localhost in development"
+
+    return True, ""
 
 
 # ==============================================================================
@@ -121,6 +231,15 @@ async def oauth_start_saas(
         callback_url: Where to redirect after OAuth (your app's callback endpoint)
         client_id: Optional client identifier for validation during exchange
     """
+    # Validate callback URL (includes length check)
+    is_valid, error_msg = _validate_callback_url(callback_url)
+    if not is_valid:
+        raise NotAuthorizedException(f"Invalid callback_url: {error_msg}")
+
+    # Validate client_id length to prevent DoS
+    if client_id and len(client_id) > 255:
+        raise NotAuthorizedException("client_id too long (max 255 characters)")
+
     # Get OAuth credentials from database
     stmt = select(AppSettings).where(AppSettings.id == 1)
     result = await session.execute(stmt)
@@ -129,19 +248,9 @@ async def oauth_start_saas(
     if not app_settings or not app_settings.polar_client_id:
         raise NotFoundException("OAuth credentials not configured on server")
 
-    # Generate CSRF state token
+    # Generate CSRF state token (BoundedOAuthStateCache handles cleanup and size limits)
     state = secrets.token_urlsafe(32)
-    _saas_oauth_states[state] = {
-        "expires_at": datetime.now(UTC) + timedelta(minutes=10),
-        "callback_url": callback_url,
-        "client_id": client_id,
-    }
-
-    # Clean up expired states
-    now = datetime.now(UTC)
-    expired = [s for s, data in _saas_oauth_states.items() if data["expires_at"] < now]
-    for s in expired:
-        del _saas_oauth_states[s]
+    await _saas_oauth_states.set(state, callback_url, client_id)
 
     # Build authorization URL - extract host/scheme from request headers
     # Coolify/nginx sets x-forwarded-* headers
@@ -183,31 +292,34 @@ async def oauth_callback_saas(
 
     from polar_flow_server.core.security import token_encryption
 
-    # Handle errors
+    # Handle errors - try to redirect to callback with error if we have state
     if error or not code:
-        # Redirect to callback with error if we have oauth_state
-        if oauth_state and oauth_state in _saas_oauth_states:
-            callback_url = _saas_oauth_states[oauth_state]["callback_url"]
-            del _saas_oauth_states[oauth_state]
-            error_params = urlencode({"error": error or "no_code", "status": "failed"})
-            return Redirect(path=f"{callback_url}?{error_params}", status_code=HTTP_303_SEE_OTHER)
+        if oauth_state:
+            state_data = await _saas_oauth_states.pop(oauth_state)
+            if state_data:
+                callback_url = state_data["callback_url"]
+                error_params = urlencode({"error": error or "no_code", "status": "failed"})
+                return Redirect(
+                    path=f"{callback_url}?{error_params}", status_code=HTTP_303_SEE_OTHER
+                )
         raise NotAuthorizedException(f"OAuth authorization failed: {error or 'No code received'}")
 
-    # Validate oauth_state
-    if not oauth_state or oauth_state not in _saas_oauth_states:
+    # Validate oauth_state exists
+    if not oauth_state or not await _saas_oauth_states.contains(oauth_state):
         raise NotAuthorizedException("Invalid OAuth state - possible CSRF attack")
 
-    state_data = _saas_oauth_states[oauth_state]
+    # Get and remove state data (one-time use)
+    state_data = await _saas_oauth_states.pop(oauth_state)
+    if not state_data:
+        raise NotAuthorizedException("OAuth state not found")
 
     # Check expiry
     if state_data["expires_at"] < datetime.now(UTC):
-        del _saas_oauth_states[oauth_state]
         raise NotAuthorizedException("OAuth state expired. Please try again.")
 
-    # Get callback info and remove oauth_state (one-time use)
+    # Get callback info
     callback_url = state_data["callback_url"]
     stored_client_id = state_data["client_id"]
-    del _saas_oauth_states[oauth_state]
 
     # Get OAuth credentials
     stmt = select(AppSettings).where(AppSettings.id == 1)
