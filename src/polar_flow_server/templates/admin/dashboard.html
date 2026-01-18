@@ -1439,6 +1439,9 @@ function getCsrfToken() {
 async function confirmRegenerate() {
     if (!currentKeyId) return;
 
+    // Reset copy state for new key generation
+    keyWasCopied = false;
+
     const resultDiv = document.getElementById('regenerate-result');
     const confirmBtn = document.getElementById('regenerate-confirm-btn');
 
@@ -1559,6 +1562,9 @@ function closeCreateKeyModal() {
 }
 
 async function confirmCreateKey() {
+    // Reset copy state for new key generation
+    keyWasCopied = false;
+
     const resultDiv = document.getElementById('create-key-result');
     const confirmBtn = document.getElementById('create-key-confirm-btn');
 

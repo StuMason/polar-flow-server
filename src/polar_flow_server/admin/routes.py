@@ -987,6 +987,17 @@ async def reset_oauth_credentials(
 # ============================================================================
 # API Key Management (Admin-authenticated, no API key required)
 # ============================================================================
+#
+# Authorization Model:
+# These routes use session-based admin authentication, not per-key authorization.
+# The admin who logs into the dashboard has full access to manage all API keys.
+# This is intentional:
+# - Self-hosted: Single admin manages all keys for their deployment
+# - SaaS: System admin manages keys across all users
+#
+# Per-key ownership checks are not needed since admin access itself is the
+# authorization boundary. If you need user-level key management, use the
+# per-user API endpoints in api/keys.py which require API key authentication.
 
 
 @post("/api-keys/{key_id:int}/regenerate", sync_to_thread=False, status_code=HTTP_200_OK)
