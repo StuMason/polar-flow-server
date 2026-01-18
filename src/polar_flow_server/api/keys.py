@@ -58,9 +58,7 @@ class BoundedOAuthStateCache:
         self._maxsize = maxsize
         self._ttl = timedelta(minutes=ttl_minutes)
 
-    def set(
-        self, key: str, callback_url: str, client_id: str | None = None
-    ) -> None:
+    def set(self, key: str, callback_url: str, client_id: str | None = None) -> None:
         """Add a new OAuth state with its associated data."""
         self._cleanup_expired()
         # If at max, evict oldest entry
@@ -278,7 +276,9 @@ async def oauth_callback_saas(
             if state_data:
                 callback_url = state_data["callback_url"]
                 error_params = urlencode({"error": error or "no_code", "status": "failed"})
-                return Redirect(path=f"{callback_url}?{error_params}", status_code=HTTP_303_SEE_OTHER)
+                return Redirect(
+                    path=f"{callback_url}?{error_params}", status_code=HTTP_303_SEE_OTHER
+                )
         raise NotAuthorizedException(f"OAuth authorization failed: {error or 'No code received'}")
 
     # Validate oauth_state
