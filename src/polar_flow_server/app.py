@@ -99,13 +99,14 @@ def create_app() -> Litestar:
     session_store = MemoryStore()
 
     # Session middleware config with explicit security settings
-    is_debug = settings.log_level == "DEBUG"
+    # Note: We don't set secure=True because Coolify/nginx terminates SSL
+    # and forwards HTTP internally. The cookies would be rejected over HTTP.
+    # Security is still enforced at the proxy level.
     session_config = ServerSideSessionConfig(
         key=settings.get_session_secret(),
         store="session_store",
         max_age=86400,  # 24 hours
-        secure=not is_debug,  # HTTPS only in production
-        httponly=True,  # Prevent JS access
+        httponly=True,  # Prevent JS access to session cookie
         samesite="lax",  # CSRF protection
     )
 
@@ -116,6 +117,7 @@ def create_app() -> Litestar:
         secret=settings.get_session_secret(),
         cookie_name="csrf_token",
         header_name="X-CSRF-Token",
+        cookie_httponly=False,  # JS needs to read this cookie to send in header
         exclude=[
             # Entry points (no session yet)
             "/admin/login",
@@ -156,7 +158,7 @@ def create_app() -> Litestar:
         middleware=[session_config.middleware, RateLimitHeadersMiddleware],
         csrf_config=csrf_config,
         stores={"session_store": session_store},
-        debug=is_debug,
+        debug=settings.log_level == "DEBUG",
     )
 
 
