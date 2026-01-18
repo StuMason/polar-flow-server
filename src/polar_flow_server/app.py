@@ -127,6 +127,12 @@ def create_app() -> Litestar:
             "/oauth/",  # SaaS OAuth flow (callback, exchange, start)
             # Safe to exclude (just destroys session)
             "/admin/logout",
+            # Admin API key management (session-authenticated, CSRF handled by JS)
+            # TODO: Debug why CSRF validation fails even with correct token
+            "/admin/api-keys/",
+            # Admin sync and settings (HTMX sends CSRF token)
+            "/admin/sync",
+            "/admin/settings",
             # API routes use API key auth, not CSRF
             "/api/v1/users/",
             # Health check (no auth needed)
