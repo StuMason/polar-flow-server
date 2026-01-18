@@ -289,9 +289,24 @@
             <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
             <p class="text-sm text-gray-600">Manage API keys for service-to-service authentication</p>
         </div>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-            {{ api_keys|length }} key{% if api_keys|length != 1 %}s{% endif %}
-        </span>
+        <div class="flex items-center gap-3">
+            {% set has_active_key = api_keys|selectattr('is_active')|list|length > 0 %}
+            {% if not has_active_key %}
+            <button
+                type="button"
+                onclick="openCreateKeyModal()"
+                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create New Key
+            </button>
+            {% endif %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                {{ api_keys|length }} key{% if api_keys|length != 1 %}s{% endif %}
+            </span>
+        </div>
     </div>
 
     {% if api_keys %}
@@ -305,6 +320,7 @@
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate Limit</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -351,6 +367,34 @@
                         <span class="text-gray-400">Never</span>
                         {% endif %}
                     </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm">
+                        {% if key.is_active %}
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onclick="openRegenerateModal({{ key.id }}, '{{ key.key_prefix }}', '{{ key.name }}')"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            >
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                Regenerate
+                            </button>
+                            <button
+                                type="button"
+                                onclick="openRevokeModal({{ key.id }}, '{{ key.key_prefix }}', '{{ key.name }}')"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                </svg>
+                                Revoke
+                            </button>
+                        </div>
+                        {% else %}
+                        <span class="text-gray-400 text-xs">Revoked</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -362,7 +406,19 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
         </svg>
         <h3 class="mt-2 text-sm font-medium text-gray-900">No API keys</h3>
-        <p class="mt-1 text-sm text-gray-500">API keys are created when users connect via OAuth.</p>
+        <p class="mt-1 text-sm text-gray-500">Create an API key to access the REST API.</p>
+        <div class="mt-4">
+            <button
+                type="button"
+                onclick="openCreateKeyModal()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create API Key
+            </button>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -1327,5 +1383,398 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
         refreshCharts();
     }
 });
+
+// =============================================================================
+// API Key Management Modals
+// =============================================================================
+
+let currentKeyId = null;
+let currentKeyPrefix = null;
+let currentKeyName = null;
+
+function openRegenerateModal(keyId, keyPrefix, keyName) {
+    currentKeyId = keyId;
+    currentKeyPrefix = keyPrefix;
+    currentKeyName = keyName;
+    document.getElementById('regenerate-key-prefix').textContent = keyPrefix + '...';
+    document.getElementById('regenerate-key-name').textContent = keyName;
+    document.getElementById('regenerate-modal').classList.remove('hidden');
+}
+
+function closeRegenerateModal() {
+    document.getElementById('regenerate-modal').classList.add('hidden');
+    currentKeyId = null;
+}
+
+function openRevokeModal(keyId, keyPrefix, keyName) {
+    currentKeyId = keyId;
+    currentKeyPrefix = keyPrefix;
+    currentKeyName = keyName;
+    document.getElementById('revoke-key-prefix').textContent = keyPrefix + '...';
+    document.getElementById('revoke-key-name').textContent = keyName;
+    document.getElementById('revoke-modal').classList.remove('hidden');
+}
+
+function closeRevokeModal() {
+    document.getElementById('revoke-modal').classList.add('hidden');
+    currentKeyId = null;
+}
+
+// Helper to safely load server-rendered HTML partials into result containers
+// This is the same pattern used by HTMX - we trust our own server's HTML responses
+function loadServerPartial(container, html) {
+    // Clear existing content and set new HTML from our trusted server
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    container.insertAdjacentHTML('beforeend', html);
+}
+
+// Get CSRF token from cookie
+function getCsrfToken() {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    return match ? match[1] : '';
+}
+
+async function confirmRegenerate() {
+    if (!currentKeyId) return;
+
+    // Reset copy state for new key generation
+    keyWasCopied = false;
+
+    const resultDiv = document.getElementById('regenerate-result');
+    const confirmBtn = document.getElementById('regenerate-confirm-btn');
+
+    // Show loading state
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Regenerating...';
+
+    try {
+        const response = await fetch(`/admin/api-keys/${currentKeyId}/regenerate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
+            },
+            credentials: 'same-origin'
+        });
+
+        const html = await response.text();
+        loadServerPartial(resultDiv, html);
+        resultDiv.classList.remove('hidden');
+
+        // Hide the confirmation buttons, show close button
+        document.getElementById('regenerate-buttons').classList.add('hidden');
+        document.getElementById('regenerate-close-btn').classList.remove('hidden');
+
+    } catch (error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+        resultDiv.className = 'mt-4 px-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Regenerate Key';
+    }
+}
+
+async function confirmRevoke() {
+    if (!currentKeyId) return;
+
+    const resultDiv = document.getElementById('revoke-result');
+    const confirmBtn = document.getElementById('revoke-confirm-btn');
+
+    // Show loading state
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Revoking...';
+
+    try {
+        const response = await fetch(`/admin/api-keys/${currentKeyId}/revoke`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
+            },
+            credentials: 'same-origin'
+        });
+
+        const html = await response.text();
+        loadServerPartial(resultDiv, html);
+        resultDiv.classList.remove('hidden');
+
+        // Hide the confirmation buttons, show close button
+        document.getElementById('revoke-buttons').classList.add('hidden');
+        document.getElementById('revoke-close-btn').classList.remove('hidden');
+
+    } catch (error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+        resultDiv.className = 'mt-4 px-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Revoke Key';
+    }
+}
+
+let keyWasCopied = false;
+
+function copyApiKey() {
+    const keyElement = document.getElementById('new-api-key');
+    if (keyElement) {
+        navigator.clipboard.writeText(keyElement.textContent).then(() => {
+            keyWasCopied = true;
+            const copyBtn = document.getElementById('copy-key-btn');
+            copyBtn.textContent = 'Copied!';
+            copyBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            copyBtn.classList.add('bg-green-600');
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy Key';
+                copyBtn.classList.remove('bg-green-600');
+                copyBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            }, 2000);
+        });
+    }
+}
+
+function closeAndRefresh() {
+    // Check if a new key was generated but not copied
+    const newKeyElement = document.getElementById('new-api-key');
+    if (newKeyElement && !keyWasCopied) {
+        if (!confirm('You have not copied the new API key. It will NOT be shown again after closing. Are you sure you want to close?')) {
+            return;
+        }
+    }
+    keyWasCopied = false;
+    window.location.reload();
+}
+
+// Close modals on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeRegenerateModal();
+        closeRevokeModal();
+        closeCreateKeyModal();
+    }
+});
+
+// Create API Key Modal
+function openCreateKeyModal() {
+    document.getElementById('create-key-modal').classList.remove('hidden');
+}
+
+function closeCreateKeyModal() {
+    document.getElementById('create-key-modal').classList.add('hidden');
+}
+
+async function confirmCreateKey() {
+    // Reset copy state for new key generation
+    keyWasCopied = false;
+
+    const resultDiv = document.getElementById('create-key-result');
+    const confirmBtn = document.getElementById('create-key-confirm-btn');
+
+    // Show loading state
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Creating...';
+
+    try {
+        const response = await fetch('/admin/api-keys/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRF-Token': getCsrfToken(),
+            },
+            credentials: 'same-origin'
+        });
+
+        const html = await response.text();
+        loadServerPartial(resultDiv, html);
+        resultDiv.classList.remove('hidden');
+
+        // Hide the confirmation buttons, show close button
+        document.getElementById('create-key-buttons').classList.add('hidden');
+        document.getElementById('create-key-close-btn').classList.remove('hidden');
+
+    } catch (error) {
+        resultDiv.textContent = 'Error: ' + error.message;
+        resultDiv.className = 'mt-4 px-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded';
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Create Key';
+    }
+}
 </script>
+
+<!-- Regenerate API Key Modal -->
+<div id="regenerate-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 rounded-full">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Regenerate API Key</h3>
+            <div class="mt-2 px-4 py-3">
+                <p class="text-sm text-gray-500 text-center">
+                    You are about to regenerate the API key:
+                </p>
+                <div class="mt-3 bg-gray-50 rounded-lg p-3 text-center">
+                    <code class="text-sm font-mono text-gray-700" id="regenerate-key-prefix"></code>
+                    <p class="text-xs text-gray-500 mt-1" id="regenerate-key-name"></p>
+                </div>
+                <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p class="text-sm text-yellow-800">
+                        <strong>Warning:</strong> The current key will be immediately invalidated. Any applications using it will stop working until updated with the new key.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Result area (hidden initially) -->
+            <div id="regenerate-result" class="hidden mt-4 px-4"></div>
+
+            <!-- Action buttons -->
+            <div id="regenerate-buttons" class="mt-4 flex justify-end gap-3 px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeRegenerateModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    id="regenerate-confirm-btn"
+                    onclick="confirmRegenerate()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    Regenerate Key
+                </button>
+            </div>
+
+            <!-- Close button (shown after action) -->
+            <div id="regenerate-close-btn" class="hidden mt-4 flex justify-end px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeAndRefresh()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revoke API Key Modal -->
+<div id="revoke-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                </svg>
+            </div>
+            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Revoke API Key</h3>
+            <div class="mt-2 px-4 py-3">
+                <p class="text-sm text-gray-500 text-center">
+                    You are about to revoke the API key:
+                </p>
+                <div class="mt-3 bg-gray-50 rounded-lg p-3 text-center">
+                    <code class="text-sm font-mono text-gray-700" id="revoke-key-prefix"></code>
+                    <p class="text-xs text-gray-500 mt-1" id="revoke-key-name"></p>
+                </div>
+                <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p class="text-sm text-red-800">
+                        <strong>Warning:</strong> This action cannot be undone. The key will be permanently deactivated. To restore access, you will need to reconnect via OAuth.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Result area (hidden initially) -->
+            <div id="revoke-result" class="hidden mt-4 px-4"></div>
+
+            <!-- Action buttons -->
+            <div id="revoke-buttons" class="mt-4 flex justify-end gap-3 px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeRevokeModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    id="revoke-confirm-btn"
+                    onclick="confirmRevoke()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                    Revoke Key
+                </button>
+            </div>
+
+            <!-- Close button (shown after action) -->
+            <div id="revoke-close-btn" class="hidden mt-4 flex justify-end px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeAndRefresh()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create API Key Modal -->
+<div id="create-key-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                </svg>
+            </div>
+            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
+            <div class="mt-2 px-4 py-3">
+                <p class="text-sm text-gray-500 text-center">
+                    Create a new API key for the connected Polar user. This key will allow access to the REST API.
+                </p>
+                <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p class="text-sm text-blue-800">
+                        <strong>Note:</strong> The key will only be shown once. Make sure to copy it and store it securely.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Result area (hidden initially) -->
+            <div id="create-key-result" class="hidden mt-4 px-4"></div>
+
+            <!-- Action buttons -->
+            <div id="create-key-buttons" class="mt-4 flex justify-end gap-3 px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeCreateKeyModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="button"
+                    id="create-key-confirm-btn"
+                    onclick="confirmCreateKey()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                    Create Key
+                </button>
+            </div>
+
+            <!-- Close button (shown after action) -->
+            <div id="create-key-close-btn" class="hidden mt-4 flex justify-end px-4 pb-4">
+                <button
+                    type="button"
+                    onclick="closeAndRefresh()"
+                    class="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

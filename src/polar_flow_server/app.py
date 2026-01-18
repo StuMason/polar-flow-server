@@ -117,6 +117,7 @@ def create_app() -> Litestar:
             "/admin/settings",  # Settings pages (reset-oauth, etc.)
             "/admin/sync",  # Sync trigger from dashboard
             "/admin/logout",  # Logout action
+            "/admin/api-keys/",  # API key management (uses session auth)
             "/oauth/",  # OAuth endpoints for SaaS (callback, exchange, start)
             "/users/",  # API routes use API key auth, not sessions
             "/health",
