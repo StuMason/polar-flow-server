@@ -1,0 +1,1773 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Self-hosted health analytics server for Polar devices">
+      
+      
+      
+        <link rel="canonical" href="https://stumason.github.io/polar-flow-server/adr/001-per-user-api-keys/">
+      
+      
+        <link rel="prev" href="../../api/overview/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Per-User API Keys - polar-flow-server</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adr-001-per-user-api-keys-for-multi-tenant-saas-support" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="polar-flow-server" class="md-header__button md-logo" aria-label="polar-flow-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            polar-flow-server
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Per-User API Keys
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="purple"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuMason/polar-flow-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuMason/polar-flow-server
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="polar-flow-server" class="md-nav__button md-logo" aria-label="polar-flow-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    polar-flow-server
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuMason/polar-flow-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuMason/polar-flow-server
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADRs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ADRs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User API Keys
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User API Keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-extend-existing-apikey-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Extend Existing APIKey Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-api-key-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. API Key Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-authentication-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Authentication Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-secure-oauth-flow-two-step-code-exchange" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Secure OAuth Flow (Two-Step Code Exchange)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-new-api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. New API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-rate-limiting-phase-1-critical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Rate Limiting (Phase 1 - Critical)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-admin-vs-user-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Admin vs User Keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-self-hosted-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Self-Hosted Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-webhook-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Webhook Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Consequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#positive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Positive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#negative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neutral" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neutral
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-database-model-rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Database, Model &amp; Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-oauth-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: OAuth Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-authentication-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Authentication Guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-key-management-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Key Management Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-admin-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Admin Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-to-createmodify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files to Create/Modify
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#proposed-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-extend-existing-apikey-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Extend Existing APIKey Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-api-key-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. API Key Format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-authentication-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Authentication Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-secure-oauth-flow-two-step-code-exchange" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Secure OAuth Flow (Two-Step Code Exchange)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-new-api-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. New API Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-rate-limiting-phase-1-critical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Rate Limiting (Phase 1 - Critical)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-admin-vs-user-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Admin vs User Keys
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-self-hosted-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Self-Hosted Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-webhook-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Webhook Authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Consequences
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Consequences">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#positive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Positive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#negative" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Negative
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neutral" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neutral
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-database-model-rate-limiting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Database, Model &amp; Rate Limiting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-oauth-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: OAuth Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-authentication-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Authentication Guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-key-management-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Key Management Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-admin-dashboard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Admin Dashboard
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-7-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7: Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-to-createmodify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files to Create/Modify
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved Questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adr-001-per-user-api-keys-for-multi-tenant-saas-support">ADR-001: Per-User API Keys for Multi-Tenant SaaS Support</h1>
+<h2 id="status">Status</h2>
+<p>Proposed (Revised based on security review)</p>
+<h2 id="context">Context</h2>
+<p>polar-flow-server is designed to work in two modes:</p>
+<ol>
+<li><strong>Self-hosted</strong>: Single user boots up an instance, connects their Polar account, uses dashboard or API</li>
+<li><strong>SaaS backend</strong>: Laravel frontend (myloopcoach.com) manages users, polar-flow-server handles Polar data sync/storage</li>
+</ol>
+<p>The current authentication model uses a single API key for all external access. This creates a security risk for SaaS deployments: if the single key is compromised, ALL users' data is exposed.</p>
+<h3 id="current-architecture">Current Architecture</h3>
+<div class="highlight"><pre><span></span><code>Laravel App                     polar-flow-server
+┌─────────────┐                ┌─────────────────┐
+│ All users   │──ONE API KEY──▶│ All data        │
+│ share key   │                │ accessible      │
+└─────────────┘                └─────────────────┘
+
+Risk: Key compromise = total data breach
+</code></pre></div>
+<h3 id="proposed-architecture">Proposed Architecture</h3>
+<div class="highlight"><pre><span></span><code>Laravel App                     polar-flow-server
+┌─────────────┐                ┌─────────────────┐
+│ Steve       │──Steve&#39;s key──▶│ Steve&#39;s data    │
+│ Jane        │──Jane&#39;s key───▶│ Jane&#39;s data     │
+│ Bob         │──Bob&#39;s key────▶│ Bob&#39;s data      │
+└─────────────┘                └─────────────────┘
+
+Risk: Key compromise = single user&#39;s data only
+</code></pre></div>
+<h2 id="decision">Decision</h2>
+<p>Implement per-user API keys with the following design:</p>
+<h3 id="1-extend-existing-apikey-model">1. Extend Existing APIKey Model</h3>
+<p>The codebase already has an <code>APIKey</code> model for service-level authentication. We extend it to support per-user scoping:</p>
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">APIKey</span><span class="p">(</span><span class="n">Base</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;API key for authenticating service-to-service requests.&quot;&quot;&quot;</span>
+
+    <span class="n">__tablename__</span> <span class="o">=</span> <span class="s2">&quot;api_keys&quot;</span>
+
+    <span class="nb">id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">key_hash</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">64</span><span class="p">),</span> <span class="n">unique</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">key_prefix</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">12</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>  <span class="c1"># First 8 chars for identification</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">String</span><span class="p">(</span><span class="mi">100</span><span class="p">))</span>
+    <span class="n">is_active</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">bool</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># NEW: User scoping (nullable for service-level keys)</span>
+    <span class="n">user_id</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span>
+        <span class="n">String</span><span class="p">(</span><span class="mi">50</span><span class="p">),</span>
+        <span class="n">ForeignKey</span><span class="p">(</span><span class="s2">&quot;users.polar_user_id&quot;</span><span class="p">),</span>
+        <span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">index</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Rate limiting</span>
+    <span class="n">rate_limit_requests</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>  <span class="c1"># per hour</span>
+    <span class="n">rate_limit_remaining</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+    <span class="n">rate_limit_reset_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">created_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">server_default</span><span class="o">=</span><span class="n">func</span><span class="o">.</span><span class="n">now</span><span class="p">())</span>
+    <span class="n">last_used_at</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="n">datetime</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="n">mapped_column</span><span class="p">(</span><span class="n">nullable</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Relationship</span>
+    <span class="n">user</span><span class="p">:</span> <span class="n">Mapped</span><span class="p">[</span><span class="s2">&quot;User | None&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">relationship</span><span class="p">(</span><span class="n">back_populates</span><span class="o">=</span><span class="s2">&quot;api_keys&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p><strong>Key behaviors:</strong>
+- <code>user_id = None</code>: Service-level key with full access (existing behavior)
+- <code>user_id = "12345"</code>: User-scoped key, can only access that user's data</p>
+<h3 id="2-api-key-format">2. API Key Format</h3>
+<div class="highlight"><pre><span></span><code>pfk_&lt;random_40_chars&gt;
+Example: pfk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+</code></pre></div>
+<ul>
+<li><code>pfk_</code> prefix identifies it as a polar-flow-server key</li>
+<li>40 random alphanumeric chars for security (240 bits of entropy)</li>
+<li><strong>No user ID in the key</strong> - prevents enumeration attacks</li>
+<li>First 8 chars stored as <code>key_prefix</code> for admin identification</li>
+<li>Only the hash is stored, full key shown once on creation</li>
+</ul>
+<h3 id="3-authentication-flow">3. Authentication Flow</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># API request</span>
+<span class="n">GET</span> <span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">users</span><span class="o">/</span><span class="p">{</span><span class="n">user_id</span><span class="p">}</span><span class="o">/</span><span class="n">sleep</span>
+<span class="n">Header</span><span class="p">:</span> <span class="n">X</span><span class="o">-</span><span class="n">API</span><span class="o">-</span><span class="n">Key</span><span class="p">:</span> <span class="n">pfk_a1b2c3d4e5f6</span><span class="o">...</span>
+
+<span class="c1"># Server validates (in this order):</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">api_key_guard</span><span class="p">(</span><span class="n">connection</span><span class="p">:</span> <span class="n">ASGIConnection</span><span class="p">,</span> <span class="n">handler</span><span class="p">:</span> <span class="n">BaseRouteHandler</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">api_key</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;X-API-Key&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">api_key</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotAuthorizedException</span><span class="p">(</span><span class="s2">&quot;Missing X-API-Key header&quot;</span><span class="p">)</span>
+
+    <span class="c1"># 1. Hash and lookup key</span>
+    <span class="n">key_hash</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">api_key</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+    <span class="n">key_record</span> <span class="o">=</span> <span class="k">await</span> <span class="n">get_api_key_by_hash</span><span class="p">(</span><span class="n">key_hash</span><span class="p">,</span> <span class="n">session</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">key_record</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">key_record</span><span class="o">.</span><span class="n">is_active</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotAuthorizedException</span><span class="p">(</span><span class="s2">&quot;Invalid or inactive API key&quot;</span><span class="p">)</span>
+
+    <span class="c1"># 2. Check rate limit BEFORE any data access</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="k">await</span> <span class="n">check_rate_limit</span><span class="p">(</span><span class="n">key_record</span><span class="p">,</span> <span class="n">session</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">TooManyRequestsException</span><span class="p">(</span><span class="s2">&quot;Rate limit exceeded&quot;</span><span class="p">,</span> <span class="n">retry_after</span><span class="o">=...</span><span class="p">)</span>
+
+    <span class="c1"># 3. If user-scoped key, verify access to requested user</span>
+    <span class="n">path_user_id</span> <span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">path_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;user_id&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">key_record</span><span class="o">.</span><span class="n">user_id</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">path_user_id</span> <span class="ow">and</span> <span class="n">key_record</span><span class="o">.</span><span class="n">user_id</span> <span class="o">!=</span> <span class="n">path_user_id</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">NotAuthorizedException</span><span class="p">(</span><span class="s2">&quot;API key not authorized for this user&quot;</span><span class="p">)</span>
+
+    <span class="c1"># 4. Update last_used_at</span>
+    <span class="n">key_record</span><span class="o">.</span><span class="n">last_used_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="4-secure-oauth-flow-two-step-code-exchange">4. Secure OAuth Flow (Two-Step Code Exchange)</h3>
+<p><strong>CRITICAL SECURITY FIX</strong>: API keys are NEVER passed in URL parameters. Instead, we use a temporary authorization code that Laravel exchanges server-to-server.</p>
+<div class="highlight"><pre><span></span><code>┌─────────┐          ┌─────────────────┐          ┌─────────────┐
+│  User   │          │  polar-flow     │          │   Laravel   │
+│ Browser │          │    server       │          │   Backend   │
+└────┬────┘          └────────┬────────┘          └──────┬──────┘
+     │                        │                          │
+     │ 1. User clicks         │                          │
+     │    &quot;Connect Polar&quot;     │                          │
+     │───────────────────────▶│                          │
+     │                        │                          │
+     │ 2. Redirect to         │                          │
+     │    Polar OAuth         │                          │
+     │◀───────────────────────│                          │
+     │                        │                          │
+     │ 3. User authorizes     │                          │
+     │    on Polar            │                          │
+     │───────────────────────▶│                          │
+     │                        │                          │
+     │ 4. Polar redirects     │                          │
+     │    with OAuth code     │                          │
+     │───────────────────────▶│                          │
+     │                        │                          │
+     │                        │ 5. Exchange OAuth code   │
+     │                        │    for Polar tokens      │
+     │                        │                          │
+     │                        │ 6. Generate temp auth    │
+     │                        │    code (expires 5min)   │
+     │                        │                          │
+     │ 7. Redirect to Laravel │                          │
+     │    with temp code only │                          │
+     │◀───────────────────────│                          │
+     │                        │                          │
+     │ 8. Browser follows     │                          │
+     │    redirect            │                          │
+     │────────────────────────────────────────────────▶  │
+     │                        │                          │
+     │                        │  9. Server-to-server     │
+     │                        │     POST with temp code  │
+     │                        │◀─────────────────────────│
+     │                        │                          │
+     │                        │ 10. Validate code,       │
+     │                        │     generate API key,    │
+     │                        │     return in response   │
+     │                        │─────────────────────────▶│
+     │                        │                          │
+     │                        │                          │ 11. Store API key
+     │                        │                          │     securely
+</code></pre></div>
+<p><strong>Step-by-step:</strong></p>
+<ol>
+<li>User initiates OAuth from Laravel app</li>
+<li>Laravel redirects to polar-flow-server OAuth start (with Laravel callback URL)</li>
+<li>polar-flow-server redirects to Polar OAuth</li>
+<li>User authorizes on Polar</li>
+<li>Polar redirects back with authorization code</li>
+<li>polar-flow-server exchanges code for tokens, stores user</li>
+<li>Generate temporary auth code (random 64 chars, expires in 5 minutes, single-use)</li>
+<li>Redirect to Laravel callback with ONLY:
+   <div class="highlight"><pre><span></span><code>https://myloopcoach.com/polar/callback?
+  code=temp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  &amp;polar_user_id=12345678
+  &amp;status=connected
+</code></pre></div></li>
+<li>Laravel backend makes server-to-server POST request:
+   <div class="highlight"><pre><span></span><code>POST /api/v1/oauth/exchange
+Content-Type: application/json
+
+{
+  &quot;code&quot;: &quot;temp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&quot;,
+  &quot;client_id&quot;: &quot;laravel_app_id&quot;
+}
+</code></pre></div></li>
+<li>polar-flow-server validates code, generates API key, returns:
+    <div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;api_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;pfk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;polar_user_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;12345678&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;expires_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+<span class="p">}</span>
+</code></pre></div></li>
+<li>Laravel stores API key encrypted in database</li>
+</ol>
+<p><strong>Why this is secure:</strong>
+- API key never appears in browser history, server logs, or referrer headers
+- Temporary code is single-use and expires quickly
+- Server-to-server exchange requires client credentials
+- No sensitive data in URL parameters</p>
+<h3 id="5-new-api-endpoints">5. New API Endpoints</h3>
+<div class="highlight"><pre><span></span><code>POST /api/v1/oauth/exchange
+  - Exchange temporary auth code for API key
+  - Requires: valid temp code, client credentials
+  - Returns: API key, user ID
+
+POST /api/v1/users/{user_id}/api-key/regenerate
+  - Requires current valid API key for that user
+  - Invalidates old key, returns new one
+  - Use case: key rotation, suspected compromise
+
+POST /api/v1/users/{user_id}/api-key/revoke
+  - Requires current valid API key OR admin auth
+  - Permanently invalidates key without generating new one
+  - Use case: user disconnects, account deletion
+
+GET /api/v1/users/{user_id}/status
+  - Returns connection status, last sync, key info (masked)
+  - Requires valid API key for that user
+</code></pre></div>
+<h3 id="6-rate-limiting-phase-1-critical">6. Rate Limiting (Phase 1 - Critical)</h3>
+<p>Rate limiting is implemented at the API key level:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Default limits</span>
+<span class="n">DEFAULT_RATE_LIMIT</span> <span class="o">=</span> <span class="mi">1000</span>  <span class="c1"># requests per hour</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">check_rate_limit</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="n">APIKey</span><span class="p">,</span> <span class="n">session</span><span class="p">:</span> <span class="n">AsyncSession</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check and update rate limit for API key.&quot;&quot;&quot;</span>
+    <span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span>
+
+    <span class="c1"># Reset if window expired</span>
+    <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_reset_at</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">now</span> <span class="o">&gt;=</span> <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_reset_at</span><span class="p">:</span>
+        <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_remaining</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_requests</span>
+        <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_reset_at</span> <span class="o">=</span> <span class="n">now</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Check limit</span>
+    <span class="k">if</span> <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_remaining</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="c1"># Decrement</span>
+    <span class="n">key</span><span class="o">.</span><span class="n">rate_limit_remaining</span> <span class="o">-=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="kc">True</span>
+</code></pre></div>
+<p>Response headers:
+<div class="highlight"><pre><span></span><code>X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 847
+X-RateLimit-Reset: 1704067200
+</code></pre></div></p>
+<h3 id="7-admin-vs-user-keys">7. Admin vs User Keys</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Scope</th>
+<th>Use Case</th>
+<th>user_id</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Service key</td>
+<td>Full server access</td>
+<td>Admin CLI, monitoring</td>
+<td><code>NULL</code></td>
+</tr>
+<tr>
+<td>User API key</td>
+<td>Single user's data</td>
+<td>Laravel API calls</td>
+<td>User's polar_user_id</td>
+</tr>
+</tbody>
+</table>
+<p>Admins can still view all data via dashboard (session auth), but API keys are scoped.</p>
+<h3 id="8-self-hosted-mode">8. Self-Hosted Mode</h3>
+<p>For self-hosted single-user deployments:</p>
+<ol>
+<li><strong>Environment variable mode</strong> (existing):</li>
+<li>Set <code>API_KEY</code> env var for simple single-key auth</li>
+<li>This key has full access (service-level)</li>
+<li>
+<p>No database lookup required</p>
+</li>
+<li>
+<p><strong>Per-user mode</strong> (new):</p>
+</li>
+<li>When user connects Polar via admin UI, per-user key is generated</li>
+<li>Key is displayed ONCE on the success page (user must copy it)</li>
+<li>
+<p>Stored hashed in database</p>
+</li>
+<li>
+<p><strong>Both modes together</strong>:</p>
+</li>
+<li><code>API_KEY</code> env var works as a master/fallback key</li>
+<li>Per-user keys provide additional scoped access</li>
+<li>Self-hosted users typically only need the env var key</li>
+</ol>
+<h3 id="9-webhook-authentication">9. Webhook Authentication</h3>
+<p>For Laravel-initiated sync triggers via webhooks:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Laravel can trigger sync using the user&#39;s API key</span>
+<span class="n">POST</span> <span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">users</span><span class="o">/</span><span class="p">{</span><span class="n">user_id</span><span class="p">}</span><span class="o">/</span><span class="n">sync</span><span class="o">/</span><span class="n">trigger</span>
+<span class="n">X</span><span class="o">-</span><span class="n">API</span><span class="o">-</span><span class="n">Key</span><span class="p">:</span> <span class="n">pfk_user_key_here</span>
+
+<span class="c1"># Or use a service-level key for batch operations</span>
+<span class="n">POST</span> <span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">sync</span><span class="o">/</span><span class="n">trigger</span><span class="o">-</span><span class="nb">all</span>
+<span class="n">X</span><span class="o">-</span><span class="n">API</span><span class="o">-</span><span class="n">Key</span><span class="p">:</span> <span class="n">pfk_service_key_here</span>
+</code></pre></div>
+<p>Webhook callbacks FROM polar-flow-server TO Laravel use HMAC signatures:
+<div class="highlight"><pre><span></span><code><span class="c1"># polar-flow-server signs webhook payload</span>
+<span class="n">signature</span> <span class="o">=</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span>
+    <span class="n">webhook_secret</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+    <span class="n">payload</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+    <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span>
+<span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+<span class="c1"># Header: X-Webhook-Signature: sha256=xxxxx</span>
+</code></pre></div></p>
+<h2 id="consequences">Consequences</h2>
+<h3 id="positive">Positive</h3>
+<ul>
+<li><strong>Security</strong>: Compromised key only affects one user</li>
+<li><strong>Audit</strong>: Can track which user's key made each request</li>
+<li><strong>Revocation</strong>: Can revoke single user's access without affecting others</li>
+<li><strong>SaaS-ready</strong>: Proper multi-tenant isolation</li>
+<li><strong>Rate limiting</strong>: Prevents abuse per key</li>
+</ul>
+<h3 id="negative">Negative</h3>
+<ul>
+<li><strong>Complexity</strong>: More auth logic to maintain</li>
+<li><strong>Migration</strong>: Existing integrations need to update</li>
+<li><strong>Key management</strong>: Laravel needs to store keys securely</li>
+</ul>
+<h3 id="neutral">Neutral</h3>
+<ul>
+<li><strong>Storage</strong>: Additional columns in api_keys table</li>
+<li><strong>Performance</strong>: One extra DB lookup per request (indexed, fast)</li>
+</ul>
+<h2 id="implementation-plan">Implementation Plan</h2>
+<h3 id="phase-1-database-model-rate-limiting">Phase 1: Database, Model &amp; Rate Limiting</h3>
+<ul>
+<li>[ ] Add migration to extend APIKey model with user_id, rate limit fields</li>
+<li>[ ] Update APIKey model with new fields and relationships</li>
+<li>[ ] Add temporary auth code table for OAuth exchange</li>
+<li>[ ] Add API key generation utility (secure random, hashing)</li>
+<li>[ ] Implement rate limiting logic</li>
+</ul>
+<h3 id="phase-2-oauth-integration">Phase 2: OAuth Integration</h3>
+<ul>
+<li>[ ] Create temp code generation on OAuth success</li>
+<li>[ ] Create <code>/api/v1/oauth/exchange</code> endpoint</li>
+<li>[ ] Modify OAuth callback to return only temp code</li>
+<li>[ ] Update admin UI to display API key on successful connection</li>
+</ul>
+<h3 id="phase-3-authentication-guard">Phase 3: Authentication Guard</h3>
+<ul>
+<li>[ ] Create per-user auth guard with rate limit check</li>
+<li>[ ] Update data endpoints to use new guard</li>
+<li>[ ] Add key validation and user scoping</li>
+<li>[ ] Implement proper 401/403/429 responses</li>
+</ul>
+<h3 id="phase-4-key-management-endpoints">Phase 4: Key Management Endpoints</h3>
+<ul>
+<li>[ ] Create key regeneration endpoint</li>
+<li>[ ] Create key revocation endpoint</li>
+<li>[ ] Create user status endpoint</li>
+<li>[ ] Add CLI commands for key management</li>
+</ul>
+<h3 id="phase-5-admin-dashboard">Phase 5: Admin Dashboard</h3>
+<ul>
+<li>[ ] Show user's API key status in admin</li>
+<li>[ ] Allow admin to revoke user keys</li>
+<li>[ ] Add rate limit and last-used tracking display</li>
+<li>[ ] Add key prefix display for identification</li>
+</ul>
+<h3 id="phase-6-testing">Phase 6: Testing</h3>
+<ul>
+<li>[ ] Unit tests for key generation and hashing</li>
+<li>[ ] Unit tests for rate limiting logic</li>
+<li>[ ] Integration tests for OAuth two-step flow</li>
+<li>[ ] Integration tests for auth guard</li>
+<li>[ ] Security tests for cross-user access attempts</li>
+<li>[ ] Load tests for rate limiting behavior</li>
+</ul>
+<h3 id="phase-7-documentation">Phase 7: Documentation</h3>
+<ul>
+<li>[ ] Update API docs with new auth model</li>
+<li>[ ] Add Laravel integration guide with code examples</li>
+<li>[ ] Document key rotation best practices</li>
+<li>[ ] Document webhook authentication</li>
+</ul>
+<h2 id="files-to-createmodify">Files to Create/Modify</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>alembic/versions/xxx_add_user_api_keys.py</code></td>
+<td>Migration for APIKey changes</td>
+</tr>
+<tr>
+<td><code>alembic/versions/xxx_add_temp_auth_codes.py</code></td>
+<td>Migration for temp codes table</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/models/api_key.py</code></td>
+<td>Add user_id, rate limit fields</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/models/temp_auth_code.py</code></td>
+<td>New temp code model</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/core/api_keys.py</code></td>
+<td>Key generation/validation/rate limiting</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/api/auth.py</code></td>
+<td>Per-user auth guard</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/api/oauth.py</code></td>
+<td>New OAuth exchange endpoint</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/api/data.py</code></td>
+<td>Update to use new guard</td>
+</tr>
+<tr>
+<td><code>src/polar_flow_server/admin/routes.py</code></td>
+<td>OAuth callback changes</td>
+</tr>
+<tr>
+<td><code>docs/api-authentication.md</code></td>
+<td>New documentation</td>
+</tr>
+</tbody>
+</table>
+<h2 id="resolved-questions">Resolved Questions</h2>
+<ol>
+<li>
+<p><strong>Key expiration</strong>: No automatic expiration. Track <code>last_used_at</code> for stale key identification. Consider soft expiration (warning after 90 days) as future enhancement.</p>
+</li>
+<li>
+<p><strong>Rate limiting</strong>: Yes, implemented in Phase 1. Default 1000 requests/hour per key, configurable per key.</p>
+</li>
+<li>
+<p><strong>Multiple keys per user</strong>: No, keep simple. One active key per user. Regenerate replaces existing key.</p>
+</li>
+<li>
+<p><strong>Lost API key recovery</strong>: User can regenerate key via the polar-flow-server admin UI (if self-hosted) or request regeneration from Laravel admin (if SaaS).</p>
+</li>
+<li>
+<p><strong>Existing deployment migration</strong>:</p>
+</li>
+<li>Self-hosted: No change needed, <code>API_KEY</code> env var continues to work</li>
+<li>
+<p>SaaS: Laravel triggers reconnection flow for each user to generate per-user keys</p>
+</li>
+<li>
+<p><strong>Self-hosted unused fields</strong>: Per-user key fields exist but remain NULL until used. Minimal overhead.</p>
+</li>
+<li>
+<p><strong>Performance of hash lookups</strong>: api_keys.key_hash is indexed, lookup is O(log n). For very high traffic, add Redis caching layer.</p>
+</li>
+</ol>
+<h2 id="security-considerations">Security Considerations</h2>
+<ol>
+<li><strong>Key storage</strong>: Only SHA-256 hash stored in database. Raw key shown once on creation.</li>
+<li><strong>Timing attacks</strong>: Use constant-time comparison for hash validation.</li>
+<li><strong>Brute force</strong>: Rate limiting + key length (40 chars) makes brute force infeasible.</li>
+<li><strong>Key rotation</strong>: Provide regeneration endpoint; recommend periodic rotation.</li>
+<li><strong>Audit logging</strong>: Log all key usage with timestamp and IP (future enhancement).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
