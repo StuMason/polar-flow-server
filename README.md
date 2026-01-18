@@ -132,7 +132,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 ```bash
 # With per-user API key (includes rate limit headers)
 curl -H "X-API-Key: pfk_your_api_key_here" \
-  http://localhost:8000/users/{user_id}/sleep?days=7
+  http://localhost:8000/api/v1/users/{user_id}/sleep?days=7
 
 # Response headers include:
 # X-RateLimit-Limit: 1000
@@ -211,7 +211,7 @@ Store `api_key` and `polar_user_id` for this user. Use the API key for all data 
 
 ```bash
 curl -H "X-API-Key: pfk_abc123..." \
-  "https://your-polar-server.com/users/12345678/sleep?days=7"
+  "https://your-polar-server.com/api/v1/users/12345678/sleep?days=7"
 ```
 
 ### Polar Admin Setup
@@ -226,43 +226,43 @@ https://your-polar-server.com/oauth/callback
 
 ```bash
 # Get key info
-GET /users/{user_id}/api-key/info
+GET /api/v1/users/{user_id}/api-key/info
 X-API-Key: pfk_...
 
 # Regenerate key (invalidates old key)
-POST /users/{user_id}/api-key/regenerate
+POST /api/v1/users/{user_id}/api-key/regenerate
 X-API-Key: pfk_...
 
 # Revoke key
-POST /users/{user_id}/api-key/revoke
+POST /api/v1/users/{user_id}/api-key/revoke
 X-API-Key: pfk_...
 ```
 
 ## API Endpoints
 
 ```bash
-# Health check
+# Health check (no auth required)
 curl http://localhost:8000/health
 
 # Get sleep data (last 7 days)
 curl -H "X-API-Key: pfk_..." \
-  "http://localhost:8000/users/{user_id}/sleep?days=7"
+  "http://localhost:8000/api/v1/users/{user_id}/sleep?days=7"
 
 # Get activity data
 curl -H "X-API-Key: pfk_..." \
-  "http://localhost:8000/users/{user_id}/activity?days=7"
+  "http://localhost:8000/api/v1/users/{user_id}/activity?days=7"
 
 # Get nightly recharge (HRV)
 curl -H "X-API-Key: pfk_..." \
-  "http://localhost:8000/users/{user_id}/recharge?days=7"
+  "http://localhost:8000/api/v1/users/{user_id}/recharge?days=7"
 
 # Get exercises
 curl -H "X-API-Key: pfk_..." \
-  "http://localhost:8000/users/{user_id}/exercises?days=30"
+  "http://localhost:8000/api/v1/users/{user_id}/exercises?days=30"
 
 # Export summary
 curl -H "X-API-Key: pfk_..." \
-  "http://localhost:8000/users/{user_id}/export/summary?days=30"
+  "http://localhost:8000/api/v1/users/{user_id}/export/summary?days=30"
 ```
 
 ## Development
