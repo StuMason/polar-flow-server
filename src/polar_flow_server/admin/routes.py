@@ -1,5 +1,6 @@
 """Admin panel routes."""
 
+import asyncio
 import csv
 import io
 import logging
@@ -67,44 +68,52 @@ class BoundedTTLCache:
 
     Prevents memory exhaustion attacks by limiting max entries.
     Automatically evicts expired entries on access.
+    Thread-safe via asyncio lock.
     """
 
-    def __init__(self, maxsize: int = 1000, ttl_minutes: int = 10) -> None:
+    def __init__(self, maxsize: int = 100, ttl_minutes: int = 10) -> None:
         self._cache: OrderedDict[str, datetime] = OrderedDict()
         self._maxsize = maxsize
         self._ttl = timedelta(minutes=ttl_minutes)
+        self._lock = asyncio.Lock()
 
-    def set(self, key: str, expires_at: datetime | None = None) -> None:
+    async def set(self, key: str, expires_at: datetime | None = None) -> None:
         """Add or update a key with expiry time."""
-        self._cleanup_expired()
-        # If at max, evict oldest entry
-        while len(self._cache) >= self._maxsize:
-            self._cache.popitem(last=False)
-        self._cache[key] = expires_at or (datetime.now(UTC) + self._ttl)
+        async with self._lock:
+            self._cleanup_expired()
+            # If at max, evict oldest entry and log warning
+            if len(self._cache) >= self._maxsize:
+                logger.warning(f"OAuth state cache full ({self._maxsize}), evicting oldest entries")
+            while len(self._cache) >= self._maxsize:
+                self._cache.popitem(last=False)
+            self._cache[key] = expires_at or (datetime.now(UTC) + self._ttl)
 
-    def get(self, key: str) -> datetime | None:
+    async def get(self, key: str) -> datetime | None:
         """Get expiry time for a key, or None if not found/expired."""
-        self._cleanup_expired()
-        return self._cache.get(key)
+        async with self._lock:
+            self._cleanup_expired()
+            return self._cache.get(key)
 
-    def pop(self, key: str) -> datetime | None:
+    async def pop(self, key: str) -> datetime | None:
         """Remove and return expiry time for a key."""
-        return self._cache.pop(key, None)
+        async with self._lock:
+            return self._cache.pop(key, None)
 
-    def __contains__(self, key: str) -> bool:
-        self._cleanup_expired()
-        return key in self._cache
+    async def contains(self, key: str) -> bool:
+        """Check if key exists (async version of __contains__)."""
+        async with self._lock:
+            self._cleanup_expired()
+            return key in self._cache
 
     def _cleanup_expired(self) -> None:
-        """Remove expired entries."""
+        """Remove expired entries. Must be called with lock held."""
         now = datetime.now(UTC)
-        expired = [k for k, exp in self._cache.items() if exp < now]
-        for k in expired:
-            del self._cache[k]
+        # Use dict comprehension for atomic update
+        self._cache = OrderedDict((k, exp) for k, exp in self._cache.items() if exp >= now)
 
 
 # OAuth state storage with bounded size (prevents memory exhaustion)
-_oauth_states = BoundedTTLCache(maxsize=1000, ttl_minutes=10)
+_oauth_states = BoundedTTLCache(maxsize=100, ttl_minutes=10)
 
 
 # =============================================================================
@@ -116,6 +125,7 @@ class LoginRateLimiter:
     """Simple in-memory rate limiter for login attempts.
 
     Tracks failed attempts by IP address and locks out after threshold.
+    Thread-safe via asyncio lock.
     """
 
     def __init__(
@@ -128,44 +138,48 @@ class LoginRateLimiter:
         self._attempt_window = timedelta(minutes=15)
         self._cleanup_counter = 0
         self._cleanup_interval = cleanup_interval
+        self._lock = asyncio.Lock()
 
-    def is_locked_out(self, ip: str) -> bool:
+    async def is_locked_out(self, ip: str) -> bool:
         """Check if IP is currently locked out."""
-        self._maybe_cleanup()
-        lockout_until = self._lockouts.get(ip)
-        if lockout_until and lockout_until > datetime.now(UTC):
-            return True
-        # Clear expired lockout
-        if lockout_until:
-            del self._lockouts[ip]
-        return False
+        async with self._lock:
+            self._maybe_cleanup()
+            lockout_until = self._lockouts.get(ip)
+            if lockout_until and lockout_until > datetime.now(UTC):
+                return True
+            # Clear expired lockout
+            if lockout_until:
+                del self._lockouts[ip]
+            return False
 
-    def record_failure(self, ip: str) -> bool:
+    async def record_failure(self, ip: str) -> bool:
         """Record a failed login attempt. Returns True if now locked out."""
-        now = datetime.now(UTC)
-        self._maybe_cleanup()
+        async with self._lock:
+            now = datetime.now(UTC)
+            self._maybe_cleanup()
 
-        # Get recent attempts within window
-        attempts = self._attempts.get(ip, [])
-        cutoff = now - self._attempt_window
-        attempts = [t for t in attempts if t > cutoff]
-        attempts.append(now)
-        self._attempts[ip] = attempts
+            # Get recent attempts within window
+            attempts = self._attempts.get(ip, [])
+            cutoff = now - self._attempt_window
+            attempts = [t for t in attempts if t > cutoff]
+            attempts.append(now)
+            self._attempts[ip] = attempts
 
-        # Check if should lock out
-        if len(attempts) >= self._max_attempts:
-            self._lockouts[ip] = now + self._lockout_duration
-            logger.warning(f"Login rate limit exceeded for IP {ip}, locked out for 15 minutes")
-            return True
-        return False
+            # Check if should lock out
+            if len(attempts) >= self._max_attempts:
+                self._lockouts[ip] = now + self._lockout_duration
+                logger.warning(f"Login rate limit exceeded for IP {ip}, locked out")
+                return True
+            return False
 
-    def record_success(self, ip: str) -> None:
+    async def record_success(self, ip: str) -> None:
         """Clear attempts on successful login."""
-        self._attempts.pop(ip, None)
-        self._lockouts.pop(ip, None)
+        async with self._lock:
+            self._attempts.pop(ip, None)
+            self._lockouts.pop(ip, None)
 
     def _maybe_cleanup(self) -> None:
-        """Periodically clean up old entries to prevent memory growth."""
+        """Periodically clean up old entries. Must be called with lock held."""
         self._cleanup_counter += 1
         if self._cleanup_counter < self._cleanup_interval:
             return
@@ -174,16 +188,13 @@ class LoginRateLimiter:
         now = datetime.now(UTC)
         cutoff = now - self._attempt_window
 
-        # Clean up old attempts
-        for ip in list(self._attempts.keys()):
-            self._attempts[ip] = [t for t in self._attempts[ip] if t > cutoff]
-            if not self._attempts[ip]:
-                del self._attempts[ip]
-
-        # Clean up expired lockouts
-        for ip in list(self._lockouts.keys()):
-            if self._lockouts[ip] < now:
-                del self._lockouts[ip]
+        # Atomic cleanup using dict comprehension
+        self._attempts = {
+            ip: [t for t in attempts if t > cutoff]
+            for ip, attempts in self._attempts.items()
+            if any(t > cutoff for t in attempts)
+        }
+        self._lockouts = {ip: exp for ip, exp in self._lockouts.items() if exp >= now}
 
 
 # Global rate limiter instance
@@ -481,19 +492,29 @@ async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> 
 
 
 def _get_client_ip(request: Request[Any, Any, Any]) -> str:
-    """Get client IP from request, checking proxy headers first."""
-    # Check X-Forwarded-For header (set by proxies like nginx, Coolify)
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        # Take the first IP (original client)
-        return forwarded_for.split(",")[0].strip()
-    # Check X-Real-IP header
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip
-    # Fall back to direct connection
+    """Get client IP from request, checking proxy headers only from trusted sources.
+
+    Only trusts X-Forwarded-For/X-Real-IP when request comes from localhost
+    (i.e., from a reverse proxy like nginx/Coolify running on the same host).
+    This prevents IP spoofing attacks where attackers set fake headers.
+    """
     client = request.client
-    return client.host if client else "unknown"
+    direct_ip = client.host if client else "unknown"
+
+    # Only trust proxy headers if request comes from localhost (reverse proxy)
+    trusted_proxies = {"127.0.0.1", "::1", "localhost"}
+    if direct_ip in trusted_proxies:
+        # Check X-Forwarded-For header (set by proxies like nginx, Coolify)
+        forwarded_for = request.headers.get("x-forwarded-for")
+        if forwarded_for:
+            # Take the first IP (original client)
+            return forwarded_for.split(",")[0].strip()
+        # Check X-Real-IP header
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip
+
+    return direct_ip
 
 
 @post("/login", sync_to_thread=False)
@@ -504,11 +525,11 @@ async def login_submit(
     client_ip = _get_client_ip(request)
 
     # Check if IP is locked out due to too many failed attempts
-    if _login_rate_limiter.is_locked_out(client_ip):
+    if await _login_rate_limiter.is_locked_out(client_ip):
         return Template(
             template_name="admin/login.html",
             context={
-                "error": "Too many failed attempts. Please try again in 15 minutes.",
+                "error": "Too many failed attempts. Please try again later.",
                 "email": "",
                 "csrf_token": _get_csrf_token(request),
             },
@@ -531,7 +552,7 @@ async def login_submit(
     admin = await authenticate_admin(str(email), str(password), session)
     if not admin:
         # Record failed attempt
-        _login_rate_limiter.record_failure(client_ip)
+        await _login_rate_limiter.record_failure(client_ip)
         return Template(
             template_name="admin/login.html",
             context={
@@ -542,7 +563,7 @@ async def login_submit(
         )
 
     # Successful login - clear any failed attempts
-    _login_rate_limiter.record_success(client_ip)
+    await _login_rate_limiter.record_success(client_ip)
     login_admin(request, admin)
     return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
@@ -945,7 +966,7 @@ async def oauth_authorize(request: Request[Any, Any, Any], session: AsyncSession
 
     # Generate CSRF state token (BoundedTTLCache handles cleanup and size limits)
     state = secrets.token_urlsafe(32)
-    _oauth_states.set(state)
+    await _oauth_states.set(state)
 
     # Build authorization URL with state for CSRF protection
     base_url = _get_base_url(request)
@@ -979,14 +1000,14 @@ async def oauth_callback(
         )
 
     # Validate CSRF state token
-    if not state or state not in _oauth_states:
+    if not state or not await _oauth_states.contains(state):
         return Template(
             template_name="admin/partials/sync_error.html",
             context={"error": "Invalid OAuth state - possible CSRF attack. Please try again."},
         )
 
     # Get and remove state (one-time use) - also checks expiry
-    state_expires = _oauth_states.pop(state)
+    state_expires = await _oauth_states.pop(state)
     if state_expires and state_expires < datetime.now(UTC):
         return Template(
             template_name="admin/partials/sync_error.html",
