@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Annotated, Any
 
 from litestar import Router, get
+from litestar.openapi.spec import Example
 from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import select
@@ -66,7 +67,17 @@ async def get_activity_list(
 @get("/users/{user_id:str}/activity/{target_date:str}", status_code=HTTP_200_OK)
 async def get_activity_by_date(
     user_id: str,
-    target_date: str,
+    target_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve activity data for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+            examples=[
+                Example(value="2026-01-20", summary="Today"),
+                Example(value="2026-01-15", summary="Last week"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, Any] | None:
     """Get activity data for a specific date."""
@@ -238,7 +249,16 @@ async def get_exercises_list(
 @get("/users/{user_id:str}/exercises/{exercise_id:int}", status_code=HTTP_200_OK)
 async def get_exercise_detail(
     user_id: str,
-    exercise_id: int,
+    exercise_id: Annotated[
+        int,
+        Parameter(
+            description="Exercise ID (from the exercises list endpoint)",
+            examples=[
+                Example(value=1, summary="First exercise"),
+                Example(value=42, summary="Example exercise ID"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, Any] | None:
     """Get detailed exercise data."""
@@ -597,4 +617,5 @@ data_router = Router(
         # Export
         export_summary,
     ],
+    tags=["Data"],
 )

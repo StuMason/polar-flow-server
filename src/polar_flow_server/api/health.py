@@ -19,4 +19,4 @@ def health_check() -> dict[str, str]:
     }
 
 
-health_router = Router(path="/", route_handlers=[health_check])
+health_router = Router(path="/", route_handlers=[health_check], tags=["System"])

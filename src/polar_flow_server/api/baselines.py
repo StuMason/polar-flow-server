@@ -3,10 +3,12 @@
 import math
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from litestar import Router, get, post
 from litestar.exceptions import ValidationException
+from litestar.openapi.spec import Example
+from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,11 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.services.baseline import BaselineService
+
+# Type alias for valid metric names (used in OpenAPI schema)
+MetricNameLiteral = Literal[
+    "hrv_rmssd", "sleep_score", "resting_hr", "training_load", "training_load_ratio"
+]
 
 # Regex for valid user_id format (alphanumeric, underscores, hyphens)
 USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -120,7 +127,19 @@ async def get_baselines(
 @get("/users/{user_id:str}/baselines/{metric_name:str}", status_code=HTTP_200_OK)
 async def get_baseline_by_metric(
     user_id: str,
-    metric_name: str,
+    metric_name: Annotated[
+        MetricNameLiteral,
+        Parameter(
+            description="The metric to retrieve baseline for",
+            examples=[
+                Example(value="hrv_rmssd", summary="HRV (RMSSD)"),
+                Example(value="sleep_score", summary="Sleep quality score"),
+                Example(value="resting_hr", summary="Resting heart rate"),
+                Example(value="training_load", summary="Training load"),
+                Example(value="training_load_ratio", summary="Acute:chronic load ratio"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, Any] | None:
     """Get a specific baseline by metric name.
@@ -197,8 +216,28 @@ async def calculate_baselines(
 )
 async def check_anomaly(
     user_id: str,
-    metric_name: str,
-    value: float,
+    metric_name: Annotated[
+        MetricNameLiteral,
+        Parameter(
+            description="The metric to check against baseline",
+            examples=[
+                Example(value="hrv_rmssd", summary="HRV (RMSSD)"),
+                Example(value="sleep_score", summary="Sleep quality score"),
+                Example(value="resting_hr", summary="Resting heart rate"),
+            ],
+        ),
+    ],
+    value: Annotated[
+        float,
+        Parameter(
+            description="The value to check for anomaly",
+            examples=[
+                Example(value=25.5, summary="Low HRV example"),
+                Example(value=72, summary="Sleep score example"),
+                Example(value=58, summary="Resting HR example"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, Any]:
     """Check if a value is anomalous for a given metric.

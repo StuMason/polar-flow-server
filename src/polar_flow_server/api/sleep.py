@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Annotated
 
 from litestar import Router, get
+from litestar.openapi.spec import Example
 from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy import select
@@ -79,7 +80,17 @@ async def get_sleep_list(
 )
 async def get_sleep_by_date(
     user_id: str,
-    sleep_date: str,
+    sleep_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve sleep data for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+            examples=[
+                Example(value="2026-01-20", summary="Today"),
+                Example(value="2026-01-15", summary="Last week"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, str | int | float | None] | None:
     """Get sleep data for a specific date.
@@ -143,4 +154,5 @@ sleep_router = Router(
     path="/",
     guards=[per_user_api_key_guard],
     route_handlers=[get_sleep_list, get_sleep_by_date],
+    tags=["Sleep"],
 )

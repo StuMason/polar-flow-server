@@ -57,4 +57,5 @@ sync_router = Router(
     path="/",
     guards=[per_user_api_key_guard],
     route_handlers=[trigger_sync],
+    tags=["Sync"],
 )
