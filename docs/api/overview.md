@@ -343,9 +343,15 @@ curl -X POST \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/users/{user_id}/export/summary` | Export summary manifest |
+| GET | `/users/{user_id}/export/sleep.csv` | Export sleep data as CSV |
+| GET | `/users/{user_id}/export/activity.csv` | Export activity data as CSV |
+| GET | `/users/{user_id}/export/recharge.csv` | Export recharge/HRV data as CSV |
+| GET | `/users/{user_id}/export/cardio-load.csv` | Export cardio load data as CSV |
 
 **Query Parameters:**
 - `days` (int, default: 30) - Number of days to include (1-365)
+
+#### Export Summary
 
 **Response:**
 ```json
@@ -365,6 +371,25 @@ curl -X POST \
   "total_records": 160
 }
 ```
+
+#### CSV Exports
+
+Download data as CSV files for use in spreadsheets, data analysis tools, or external systems.
+
+**Example:**
+```bash
+curl -H "X-API-Key: pfk_..." \
+  "{base_url}/api/v1/users/12345/export/sleep.csv?days=90" \
+  -o sleep_data.csv
+```
+
+**Sleep CSV columns:** `date`, `sleep_score`, `total_hours`, `deep_hours`, `light_hours`, `rem_hours`, `hrv_avg`, `heart_rate_avg`, `breathing_rate_avg`
+
+**Activity CSV columns:** `date`, `steps`, `calories_active`, `calories_total`, `distance_km`, `active_minutes`
+
+**Recharge CSV columns:** `date`, `hrv_avg`, `ans_charge`, `status`, `breathing_rate`, `heart_rate_avg`
+
+**Cardio Load CSV columns:** `date`, `strain`, `tolerance`, `cardio_load`, `load_ratio`, `status`
 
 ---
 

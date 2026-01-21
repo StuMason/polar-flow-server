@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**User-Scoped CSV Export API**
+- New endpoints for programmatic CSV downloads:
+  - `GET /api/v1/users/{user_id}/export/sleep.csv`
+  - `GET /api/v1/users/{user_id}/export/activity.csv`
+  - `GET /api/v1/users/{user_id}/export/recharge.csv`
+  - `GET /api/v1/users/{user_id}/export/cardio-load.csv`
+- All exports support `days` query parameter (1-365, default 30)
+- Protected by per-user API key authentication
+
+**Improved OpenAPI Documentation**
+- Added proper tags to all API routers (System, Sleep, Data, Sync, API Keys, Export, Baselines, Patterns, Insights)
+- Added enum dropdowns for `metric_name` parameter (hrv_rmssd, sleep_score, resting_hr, training_load, training_load_ratio)
+- Added enum dropdowns for `pattern_name` parameter (sleep_hrv_correlation, overtraining_risk, hrv_trend, sleep_trend, etc.)
+- Added examples and descriptions for date parameters (YYYY-MM-DD format)
+- Added examples for exercise_id and anomaly check value parameters
+
+### Changed
+
+- Admin and OAuth routes hidden from Swagger docs (internal use only)
+- Admin CSV exports now filter by connected user's `polar_user_id` (multi-tenancy fix)
+
 ---
 
 ## [1.3.3] - 2026-01-21
