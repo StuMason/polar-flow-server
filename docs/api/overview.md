@@ -2,7 +2,16 @@
 
 REST API for accessing synced Polar health data.
 
-Base URL: `http://localhost:8000/api/v1`
+## Base URL
+
+```
+{base_url}/api/v1
+```
+
+Replace `{base_url}` with your server address:
+- **Local development**: `http://localhost:8000`
+- **Docker**: `http://localhost:8000` or your configured port
+- **Production**: Your deployed server URL (e.g., `https://polar.example.com`)
 
 ## OpenAPI Specification
 
@@ -14,14 +23,28 @@ The full OpenAPI 3.1 specification is available at:
 
 ```bash
 # Download OpenAPI spec
-curl http://localhost:8000/schema/openapi.json > openapi.json
+curl {base_url}/schema/openapi.json > openapi.json
 ```
 
 ## Authentication
 
-All data endpoints require a `user_id` in the URL path. For self-hosted deployments, this is your Polar user ID. For SaaS integrations, this is your application's user identifier.
+### API Key Authentication
 
-Sync endpoints require a Polar API access token via the `X-Polar-Token` header.
+If an API key is configured (recommended for production), include it in the `X-API-Key` header:
+
+```bash
+curl -H "X-API-Key: your_api_key_here" {base_url}/api/v1/users/12345/sleep
+```
+
+API keys can be created and managed from the **Admin Dashboard → API Keys** section.
+
+### User ID
+
+All data endpoints require a `user_id` in the URL path. For self-hosted deployments, this is your Polar user ID (visible in the admin dashboard). For SaaS integrations, this is your application's user identifier.
+
+### Sync Endpoints
+
+Sync endpoints additionally require a Polar API access token via the `X-Polar-Token` header.
 
 ## Endpoints
 
@@ -37,7 +60,7 @@ Sync endpoints require a Polar API access token via the `X-Polar-Token` header.
 
 **Example:**
 ```bash
-curl http://localhost:8000/api/v1/users/12345/sleep?days=30
+curl {base_url}/api/v1/users/12345/sleep?days=30
 ```
 
 **Response:**
@@ -70,7 +93,7 @@ curl http://localhost:8000/api/v1/users/12345/sleep?days=30
 
 **Example:**
 ```bash
-curl http://localhost:8000/api/v1/users/12345/activity?days=7
+curl {base_url}/api/v1/users/12345/activity?days=7
 ```
 
 **Response:**
@@ -101,7 +124,7 @@ curl http://localhost:8000/api/v1/users/12345/activity?days=7
 
 **Example:**
 ```bash
-curl http://localhost:8000/api/v1/users/12345/recharge?days=14
+curl {base_url}/api/v1/users/12345/recharge?days=14
 ```
 
 **Response:**
@@ -132,7 +155,7 @@ curl http://localhost:8000/api/v1/users/12345/recharge?days=14
 
 **Example:**
 ```bash
-curl http://localhost:8000/api/v1/users/12345/exercises?days=30
+curl {base_url}/api/v1/users/12345/exercises?days=30
 ```
 
 **Response:**
@@ -289,7 +312,7 @@ Requires compatible device with Elixir sensor platform.
 ```bash
 curl -X POST \
   -H "X-Polar-Token: your_polar_token" \
-  http://localhost:8000/api/v1/users/12345/sync/trigger?days=30
+  {base_url}/api/v1/users/12345/sync/trigger?days=30
 ```
 
 **Response:**
@@ -367,7 +390,7 @@ Personal baselines computed from historical data. Use these for anomaly detectio
 #### Get All Baselines
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/baselines
+curl {base_url}/api/v1/users/12345/baselines
 ```
 
 **Response:**
@@ -409,7 +432,7 @@ Uses IQR-based anomaly detection:
 - **Critical**: value outside Q1 - 3×IQR to Q3 + 3×IQR
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/baselines/check/hrv_rmssd/25.5
+curl {base_url}/api/v1/users/12345/baselines/check/hrv_rmssd/25.5
 ```
 
 **Response:**
@@ -432,7 +455,7 @@ curl http://localhost:8000/api/v1/users/12345/baselines/check/hrv_rmssd/25.5
 Trigger baseline recalculation from historical data:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/users/12345/baselines/calculate
+curl -X POST {base_url}/api/v1/users/12345/baselines/calculate
 ```
 
 **Response:**
@@ -454,7 +477,7 @@ curl -X POST http://localhost:8000/api/v1/users/12345/baselines/calculate
 Check feature availability based on data history:
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/analytics/status
+curl {base_url}/api/v1/users/12345/analytics/status
 ```
 
 **Response:**
@@ -527,7 +550,7 @@ Advanced pattern detection for correlations, trends, and risk assessment.
 #### Get All Patterns
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/patterns
+curl {base_url}/api/v1/users/12345/patterns
 ```
 
 **Response:**
@@ -577,7 +600,7 @@ curl http://localhost:8000/api/v1/users/12345/patterns
 #### Get Specific Pattern
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/patterns/overtraining_risk
+curl {base_url}/api/v1/users/12345/patterns/overtraining_risk
 ```
 
 #### Trigger Pattern Detection
@@ -585,7 +608,7 @@ curl http://localhost:8000/api/v1/users/12345/patterns/overtraining_risk
 Analyzes historical data and stores pattern results:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/users/12345/patterns/detect
+curl -X POST {base_url}/api/v1/users/12345/patterns/detect
 ```
 
 **Response:**
@@ -606,7 +629,7 @@ curl -X POST http://localhost:8000/api/v1/users/12345/patterns/detect
 Scans all metrics against stored baselines and returns any values outside normal bounds:
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/anomalies
+curl {base_url}/api/v1/users/12345/anomalies
 ```
 
 **Response:**
@@ -677,7 +700,7 @@ Features unlock progressively as more data becomes available:
 #### Example Request
 
 ```bash
-curl http://localhost:8000/api/v1/users/12345/insights
+curl {base_url}/api/v1/users/12345/insights
 ```
 
 #### Example Response (30+ days of data)

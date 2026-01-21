@@ -287,7 +287,9 @@
     <div class="flex items-center justify-between mb-4">
         <div>
             <h2 class="text-lg font-semibold text-gray-900">API Keys</h2>
-            <p class="text-sm text-gray-600">Manage API keys for service-to-service authentication</p>
+            <p class="text-sm text-gray-600">Manage API keys for service-to-service authentication.
+                <a href="https://stumason.github.io/polar-flow-server/api/overview/" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline">View API Documentation →</a>
+            </p>
         </div>
         <div class="flex items-center gap-3">
             {% set has_active_key = api_keys|selectattr('is_active')|list|length > 0 %}
