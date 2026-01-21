@@ -935,11 +935,7 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
         # Check sync status
         if sync_log.status == "partial":
             # Partial success - some endpoints worked, some failed
-            errors = (
-                sync_log.error_details.get("errors", {})
-                if sync_log.error_details
-                else {}
-            )
+            errors = sync_log.error_details.get("errors", {}) if sync_log.error_details else {}
             return Template(
                 template_name="admin/partials/sync_partial.html",
                 context={
@@ -952,11 +948,7 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             )
         elif sync_log.status == "failed":
             # Total failure - all endpoints failed
-            errors_raw = (
-                sync_log.error_details.get("errors", {})
-                if sync_log.error_details
-                else {}
-            )
+            errors_raw = sync_log.error_details.get("errors", {}) if sync_log.error_details else {}
             # errors_raw is dict[str, str] but typed as object, cast for iteration
             errors = errors_raw if isinstance(errors_raw, dict) else {}
             if errors:
