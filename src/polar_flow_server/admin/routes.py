@@ -921,7 +921,7 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
     # Run sync
     sync_service = SyncService(session)
     try:
-        results = await sync_service.sync_user(
+        sync_result = await sync_service.sync_user(
             user_id=user_id,
             polar_token=polar_token,
             days=settings.sync_days_lookback,
@@ -932,10 +932,35 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
         exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
         activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
 
+        # Check for partial success (some errors but some data synced)
+        if sync_result.has_errors:
+            if sync_result.total_records > 0:
+                # Partial success - some endpoints worked, some failed
+                return Template(
+                    template_name="admin/partials/sync_partial.html",
+                    context={
+                        "results": sync_result.records,
+                        "errors": sync_result.errors,
+                        "sleep_count": sleep_count,
+                        "exercise_count": exercise_count,
+                        "activity_count": activity_count,
+                    },
+                )
+            else:
+                # Total failure - all endpoints failed
+                error_messages = "\n".join(
+                    f"• {endpoint}: {msg}" for endpoint, msg in sync_result.errors.items()
+                )
+                return Template(
+                    template_name="admin/partials/sync_error.html",
+                    context={"error": error_messages},
+                )
+
+        # Full success - no errors
         return Template(
             template_name="admin/partials/sync_success.html",
             context={
-                "results": results,
+                "results": sync_result.records,
                 "sleep_count": sleep_count,
                 "exercise_count": exercise_count,
                 "activity_count": activity_count,

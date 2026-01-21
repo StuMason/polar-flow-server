@@ -248,35 +248,73 @@ class SyncOrchestrator:
 
         try:
             # Perform sync (without auto-baseline recalc - we handle it here)
-            results = await self.sync_service.sync_user(
+            sync_result = await self.sync_service.sync_user(
                 user_id=user_id,
                 polar_token=polar_token,
                 recalculate_baselines=False,  # We'll do it ourselves
             )
 
-            # Mark sync successful
             # API calls = number of data types with records (each requires 1+ API call)
-            api_calls = len([v for v in results.values() if v > 0])
-            sync_log.complete_success(records=results, api_calls=api_calls)
+            api_calls = len([v for v in sync_result.records.values() if v > 0])
 
-            # Update user's last_synced_at timestamp
-            user_result = await self.session.execute(
-                select(User).where(User.polar_user_id == user_id)
-            )
-            user = user_result.scalar_one_or_none()
-            if user:
-                user.last_synced_at = datetime.now(UTC)
+            # Handle partial success vs full success
+            if sync_result.has_errors:
+                if sync_result.total_records > 0:
+                    # Partial success - some data synced, some errors
+                    # Format error message with all failed endpoints
+                    error_msg = "; ".join(
+                        f"{endpoint}: {msg}" for endpoint, msg in sync_result.errors.items()
+                    )
+                    sync_log.complete_partial(
+                        records=sync_result.records,
+                        api_calls=api_calls,
+                        error_type=SyncErrorType.API_ERROR,
+                        message=error_msg[:500],  # Truncate to avoid DB issues
+                    )
+                    log.warning(
+                        "Sync completed with errors",
+                        records_synced=sync_result.records,
+                        errors=sync_result.errors,
+                    )
+                else:
+                    # All endpoints failed
+                    sync_log.complete_failed(
+                        error_type=SyncErrorType.API_ERROR,
+                        message="All sync endpoints failed",
+                        details={"errors": sync_result.errors},
+                    )
+                    log.error(
+                        "Sync failed - all endpoints returned errors",
+                        errors=sync_result.errors,
+                    )
             else:
-                log.warning("User not found after successful sync - cannot update last_synced_at")
+                # Full success
+                sync_log.complete_success(records=sync_result.records, api_calls=api_calls)
+                log.info(
+                    "Sync completed successfully",
+                    records_synced=sync_result.records,
+                    api_calls=api_calls,
+                )
 
-            log.info("Sync completed successfully", records_synced=results, api_calls=api_calls)
+            # Update user's last_synced_at timestamp (even for partial success)
+            if sync_result.total_records > 0:
+                user_result = await self.session.execute(
+                    select(User).where(User.polar_user_id == user_id)
+                )
+                user = user_result.scalar_one_or_none()
+                if user:
+                    user.last_synced_at = datetime.now(UTC)
+                else:
+                    log.warning(
+                        "User not found after successful sync - cannot update last_synced_at"
+                    )
 
-            # Post-sync analytics
-            if recalculate_analytics:
+            # Post-sync analytics (only if we got some data)
+            if recalculate_analytics and sync_result.total_records > 0:
                 await self._run_post_sync_analytics(user_id, sync_log, log)
 
         except Exception as e:
-            # Classify and log error
+            # Classify and log error (unexpected errors, not API errors)
             sync_error = self.error_handler.classify(e, context={"user_id": user_id})
             sync_log.complete_failed(
                 error_type=SyncErrorType(sync_error.error_type),
