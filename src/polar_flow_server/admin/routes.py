@@ -1575,12 +1575,20 @@ async def export_sleep_csv(
     session: AsyncSession,
     days: int = 30,
 ) -> Response[bytes] | Redirect:
-    """Export sleep data as CSV."""
+    """Export sleep data as CSV for the connected user."""
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
+    # Get connected user to filter by user_id
+    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+    connected_user_result = await session.execute(connected_user_stmt)
+    connected_user = connected_user_result.scalar_one_or_none()
+
     since_date = date.today() - timedelta(days=days)
-    stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
+    stmt = select(Sleep).where(Sleep.date >= since_date)
+    if connected_user:
+        stmt = stmt.where(Sleep.user_id == connected_user.polar_user_id)
+    stmt = stmt.order_by(Sleep.date.asc())
     result = await session.execute(stmt)
     sleep_data = result.scalars().all()
 
@@ -1615,12 +1623,20 @@ async def export_activity_csv(
     session: AsyncSession,
     days: int = 30,
 ) -> Response[bytes] | Redirect:
-    """Export activity data as CSV."""
+    """Export activity data as CSV for the connected user."""
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
+    # Get connected user to filter by user_id
+    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+    connected_user_result = await session.execute(connected_user_stmt)
+    connected_user = connected_user_result.scalar_one_or_none()
+
     since_date = date.today() - timedelta(days=days)
-    stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
+    stmt = select(Activity).where(Activity.date >= since_date)
+    if connected_user:
+        stmt = stmt.where(Activity.user_id == connected_user.polar_user_id)
+    stmt = stmt.order_by(Activity.date.asc())
     result = await session.execute(stmt)
     activity_data = result.scalars().all()
 
@@ -1655,16 +1671,20 @@ async def export_recharge_csv(
     session: AsyncSession,
     days: int = 30,
 ) -> Response[bytes] | Redirect:
-    """Export recharge/HRV data as CSV."""
+    """Export recharge/HRV data as CSV for the connected user."""
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
+    # Get connected user to filter by user_id
+    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+    connected_user_result = await session.execute(connected_user_stmt)
+    connected_user = connected_user_result.scalar_one_or_none()
+
     since_date = date.today() - timedelta(days=days)
-    stmt = (
-        select(NightlyRecharge)
-        .where(NightlyRecharge.date >= since_date)
-        .order_by(NightlyRecharge.date.asc())
-    )
+    stmt = select(NightlyRecharge).where(NightlyRecharge.date >= since_date)
+    if connected_user:
+        stmt = stmt.where(NightlyRecharge.user_id == connected_user.polar_user_id)
+    stmt = stmt.order_by(NightlyRecharge.date.asc())
     result = await session.execute(stmt)
     recharge_data = result.scalars().all()
 
@@ -1697,12 +1717,20 @@ async def export_cardio_load_csv(
     session: AsyncSession,
     days: int = 30,
 ) -> Response[bytes] | Redirect:
-    """Export cardio load data as CSV."""
+    """Export cardio load data as CSV for the connected user."""
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
+    # Get connected user to filter by user_id
+    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
+    connected_user_result = await session.execute(connected_user_stmt)
+    connected_user = connected_user_result.scalar_one_or_none()
+
     since_date = date.today() - timedelta(days=days)
-    stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
+    stmt = select(CardioLoad).where(CardioLoad.date >= since_date)
+    if connected_user:
+        stmt = stmt.where(CardioLoad.user_id == connected_user.polar_user_id)
+    stmt = stmt.order_by(CardioLoad.date.asc())
     result = await session.execute(stmt)
     cardio_data = result.scalars().all()
 

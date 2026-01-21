@@ -601,6 +601,7 @@ async def get_user_status(
 # ==============================================================================
 
 # OAuth endpoints (no auth required - start and callback, plus code exchange)
+# Hidden from Swagger as these are not for public API consumers
 oauth_router = Router(
     path="/",
     route_handlers=[
@@ -608,6 +609,7 @@ oauth_router = Router(
         oauth_callback_saas,
         exchange_oauth_code,
     ],
+    include_in_schema=False,
 )
 
 # Key management endpoints (require per-user auth)
@@ -620,4 +622,5 @@ keys_router = Router(
         get_key_info,
         get_user_status,
     ],
+    tags=["API Keys"],
 )

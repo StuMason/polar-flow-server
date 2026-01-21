@@ -1,16 +1,29 @@
 """Pattern detection and anomaly API endpoints."""
 
 import re
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from litestar import Router, get, post
 from litestar.exceptions import NotFoundException, ValidationException
+from litestar.openapi.spec import Example
+from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from polar_flow_server.core.auth import per_user_api_key_guard
 from polar_flow_server.models.pattern import PatternName
 from polar_flow_server.services.pattern import AnomalyService, PatternService
+
+# Type alias for valid pattern names (used in OpenAPI schema)
+PatternNameLiteral = Literal[
+    "sleep_hrv_correlation",
+    "overtraining_risk",
+    "hrv_trend",
+    "sleep_trend",
+    "training_recovery_lag",
+    "activity_sleep_correlation",
+    "recovery_readiness",
+]
 
 # Regex for valid user_id format (alphanumeric, underscores, hyphens)
 USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
@@ -76,7 +89,18 @@ async def get_patterns(
 @get("/users/{user_id:str}/patterns/{pattern_name:str}", status_code=HTTP_200_OK)
 async def get_pattern_by_name(
     user_id: str,
-    pattern_name: str,
+    pattern_name: Annotated[
+        PatternNameLiteral,
+        Parameter(
+            description="The pattern analysis to retrieve",
+            examples=[
+                Example(value="sleep_hrv_correlation", summary="Sleep-HRV correlation"),
+                Example(value="overtraining_risk", summary="Overtraining risk score"),
+                Example(value="hrv_trend", summary="HRV trend (7d vs 30d)"),
+                Example(value="sleep_trend", summary="Sleep trend (7d vs 30d)"),
+            ],
+        ),
+    ],
     session: AsyncSession,
 ) -> dict[str, Any]:
     """Get a specific pattern by name.
