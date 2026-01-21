@@ -49,11 +49,11 @@ from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
 from polar_flow_server.models.spo2 import SpO2
-from polar_flow_server.models.sync_log import SyncLog
+from polar_flow_server.models.sync_log import SyncLog, SyncTrigger
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.models.user import User
 from polar_flow_server.services.scheduler import get_scheduler
-from polar_flow_server.services.sync import SyncService
+from polar_flow_server.services.sync_orchestrator import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -918,13 +918,13 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
         polar_token = env_token
         user_id = "self"
 
-    # Run sync
-    sync_service = SyncService(session)
+    # Run sync via orchestrator (creates SyncLog entry for audit trail)
+    orchestrator = SyncOrchestrator(session)
     try:
-        results = await sync_service.sync_user(
+        sync_log = await orchestrator.sync_user(
             user_id=user_id,
             polar_token=polar_token,
-            days=settings.sync_days_lookback,
+            trigger=SyncTrigger.MANUAL,
         )
 
         # Get updated counts
@@ -932,10 +932,41 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
         exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
         activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
 
+        # Check sync status
+        if sync_log.status == "partial":
+            # Partial success - some endpoints worked, some failed
+            errors = sync_log.error_details.get("errors", {}) if sync_log.error_details else {}
+            return Template(
+                template_name="admin/partials/sync_partial.html",
+                context={
+                    "results": sync_log.records_synced or {},
+                    "errors": errors,
+                    "sleep_count": sleep_count,
+                    "exercise_count": exercise_count,
+                    "activity_count": activity_count,
+                },
+            )
+        elif sync_log.status == "failed":
+            # Total failure - all endpoints failed
+            errors_raw = sync_log.error_details.get("errors", {}) if sync_log.error_details else {}
+            # errors_raw is dict[str, str] but typed as object, cast for iteration
+            errors = errors_raw if isinstance(errors_raw, dict) else {}
+            if errors:
+                error_messages = "\n".join(
+                    f"• {endpoint}: {msg}" for endpoint, msg in errors.items()
+                )
+            else:
+                error_messages = sync_log.error_message or "Sync failed"
+            return Template(
+                template_name="admin/partials/sync_error.html",
+                context={"error": error_messages},
+            )
+
+        # Full success - no errors
         return Template(
             template_name="admin/partials/sync_success.html",
             context={
-                "results": results,
+                "results": sync_log.records_synced or {},
                 "sleep_count": sleep_count,
                 "exercise_count": exercise_count,
                 "activity_count": activity_count,

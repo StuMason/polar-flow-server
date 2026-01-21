@@ -1,6 +1,6 @@
 """Sync API endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from litestar import Router, post
 from litestar.params import Parameter
@@ -20,7 +20,7 @@ async def trigger_sync(
     session: AsyncSession,
     polar_token: Annotated[str, Parameter(header="X-Polar-Token")],
     days: Annotated[int | None, Parameter(query="days", ge=1, le=365)] = None,
-) -> dict[str, str | dict[str, int]]:
+) -> dict[str, Any]:
     """Trigger data sync for a user.
 
     Args:
@@ -30,7 +30,7 @@ async def trigger_sync(
         days: Number of days to sync (optional, uses config default)
 
     Returns:
-        Sync results with counts per data type
+        Sync results with counts per data type and any errors
 
     Example:
         POST /api/v1/users/12345/sync/trigger?days=30
@@ -38,16 +38,18 @@ async def trigger_sync(
     """
     sync_service = SyncService(session)
 
-    results = await sync_service.sync_user(
+    sync_result = await sync_service.sync_user(
         user_id=user_id,
         polar_token=polar_token,
         days=days,
     )
 
     return {
-        "status": "success",
+        "status": "partial" if sync_result.has_errors else "success",
         "user_id": user_id,
-        "results": results,
+        "records": sync_result.records,
+        "errors": sync_result.errors if sync_result.has_errors else None,
+        "total_records": sync_result.total_records,
     }
 
 

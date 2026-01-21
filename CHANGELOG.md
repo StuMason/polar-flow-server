@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.3] - 2026-01-21
+
+### Fixed
+
+**Partial Sync Failure Handling (Issue #19)**
+- Sync now continues when individual Polar API endpoints fail (e.g., 403 on sleep)
+- Previously, a single endpoint failure would stop the entire sync with no data saved
+- Now syncs each endpoint independently - failures are captured but don't block other data
+
+**Manual Sync Audit Logging**
+- Admin "Sync Now" button now creates `SyncLog` entries for proper audit trail
+- Previously, manual syncs bypassed `SyncOrchestrator` and weren't logged
+
+### Added
+
+- `SyncResult` dataclass to track both successful records and per-endpoint errors
+- Actionable error messages for common HTTP errors:
+  - 403: Guidance about Polar data sharing consent settings
+  - 401: Token expiration/re-authentication needed
+  - 429: Rate limit information
+- Partial success UI template showing both synced data and errors
+- Dynamic endpoint display in templates (all 13 data types now shown)
+- API sync endpoint now returns `status: "partial"` with error details when some endpoints fail
+- Expandable sync log rows in admin dashboard showing full details (records, errors, analytics, metadata)
+
+### Changed
+
+- `SyncService.sync_user()` now returns `SyncResult` instead of `dict[str, int]`
+- `SyncOrchestrator` properly tracks partial success status in `SyncLog`
+- Admin sync templates dynamically iterate over all endpoints instead of hardcoding
+
+---
+
+## [1.3.2] - 2026-01-20
+
+### Fixed
+
+- CSRF cookie configuration for proxy deployments
+- Admin route CSRF exclusions
+
+---
+
+## [1.3.1] - 2026-01-20
+
+### Fixed
+
+- Version mismatch between pyproject.toml and __init__.py
+
+---
+
+## [1.3.0] - 2026-01-20
+
+### Added
+
+- MCP server integration for Claude Desktop
+- Additional Polar SDK endpoints (cardio load, sleepwise, biosensing)
+
+---
+
 ## [1.2.0] - 2026-01-13
 
 ### Added

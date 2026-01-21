@@ -1,9 +1,12 @@
 """Polar data sync service."""
 
+from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import Any
 
 import structlog
 from polar_flow import PolarFlow
+from polar_flow.exceptions import PolarFlowError
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +43,80 @@ from polar_flow_server.transformers import (
 logger = structlog.get_logger()
 
 
+@dataclass
+class SyncResult:
+    """Result of a sync operation with support for partial success.
+
+    Attributes:
+        records: Dict of endpoint -> count of records synced
+        errors: Dict of endpoint -> error message for failed endpoints
+        has_errors: Whether any endpoint failed
+        total_records: Total records synced across all endpoints
+    """
+
+    records: dict[str, int] = field(default_factory=dict)
+    errors: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def has_errors(self) -> bool:
+        """Check if any endpoint had errors."""
+        return len(self.errors) > 0
+
+    @property
+    def total_records(self) -> int:
+        """Total records synced across all endpoints."""
+        return sum(self.records.values())
+
+    @property
+    def successful_endpoints(self) -> list[str]:
+        """List of endpoints that synced successfully."""
+        return [k for k, v in self.records.items() if v > 0 and k not in self.errors]
+
+    @property
+    def failed_endpoints(self) -> list[str]:
+        """List of endpoints that failed."""
+        return list(self.errors.keys())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization."""
+        return {
+            "records": self.records,
+            "errors": self.errors,
+            "has_errors": self.has_errors,
+            "total_records": self.total_records,
+        }
+
+
+def _format_polar_error(error: Exception, endpoint: str) -> str:
+    """Format a Polar API error into a user-friendly message.
+
+    Provides actionable guidance for common errors like 403 (consent issues).
+    """
+    if isinstance(error, PolarFlowError):
+        status_code = error.status_code
+
+        if status_code == 403:
+            return (
+                f"403 Forbidden on {endpoint}: The Polar user may not have accepted "
+                "required data sharing consents. Check consent settings at "
+                "https://account.polar.com or re-authenticate with Polar."
+            )
+        elif status_code == 401:
+            return (
+                f"401 Unauthorized on {endpoint}: Access token is invalid or expired. "
+                "Please re-authenticate with Polar."
+            )
+        elif status_code == 429:
+            return (
+                f"429 Rate Limited on {endpoint}: Too many API requests. "
+                "Please wait before syncing again."
+            )
+        else:
+            return f"API error {status_code} on {endpoint}: {error}"
+
+    return f"Error syncing {endpoint}: {error}"
+
+
 class SyncService:
     """Service for syncing data from Polar API.
 
@@ -62,8 +139,11 @@ class SyncService:
         polar_token: str,
         days: int | None = None,
         recalculate_baselines: bool = True,
-    ) -> dict[str, int]:
+    ) -> SyncResult:
         """Sync all data for a user from Polar API.
+
+        Syncs each endpoint independently - if one fails, others continue.
+        Returns a SyncResult with both successful record counts and any errors.
 
         Args:
             user_id: User identifier (Polar user ID or Laravel UUID)
@@ -72,89 +152,177 @@ class SyncService:
             recalculate_baselines: Whether to recalculate baselines after sync
 
         Returns:
-            Dict with counts of synced records per data type
+            SyncResult with records dict and errors dict
 
         Example:
-            # Self-hosted mode
-            await sync_service.sync_user(
-                user_id="12345",  # From Polar API
-                polar_token=load_token_from_file(),
+            result = await sync_service.sync_user(
+                user_id="12345",
+                polar_token=token,
             )
-
-            # SaaS mode
-            await sync_service.sync_user(
-                user_id="uuid-from-laravel",
-                polar_token=decrypt(user.polar_token),
-            )
+            if result.has_errors:
+                for endpoint, error in result.errors.items():
+                    print(f"{endpoint}: {error}")
+            print(f"Synced {result.total_records} records")
         """
         if days is None:
             days = settings.sync_days_lookback
 
         self.logger.info("Starting sync", user_id=user_id, days=days)
 
-        results = {
-            "sleep": 0,
-            "recharge": 0,
-            "activity": 0,
-            "exercises": 0,
-            "cardio_load": 0,
-            "sleepwise_alertness": 0,
-            "sleepwise_bedtime": 0,
-            "activity_samples": 0,
-            "continuous_hr": 0,
-            # Biosensing (requires compatible devices)
-            "spo2": 0,
-            "ecg": 0,
-            "body_temperature": 0,
-            "skin_temperature": 0,
-        }
+        result = SyncResult(
+            records={
+                "sleep": 0,
+                "recharge": 0,
+                "activity": 0,
+                "exercises": 0,
+                "cardio_load": 0,
+                "sleepwise_alertness": 0,
+                "sleepwise_bedtime": 0,
+                "activity_samples": 0,
+                "continuous_hr": 0,
+                "spo2": 0,
+                "ecg": 0,
+                "body_temperature": 0,
+                "skin_temperature": 0,
+            },
+            errors={},
+        )
 
         async with PolarFlow(access_token=polar_token) as client:
             # Sync sleep data
-            results["sleep"] = await self._sync_sleep(client, user_id, days)
+            try:
+                result.records["sleep"] = await self._sync_sleep(client, user_id, days)
+            except Exception as e:
+                error_msg = _format_polar_error(e, "sleep")
+                result.errors["sleep"] = error_msg
+                self.logger.warning("Sleep sync failed", user_id=user_id, error=error_msg)
 
             # Sync nightly recharge
-            results["recharge"] = await self._sync_recharge(client, user_id)
+            try:
+                result.records["recharge"] = await self._sync_recharge(client, user_id)
+            except Exception as e:
+                error_msg = _format_polar_error(e, "recharge")
+                result.errors["recharge"] = error_msg
+                self.logger.warning("Recharge sync failed", user_id=user_id, error=error_msg)
 
             # Sync daily activity
-            results["activity"] = await self._sync_activity(client, user_id, days)
+            try:
+                result.records["activity"] = await self._sync_activity(client, user_id, days)
+            except Exception as e:
+                error_msg = _format_polar_error(e, "activity")
+                result.errors["activity"] = error_msg
+                self.logger.warning("Activity sync failed", user_id=user_id, error=error_msg)
 
             # Sync exercises
-            results["exercises"] = await self._sync_exercises(client, user_id)
+            try:
+                result.records["exercises"] = await self._sync_exercises(client, user_id)
+            except Exception as e:
+                error_msg = _format_polar_error(e, "exercises")
+                result.errors["exercises"] = error_msg
+                self.logger.warning("Exercises sync failed", user_id=user_id, error=error_msg)
 
             # Sync cardio load (requires SDK >= 1.3.0)
             if hasattr(client, "cardio_load"):
-                results["cardio_load"] = await self._sync_cardio_load(client, user_id)
+                try:
+                    result.records["cardio_load"] = await self._sync_cardio_load(client, user_id)
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "cardio_load")
+                    result.errors["cardio_load"] = error_msg
+                    self.logger.warning("Cardio load sync failed", user_id=user_id, error=error_msg)
 
             # Sync SleepWise alertness (requires SDK >= 1.3.0)
             if hasattr(client, "sleepwise"):
-                results["sleepwise_alertness"] = await self._sync_sleepwise_alertness(
-                    client, user_id
-                )
-                results["sleepwise_bedtime"] = await self._sync_sleepwise_bedtime(client, user_id)
+                try:
+                    result.records["sleepwise_alertness"] = await self._sync_sleepwise_alertness(
+                        client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "sleepwise_alertness")
+                    result.errors["sleepwise_alertness"] = error_msg
+                    self.logger.warning(
+                        "SleepWise alertness sync failed", user_id=user_id, error=error_msg
+                    )
+
+                try:
+                    result.records["sleepwise_bedtime"] = await self._sync_sleepwise_bedtime(
+                        client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "sleepwise_bedtime")
+                    result.errors["sleepwise_bedtime"] = error_msg
+                    self.logger.warning(
+                        "SleepWise bedtime sync failed", user_id=user_id, error=error_msg
+                    )
 
             # Sync activity samples (requires SDK >= 1.3.0)
             if hasattr(client, "activity_samples"):
-                results["activity_samples"] = await self._sync_activity_samples(
-                    client, user_id, days
-                )
+                try:
+                    result.records["activity_samples"] = await self._sync_activity_samples(
+                        client, user_id, days
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "activity_samples")
+                    result.errors["activity_samples"] = error_msg
+                    self.logger.warning(
+                        "Activity samples sync failed", user_id=user_id, error=error_msg
+                    )
 
             # Sync continuous heart rate (requires SDK >= 1.3.0)
             if hasattr(client, "continuous_hr"):
-                results["continuous_hr"] = await self._sync_continuous_hr(client, user_id, days)
+                try:
+                    result.records["continuous_hr"] = await self._sync_continuous_hr(
+                        client, user_id, days
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "continuous_hr")
+                    result.errors["continuous_hr"] = error_msg
+                    self.logger.warning(
+                        "Continuous HR sync failed", user_id=user_id, error=error_msg
+                    )
 
             # Sync biosensing data (requires SDK >= 1.4.0 and compatible devices)
             if hasattr(client, "biosensing"):
-                results["spo2"] = await self._sync_spo2(client, user_id)
-                results["ecg"] = await self._sync_ecg(client, user_id)
-                results["body_temperature"] = await self._sync_body_temperature(client, user_id)
-                results["skin_temperature"] = await self._sync_skin_temperature(client, user_id)
+                try:
+                    result.records["spo2"] = await self._sync_spo2(client, user_id)
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "spo2")
+                    result.errors["spo2"] = error_msg
+                    self.logger.warning("SpO2 sync failed", user_id=user_id, error=error_msg)
+
+                try:
+                    result.records["ecg"] = await self._sync_ecg(client, user_id)
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "ecg")
+                    result.errors["ecg"] = error_msg
+                    self.logger.warning("ECG sync failed", user_id=user_id, error=error_msg)
+
+                try:
+                    result.records["body_temperature"] = await self._sync_body_temperature(
+                        client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "body_temperature")
+                    result.errors["body_temperature"] = error_msg
+                    self.logger.warning(
+                        "Body temperature sync failed", user_id=user_id, error=error_msg
+                    )
+
+                try:
+                    result.records["skin_temperature"] = await self._sync_skin_temperature(
+                        client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "skin_temperature")
+                    result.errors["skin_temperature"] = error_msg
+                    self.logger.warning(
+                        "Skin temperature sync failed", user_id=user_id, error=error_msg
+                    )
 
         # Commit all changes to database
         await self.session.commit()
 
-        # Recalculate baselines with new data
-        if recalculate_baselines:
+        # Recalculate baselines with new data (only if we got some data)
+        if recalculate_baselines and result.total_records > 0:
             self.logger.info("Recalculating baselines after sync", user_id=user_id)
             baseline_service = BaselineService(self.session)
             baseline_results = await baseline_service.calculate_all_baselines(user_id)
@@ -162,8 +330,19 @@ class SyncService:
                 "Baseline recalculation complete", user_id=user_id, baselines=baseline_results
             )
 
-        self.logger.info("Sync completed", user_id=user_id, results=results)
-        return results
+        # Log result with errors if any
+        if result.has_errors:
+            self.logger.warning(
+                "Sync completed with errors",
+                user_id=user_id,
+                records=result.records,
+                errors=result.errors,
+                failed_endpoints=result.failed_endpoints,
+            )
+        else:
+            self.logger.info("Sync completed", user_id=user_id, records=result.records)
+
+        return result
 
     async def _sync_sleep(
         self,
