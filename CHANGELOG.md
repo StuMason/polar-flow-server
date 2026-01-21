@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Partial success UI template showing both synced data and errors
 - Dynamic endpoint display in templates (all 13 data types now shown)
 - API sync endpoint now returns `status: "partial"` with error details when some endpoints fail
+- Expandable sync log rows in admin dashboard showing full details (records, errors, analytics, metadata)
 
 ### Changed
 
