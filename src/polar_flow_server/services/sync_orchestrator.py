@@ -271,6 +271,8 @@ class SyncOrchestrator:
                         error_type=SyncErrorType.API_ERROR,
                         message=error_msg[:500],  # Truncate to avoid DB issues
                     )
+                    # Store individual errors for detailed display
+                    sync_log.error_details = {"errors": sync_result.errors}
                     log.warning(
                         "Sync completed with errors",
                         records_synced=sync_result.records,

@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Previously, a single endpoint failure would stop the entire sync with no data saved
 - Now syncs each endpoint independently - failures are captured but don't block other data
 
+**Manual Sync Audit Logging**
+- Admin "Sync Now" button now creates `SyncLog` entries for proper audit trail
+- Previously, manual syncs bypassed `SyncOrchestrator` and weren't logged
+
 ### Added
 
 - `SyncResult` dataclass to track both successful records and per-endpoint errors
