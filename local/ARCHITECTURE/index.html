@@ -1,0 +1,1200 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Self-hosted health analytics server for Polar devices">
+      
+      
+      
+        <link rel="canonical" href="https://stumason.github.io/polar-flow-server/local/ARCHITECTURE/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Architecture & Design Decisions - polar-flow-server</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture-design-decisions" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="polar-flow-server" class="md-header__button md-logo" aria-label="polar-flow-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            polar-flow-server
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture &amp; Design Decisions
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="deep-purple" data-md-color-accent="purple"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/StuMason/polar-flow-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuMason/polar-flow-server
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="polar-flow-server" class="md-nav__button md-logo" aria-label="polar-flow-server" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    polar-flow-server
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/StuMason/polar-flow-server" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    StuMason/polar-flow-server
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Integration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADRs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ADRs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/001-per-user-api-keys/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Per-User API Keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Philosophy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#competitive-analysis-open-wearables-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Competitive Analysis: Open Wearables Platform
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Competitive Analysis: Open Wearables Platform">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-open-wearables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is Open Wearables?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-they-do-well" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What They Do Well
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-they-do-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What They Do Wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-were-different-and-better" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why We're Different (and Better)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Decisions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-postgresql-only-no-duckdbsqlite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. PostgreSQL Only (No DuckDB/SQLite)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-multi-user-from-day-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Multi-User from Day 1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-python-analytics-engine-laravel-frontend-for-saas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Python Analytics Engine + Laravel Frontend (for SaaS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-litestar-over-fastapi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Litestar over FastAPI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-no-celery-apscheduler-instead" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. No Celery (APScheduler Instead)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-htmx-admin-panel-not-react" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. HTMX Admin Panel (Not React)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-strict-type-safety-mypy-strict-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Strict Type Safety (mypy strict mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-were-building" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We're Building
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What We&#39;re Building">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-core-infrastructure-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Core Infrastructure ✅ (COMPLETE)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-admin-panel-in-progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Admin Panel 🔄 (IN PROGRESS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-analytics-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: Analytics Engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-mcp-server-claude-desktop-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: MCP Server (Claude Desktop Integration)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-advanced-features-future" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Advanced Features (Future)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-were-not-building" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What We're NOT Building
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lessons-from-open-wearables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lessons from Open Wearables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lessons from Open Wearables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#steal-these-ideas" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steal These Ideas
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#avoid-these-mistakes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Avoid These Mistakes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#success-metrics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Success Metrics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tech-stack-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tech Stack Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="architecture-design-decisions">Architecture &amp; Design Decisions</h1>
+<h2 id="overview">Overview</h2>
+<p>polar-flow-server is a <strong>self-hosted health analytics server</strong> for Polar devices, designed to be both:
+1. A simple single-user deployment for self-hosters
+2. A data analytics engine for a managed SaaS (with Laravel frontend)</p>
+<h2 id="core-philosophy">Core Philosophy</h2>
+<p><strong>Focus over breadth</strong>: We do Polar devices extremely well, not all wearables poorly.</p>
+<p><strong>Simplicity over features</strong>: Clean architecture, minimal dependencies, easy to deploy.</p>
+<p><strong>Analytics first</strong>: We're not just storing data - we're generating insights (HRV baselines, recovery scores, ML predictions).</p>
+<p><strong>Multi-user from day 1</strong>: Same codebase serves both self-hosted and SaaS deployments.</p>
+<h2 id="competitive-analysis-open-wearables-platform">Competitive Analysis: Open Wearables Platform</h2>
+<h3 id="what-is-open-wearables">What is Open Wearables?</h3>
+<p>A multi-provider health data aggregation platform (like Plaid for health data). Self-hosted middleware for app developers to unify Garmin, Polar, Suunto, Whoop, Apple Health data.</p>
+<p><strong>Tech Stack:</strong>
+- FastAPI + React + TypeScript
+- PostgreSQL + Redis + Celery
+- Single-tenant (one deployment per organization)
+- Developer portal, not user dashboard</p>
+<h3 id="what-they-do-well">What They Do Well</h3>
+<ol>
+<li><strong>Provider abstraction</strong> - Clean strategy pattern for adding wearables</li>
+<li><strong>Unified data model</strong> - Normalizes workouts/sleep across providers</li>
+<li><strong>Cursor pagination</strong> - Scalable for large datasets</li>
+<li><strong>Developer portal</strong> - API key management, stats</li>
+<li><strong>Background sync</strong> - Celery workers for scheduled tasks</li>
+<li><strong>Documentation</strong> - Mintlify site with guides and examples</li>
+<li><strong>Test factories</strong> - factory-boy for test data generation</li>
+</ol>
+<h3 id="what-they-do-wrong">What They Do Wrong</h3>
+<ol>
+<li><strong>Incomplete implementation</strong> - Many endpoints return 501 Not Implemented</li>
+<li><strong>Single-tenant only</strong> - One deployment per organization, not true multi-user SaaS</li>
+<li><strong>Over-engineered</strong> - Celery + Redis + Flower for simple scheduled tasks</li>
+<li><strong>No analytics</strong> - Just data storage, no insights or ML</li>
+<li><strong>No rate limiting</strong> - Open to abuse</li>
+<li><strong>Poor time-series design</strong> - Single table will scale poorly</li>
+<li><strong>No user authentication</strong> - Users managed by API consumers only</li>
+</ol>
+<h3 id="why-were-different-and-better">Why We're Different (and Better)</h3>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Open Wearables</th>
+<th>polar-flow-server</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td>Multi-provider middleware</td>
+<td>Polar analytics server</td>
+</tr>
+<tr>
+<td><strong>Use Case</strong></td>
+<td>Infrastructure for developers</td>
+<td>Analytics for end users</td>
+</tr>
+<tr>
+<td><strong>Multi-user</strong></td>
+<td>Single-org per deployment</td>
+<td>True multi-user SaaS ready</td>
+</tr>
+<tr>
+<td><strong>Analytics</strong></td>
+<td>None (just storage)</td>
+<td>HRV baselines, recovery, ML</td>
+</tr>
+<tr>
+<td><strong>Complexity</strong></td>
+<td>High (Celery/Redis/Docker)</td>
+<td>Low (PostgreSQL only)</td>
+</tr>
+<tr>
+<td><strong>Deployment</strong></td>
+<td>Self-hosted platform</td>
+<td>Self-hosted OR managed SaaS</td>
+</tr>
+<tr>
+<td><strong>Type Safety</strong></td>
+<td>Experimental <code>ty</code> checker</td>
+<td>mypy strict mode</td>
+</tr>
+<tr>
+<td><strong>Test Coverage</strong></td>
+<td>Unknown</td>
+<td>90%+ enforced</td>
+</tr>
+<tr>
+<td><strong>API Coverage</strong></td>
+<td>Partial (501s everywhere)</td>
+<td>Complete Polar V3 API</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bottom Line</strong>: They're solving a different problem (infrastructure for devs). We're solving analytics for users.</p>
+<h2 id="architecture-decisions">Architecture Decisions</h2>
+<h3 id="1-postgresql-only-no-duckdbsqlite">1. PostgreSQL Only (No DuckDB/SQLite)</h3>
+<p><strong>Decision</strong>: Use PostgreSQL for both self-hosted and SaaS deployments.</p>
+<p><strong>Rationale</strong>:
+- Self-hosted gets docker-compose with Postgres (no hassle)
+- SaaS shares same Postgres with Laravel
+- Same database = zero conditional logic in code
+- Better timeseries support than SQLite
+- Proper async support (no thread executor wrapping)
+- Can add indexes on (user_id, date) for fast queries
+- Multi-user ready out of the box</p>
+<p><strong>Trade-off</strong>: Requires docker-compose for self-hosted (vs embedded DB).</p>
+<p><strong>Validation</strong>: Open Wearables uses PostgreSQL successfully for similar workload.</p>
+<h3 id="2-multi-user-from-day-1">2. Multi-User from Day 1</h3>
+<p><strong>Decision</strong>: Every table includes <code>user_id</code> column, all endpoints scoped by <code>user_id</code>.</p>
+<p><strong>Rationale</strong>:
+- Self-hosted: one user in database
+- SaaS: many users in database
+- Same codebase, no retrofitting later
+- No multi-tenancy complexity (shared schema, filtered by user_id)
+- Enables future growth without architectural changes</p>
+<p><strong>Trade-off</strong>: Slightly more complex than assuming single user.</p>
+<p><strong>Validation</strong>: Open Wearables is single-org only - limits their SaaS potential.</p>
+<h3 id="3-python-analytics-engine-laravel-frontend-for-saas">3. Python Analytics Engine + Laravel Frontend (for SaaS)</h3>
+<p><strong>Decision</strong>: Python handles data sync and analytics, Laravel handles UI/auth/billing.</p>
+<p><strong>Rationale</strong>:
+- Python excels at data processing and ML (Polars, scikit-learn, PyTorch)
+- PHP/Laravel can't do ML/analytics well
+- Laravel excels at auth, billing, UI (what you're confident in)
+- Clean separation of concerns
+- Laravel calls Python API for data retrieval</p>
+<p><strong>Implementation</strong>:
+<div class="highlight"><pre><span></span><code><span class="x">// Laravel example</span>
+<span class="x">$response = Http::get(&quot;http://python-service:8000/api/v1/users/{$user-&gt;id}/sleep&quot;);</span>
+<span class="x">$sleepData = $response-&gt;json();</span>
+</code></pre></div></p>
+<p><strong>Trade-off</strong>: Two services instead of one monolith.</p>
+<p><strong>Validation</strong>: Common microservices pattern (auth service + data service).</p>
+<h3 id="4-litestar-over-fastapi">4. Litestar over FastAPI</h3>
+<p><strong>Decision</strong>: Use Litestar async web framework.</p>
+<p><strong>Rationale</strong>:
+- Modern async framework (like FastAPI but newer)
+- Built-in dependency injection
+- Better SQLAlchemy integration
+- Faster than FastAPI in benchmarks
+- Active development, good docs</p>
+<p><strong>Trade-off</strong>: Smaller community than FastAPI.</p>
+<p><strong>Validation</strong>: Open Wearables uses FastAPI successfully (similar approach works).</p>
+<h3 id="5-no-celery-apscheduler-instead">5. No Celery (APScheduler Instead)</h3>
+<p><strong>Decision</strong>: Use APScheduler for background sync tasks, not Celery.</p>
+<p><strong>Rationale</strong>:
+- Celery requires Redis + workers + monitoring
+- APScheduler runs in-process (simpler deployment)
+- Good enough for scheduled sync every hour
+- No distributed task queue needed (not that many users)
+- Can upgrade to Celery later if needed</p>
+<p><strong>Trade-off</strong>: Can't scale workers horizontally.</p>
+<p><strong>Validation</strong>: Open Wearables uses Celery but has operational complexity we don't need yet.</p>
+<h3 id="6-htmx-admin-panel-not-react">6. HTMX Admin Panel (Not React)</h3>
+<p><strong>Decision</strong>: Build self-hosted admin panel with HTMX, not React.</p>
+<p><strong>Rationale</strong>:
+- Self-hosters need simple setup wizard and status dashboard
+- HTMX = server-side rendering, no JavaScript build step
+- No XSS via JSON parsing
+- Simpler security model
+- Plain and functional (not a flashy UI)
+- Single-user setup on first login (like most open source tools)</p>
+<p><strong>Trade-off</strong>: Less interactive than React SPA.</p>
+<p><strong>Validation</strong>: Many successful self-hosted tools use server-side rendering (Plausible, Umami).</p>
+<h3 id="7-strict-type-safety-mypy-strict-mode">7. Strict Type Safety (mypy strict mode)</h3>
+<p><strong>Decision</strong>: Enforce mypy strict mode in CI.</p>
+<p><strong>Rationale</strong>:
+- Catches bugs at development time
+- Self-documenting code
+- Better IDE support
+- Industry standard for Python type checking</p>
+<p><strong>Trade-off</strong>: More verbose code (explicit types everywhere).</p>
+<p><strong>Validation</strong>: Open Wearables uses experimental <code>ty</code> - mypy is more mature.</p>
+<h2 id="what-were-building">What We're Building</h2>
+<h3 id="phase-1-core-infrastructure-complete">Phase 1: Core Infrastructure ✅ (COMPLETE)</h3>
+<ul>
+<li>[x] Database models with user_id on all tables</li>
+<li>[x] PostgreSQL database with async SQLAlchemy</li>
+<li>[x] REST API endpoints scoped by user_id</li>
+<li>[x] Polar sync service (sleep, recharge, activity, exercises)</li>
+<li>[x] Docker and docker-compose setup</li>
+<li>[x] Full CI/CD (tests, lint, security, docs)</li>
+<li>[x] MkDocs documentation</li>
+</ul>
+<h3 id="phase-2-admin-panel-in-progress">Phase 2: Admin Panel 🔄 (IN PROGRESS)</h3>
+<p><strong>Why this is next:</strong>
+- Validates entire stack works end-to-end
+- Visual way to test API endpoints
+- Useful for self-hosters
+- Forces us to test sync functionality
+- Simple first-time setup wizard</p>
+<p><strong>Features:</strong>
+- [ ] First-time setup wizard (create user, connect Polar)
+- [ ] Sync status dashboard (last sync, record counts)
+- [ ] Manual sync trigger button
+- [ ] Basic data visualization (sleep/HRV last 7 days)
+- [ ] Settings page (sync interval, etc.)</p>
+<p><strong>Tech:</strong>
+- HTMX for interactivity
+- Server-side Jinja2 templates
+- TailwindCSS for styling (keep it plain)
+- Litestar template rendering</p>
+<h3 id="phase-3-analytics-engine">Phase 3: Analytics Engine</h3>
+<p><strong>Why this comes after admin:</strong>
+- Needs working data pipeline first
+- Admin panel helps validate data quality
+- Can test analytics in UI</p>
+<p><strong>Features:</strong>
+- [ ] HRV baseline calculation (7/30/60-day rolling medians)
+- [ ] Recovery score algorithm (HRV + sleep + ANS charge)
+- [ ] Sleep debt tracking
+- [ ] Training load analysis
+- [ ] Polars for fast data processing
+- [ ] SQL views for pre-computed metrics</p>
+<h3 id="phase-4-mcp-server-claude-desktop-integration">Phase 4: MCP Server (Claude Desktop Integration)</h3>
+<p><strong>Why this is later:</strong>
+- Requires working analytics first
+- Nice-to-have, not core functionality
+- Can query data via natural language</p>
+<p><strong>Features:</strong>
+- [ ] MCP server implementation
+- [ ] Tools for querying user data
+- [ ] Natural language health insights
+- [ ] Claude Desktop config example</p>
+<h3 id="phase-5-advanced-features-future">Phase 5: Advanced Features (Future)</h3>
+<ul>
+<li>[ ] Background scheduler (APScheduler or Celery)</li>
+<li>[ ] Webhook support from Polar</li>
+<li>[ ] Data export (CSV, JSON)</li>
+<li>[ ] ML predictions (injury risk, recovery time)</li>
+<li>[ ] API rate limiting</li>
+<li>[ ] Observability (metrics, tracing)</li>
+</ul>
+<h2 id="what-were-not-building">What We're NOT Building</h2>
+<p><strong>Multi-provider support</strong> - We're Polar-focused. If we expand later, we'll adopt Open Wearables' provider strategy pattern.</p>
+<p><strong>Mobile app</strong> - SaaS customers get Laravel frontend. Self-hosters use admin panel or API.</p>
+<p><strong>Social features</strong> - No following, sharing, leaderboards. This is personal analytics.</p>
+<p><strong>Complex auth</strong> - Self-hosted is simple. SaaS uses Laravel auth.</p>
+<p><strong>Distributed workers</strong> - APScheduler is enough. Celery if we really need it.</p>
+<h2 id="lessons-from-open-wearables">Lessons from Open Wearables</h2>
+<h3 id="steal-these-ideas">Steal These Ideas</h3>
+<ol>
+<li><strong>OAuth state management</strong> - Store state in Redis with TTL for better security</li>
+<li><strong>Cursor pagination</strong> - For large datasets (when we need it)</li>
+<li><strong>Provider strategy pattern</strong> - If we ever add Garmin/Whoop</li>
+<li><strong>Test factories</strong> - factory-boy for cleaner test data</li>
+<li><strong>Mintlify docs</strong> - Upgrade from MkDocs Material (later)</li>
+<li><strong>Unified data schemas</strong> - If we add multi-provider support</li>
+</ol>
+<h3 id="avoid-these-mistakes">Avoid These Mistakes</h3>
+<ol>
+<li><strong>Incomplete endpoints</strong> - Ship working features, not 501s</li>
+<li><strong>Single-tenant design</strong> - We're multi-user from day 1</li>
+<li><strong>Over-abstraction</strong> - Generic repository pattern is overkill</li>
+<li><strong>Missing rate limiting</strong> - Add protection from day 1</li>
+<li><strong>No analytics</strong> - Our differentiator, not just storage</li>
+<li><strong>Poor time-series design</strong> - Consider TimescaleDB extension if needed</li>
+</ol>
+<h2 id="success-metrics">Success Metrics</h2>
+<p><strong>Self-hosted deployment:</strong>
+- Time to first data: &lt; 5 minutes (docker-compose up + OAuth)
+- Disk space: &lt; 100MB for first month of data
+- Memory: &lt; 512MB RAM
+- CPU: Negligible (sync runs hourly)</p>
+<p><strong>SaaS deployment:</strong>
+- Support 1000+ users on single instance
+- Sync latency: &lt; 30 seconds per user
+- API response time: &lt; 100ms p95
+- Database size: ~10MB per user per year</p>
+<p><strong>Code quality:</strong>
+- Test coverage: &gt;90%
+- Type coverage: 100% (mypy strict)
+- CI green: Always
+- Docs: Complete and accurate</p>
+<h2 id="tech-stack-summary">Tech Stack Summary</h2>
+<p><strong>Core:</strong>
+- Python 3.12+
+- PostgreSQL 17
+- Litestar 2.14+
+- SQLAlchemy 2.0 (async)
+- polar-flow-api 1.1.0</p>
+<p><strong>Data Processing:</strong>
+- Polars (DataFrames)
+- NumPy/SciPy (analytics)</p>
+<p><strong>Background Tasks:</strong>
+- APScheduler (start)
+- Celery (if needed later)</p>
+<p><strong>Admin UI:</strong>
+- HTMX
+- Jinja2 templates
+- TailwindCSS</p>
+<p><strong>Development:</strong>
+- uv (package manager)
+- Ruff (linting/formatting)
+- mypy (type checking)
+- pytest (testing)</p>
+<p><strong>Deployment:</strong>
+- Docker + docker-compose
+- GitHub Actions (CI/CD)
+- MkDocs Material (docs)</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>We're building a <strong>focused, well-architected health analytics server</strong> for Polar devices. We've learned from Open Wearables (multi-provider platform) but chosen a simpler, more focused approach.</p>
+<p><strong>Next step</strong>: Build HTMX admin panel to validate the entire stack works.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

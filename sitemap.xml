@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/architecture/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/integration/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/quickstart/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/adr/001-per-user-api-keys/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/api/overview/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+    <url>
+         <loc>https://stumason.github.io/polar-flow-server/local/ARCHITECTURE/</loc>
+         <lastmod>2026-01-21</lastmod>
+    </url>
+</urlset>
