@@ -16,6 +16,8 @@ import httpx
 from litestar import Request, get, post
 from litestar.response import Redirect, Response, Template
 from litestar.status_codes import HTTP_200_OK, HTTP_303_SEE_OTHER
+from polar_flow import PolarFlow
+from polar_flow.exceptions import PolarFlowError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1089,7 +1091,22 @@ async def oauth_callback(
                 context={"error": "OAuth response missing user ID (x_user_id)"},
             )
         polar_user_id = str(x_user_id)
-        access_token_encrypted = token_encryption.encrypt(token_data["access_token"])
+        access_token = token_data["access_token"]
+
+        # Register user with Polar AccessLink API (required before data access).
+        # Without this step, all data endpoints return 403 Forbidden.
+        # 409 = already registered, which is fine.
+        async with PolarFlow(access_token=access_token) as polar_client:
+            try:
+                await polar_client.users.register(member_id=polar_user_id)
+                logger.info(f"Registered Polar user {polar_user_id} with AccessLink API")
+            except PolarFlowError as e:
+                if e.status_code == 409:
+                    logger.debug(f"Polar user {polar_user_id} already registered (409)")
+                else:
+                    raise
+
+        access_token_encrypted = token_encryption.encrypt(access_token)
 
         # Calculate token expiry
         expires_in = token_data.get("expires_in", 31536000)  # Default 1 year
