@@ -61,7 +61,7 @@ docs = [
 polar-flow-server = "polar_flow_server.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.9.22,<0.10.0"]
+requires = ["uv_build>=0.9.22,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
