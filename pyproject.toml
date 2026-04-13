@@ -23,7 +23,7 @@ dependencies = [
     "polars>=1.17.1",
     "pyarrow>=18.1.0",
     # Validation
-    "pydantic>=2.10.5",
+    "pydantic>=2.12.5",
     "pydantic-settings>=2.7.1",
     # Security
     "argon2-cffi>=23.1.0",
