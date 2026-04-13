@@ -33,7 +33,7 @@ dependencies = [
     "apscheduler>=3.10.4",
     # Utilities
     "python-dotenv>=1.0.1",
-    "structlog>=24.4.0",
+    "structlog>=25.5.0",
     "httpx>=0.28.1",
     "scipy>=1.14.0,<2.0.0",
 ]
