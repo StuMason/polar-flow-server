@@ -15,7 +15,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "alembic>=1.14.0",
     "advanced-alchemy>=0.27.0",  # Required for Litestar SQLAlchemy plugin
-    "asyncpg>=0.30.0",  # PostgreSQL async driver
+    "asyncpg>=0.31.0",  # PostgreSQL async driver
     "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
     # Polar Flow SDK
     "polar-flow-api>=1.4.0",
