@@ -48,7 +48,7 @@ dev = [
 ]
 
 mcp = [
-    "mcp>=1.3.2",  # Claude Desktop MCP server
+    "mcp>=1.27.0",  # Claude Desktop MCP server
 ]
 
 docs = [
