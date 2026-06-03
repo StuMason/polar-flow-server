@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
     # Database
     "sqlalchemy[asyncio]>=2.0.36",
-    "alembic>=1.14.0",
+    "alembic>=1.18.4",
     "advanced-alchemy>=0.27.0",  # Required for Litestar SQLAlchemy plugin
     "asyncpg>=0.30.0",  # PostgreSQL async driver
     "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
