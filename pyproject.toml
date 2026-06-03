@@ -21,7 +21,7 @@ dependencies = [
     "polar-flow-api>=1.4.0",
     # Data processing
     "polars>=1.17.1",
-    "pyarrow>=18.1.0",
+    "pyarrow>=23.0.1",
     # Validation
     "pydantic>=2.10.5",
     "pydantic-settings>=2.7.1",
