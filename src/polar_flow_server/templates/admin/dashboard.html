@@ -323,6 +323,55 @@
     </div>
 </div>
 
+<!-- Chart Controls -->
+<div class="mb-4 hidden" data-tab-panel="sleep,heart,training">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Charts</h2>
+        <div class="flex items-center gap-4">
+            <!-- Export Dropdown -->
+            <div class="relative">
+                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" onclick="document.getElementById('export-menu').classList.toggle('hidden')">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Export CSV
+                </button>
+                <div id="export-menu" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
+                    <a href="/admin/export/sleep.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
+                    <a href="/admin/export/activity.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
+                    <a href="/admin/export/recharge.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
+                    <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
+                </div>
+            </div>
+            <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="handleChartRangeChange()">
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30" selected>Last 30 days</option>
+            </select>
+        </div>
+    </div>
+
+</div>
+
+<!-- Sleep Charts -->
+<div class="mb-6 hidden" data-tab-panel="sleep">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score</h3>
+            <div class="h-64">
+                <canvas id="sleepScoreChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Duration</h3>
+            <div class="h-64">
+                <canvas id="sleepDurationChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Two Column Layout for Tables -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden" data-tab-panel="sleep">
     <!-- Recent Sleep Data -->
@@ -408,48 +457,6 @@
         {% else %}
         <div class="p-6 text-center text-gray-500">No recharge data yet</div>
         {% endif %}
-    </div>
-</div>
-
-<!-- Chart Controls -->
-<div class="mb-4 hidden" data-tab-panel="sleep,heart,training">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">Charts</h2>
-        <div class="flex items-center gap-4">
-            <!-- Export Dropdown -->
-            <div class="relative">
-                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" onclick="document.getElementById('export-menu').classList.toggle('hidden')">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                    </svg>
-                    Export CSV
-                </button>
-                <div id="export-menu" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
-                    <a href="/admin/export/sleep.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
-                    <a href="/admin/export/activity.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
-                    <a href="/admin/export/recharge.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
-                    <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
-                </div>
-            </div>
-            <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="handleChartRangeChange()">
-                <option value="7">Last 7 days</option>
-                <option value="14">Last 14 days</option>
-                <option value="30" selected>Last 30 days</option>
-            </select>
-        </div>
-    </div>
-
-</div>
-
-<!-- Sleep Charts -->
-<div class="mb-6 hidden" data-tab-panel="sleep">
-    <div class="grid grid-cols-1 gap-6">
-        <div class="bg-white shadow rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score & Duration</h3>
-            <div class="h-64">
-                <canvas id="sleepChart"></canvas>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -756,11 +763,11 @@
 // Chart instances, keyed by chart name. Charts are only ever created while their
 // tab panel is visible, so Chart.js measures the real canvas size and the default
 // entrance animation behaves consistently every time (no more reveal glitch).
-const charts = { sleep: null, activity: null, hr: null, hrv: null, cardio: null };
+const charts = { sleepScore: null, sleepDuration: null, activity: null, hr: null, hrv: null, cardio: null };
 
 // Which chart keys belong to each tab.
 const chartsByTab = {
-    sleep: ['sleep'],
+    sleep: ['sleepScore', 'sleepDuration'],
     heart: ['hr', 'hrv'],
     training: ['activity', 'cardio']
 };
@@ -940,7 +947,8 @@ async function loadChartsForTab(tab) {
 
     if (tab === 'sleep') {
         const sleepData = await fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json());
-        renderSleepChart(sleepData);
+        renderSleepScoreChart(sleepData);
+        renderSleepDurationChart(sleepData);
     } else if (tab === 'heart') {
         const [hrData, hrvData] = await Promise.all([
             fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
@@ -973,11 +981,62 @@ function handleChartRangeChange() {
     }
 }
 
-// Sleep Chart (Sleep Score + Duration)
-function renderSleepChart(sleepData) {
-    if (charts.sleep) charts.sleep.destroy();
+// Sleep Score Chart
+// Instead of coloring individual points, this draws dashed horizontal reference
+// lines for each quality level (Fair/Good/Excellent) with a label on the right
+// side of the plot area. This is a small custom Chart.js plugin using the public
+// plugin API (afterDraw + the canvas 2D context) - no extra dependency needed.
+//
+// Levels with a numeric `value` get a dashed reference line at that y-position.
+// Levels without a `value` (e.g. "Poor") are drawn as a label only, pinned near
+// the bottom of the plot area - this avoids inventing an arbitrary extra
+// threshold for an open-ended "below the lowest boundary" zone.
+const scoreLevelLinesPlugin = {
+    id: 'scoreLevelLines',
+    afterDraw(chart, _args, options) {
+        if (!options || !options.levels || !options.levels.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const yScale = scales[options.yScaleId || 'y'];
+        if (!yScale) return;
+
+        ctx.save();
+        ctx.font = '11px sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+
+        options.levels.forEach((level) => {
+            let y;
+
+            if (typeof level.value === 'number') {
+                y = yScale.getPixelForValue(level.value);
+                if (y < chartArea.top || y > chartArea.bottom) return;
+
+                ctx.strokeStyle = level.color;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(chartArea.left, y);
+                ctx.lineTo(chartArea.right, y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            } else {
+                // Label-only marker for an open-ended zone, pinned near the bottom.
+                y = chartArea.bottom - 8;
+            }
+
+            ctx.fillStyle = level.color;
+            ctx.fillText(level.label, chartArea.right + 6, y);
+        });
+
+        ctx.restore();
+    }
+};
+Chart.register(scoreLevelLinesPlugin);
+
+function renderSleepScoreChart(sleepData) {
+    if (charts.sleepScore) charts.sleepScore.destroy();
     const sleepLabels = sleepData.labels.map(formatDateLabel);
-    charts.sleep = new Chart(document.getElementById('sleepChart'), {
+    charts.sleepScore = new Chart(document.getElementById('sleepScoreChart'), {
         type: 'line',
         data: {
             labels: sleepLabels,
@@ -988,50 +1047,98 @@ function renderSleepChart(sleepData) {
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     fill: true,
-                    tension: 0.3,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Hours',
-                    data: sleepData.datasets.total_hours,
-                    borderColor: '#8b5cf6',
-                    borderDash: [5, 5],
-                    tension: 0.3,
-                    yAxisID: 'y1'
+                    tension: 0.3
                 }
             ]
         },
         options: {
             ...commonOptions,
+            layout: {
+                padding: { right: 64 }
+            },
             plugins: {
                 ...commonOptions.plugins,
+                scoreLevelLines: {
+                    levels: [
+                        { value: 85, label: 'Excellent', color: '#22c55e' },
+                        { value: 70, label: 'Good', color: '#3b82f6' },
+                        { value: 50, label: 'Fair', color: '#f59e0b' },
+                        { label: 'Poor', color: '#ef4444' }
+                    ]
+                },
                 tooltip: {
                     ...commonOptions.plugins.tooltip,
                     callbacks: {
-                        afterTitle: () => 'Sleep Quality Metrics',
+                        afterTitle: () => 'Sleep Quality',
                         afterLabel: (ctx) => {
-                            if (ctx.dataset.label === 'Sleep Score') {
-                                const v = ctx.raw;
-                                if (v >= 85) return '  Excellent sleep!';
-                                if (v >= 70) return '  Good sleep quality';
-                                if (v >= 50) return '  Fair - room for improvement';
-                                return '  Poor - check sleep habits';
-                            }
-                            if (ctx.dataset.label === 'Hours') {
-                                const v = ctx.raw;
-                                if (v >= 7 && v <= 9) return '  Optimal range';
-                                if (v < 7) return '  Consider more sleep';
-                                return '  May be oversleeping';
-                            }
-                            return '';
+                            const v = ctx.raw;
+                            if (v >= 85) return '  Excellent sleep!';
+                            if (v >= 70) return '  Good sleep quality';
+                            if (v >= 50) return '  Fair - room for improvement';
+                            return '  Poor - check sleep habits';
                         }
                     }
                 }
             },
             scales: {
                 ...commonOptions.scales,
-                y: { ...commonOptions.scales.y, max: 100, title: { display: true, text: 'Score' } },
-                y1: { position: 'right', beginAtZero: true, max: 12, title: { display: true, text: 'Hours' }, grid: { display: false } }
+                y: { ...commonOptions.scales.y, max: 100, title: { display: true, text: 'Score' } }
+            }
+        }
+    });
+}
+
+// Sleep Duration Chart
+// Same dashed reference-line approach as the Sleep Score chart, marking the
+// optimal 7-9h sleep range using the shared `scoreLevelLines` plugin.
+function renderSleepDurationChart(sleepData) {
+    if (charts.sleepDuration) charts.sleepDuration.destroy();
+    const sleepLabels = sleepData.labels.map(formatDateLabel);
+    charts.sleepDuration = new Chart(document.getElementById('sleepDurationChart'), {
+        type: 'line',
+        data: {
+            labels: sleepLabels,
+            datasets: [
+                {
+                    label: 'Hours',
+                    data: sleepData.datasets.total_hours,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            layout: {
+                padding: { right: 80 }
+            },
+            plugins: {
+                ...commonOptions.plugins,
+                scoreLevelLines: {
+                    levels: [
+                        { value: 9, label: 'Oversleeping', color: '#f59e0b' },
+                        { value: 7, label: 'Optimal', color: '#22c55e' },
+                        { label: 'Poor', color: '#ef4444' }
+                    ]
+                },
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'Sleep Duration',
+                        afterLabel: (ctx) => {
+                            const v = ctx.raw;
+                            if (v >= 7 && v <= 9) return '  Optimal range';
+                            if (v < 7) return '  Consider more sleep';
+                            return '  May be oversleeping';
+                        }
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, beginAtZero: true, max: 12, title: { display: true, text: 'Hours' } }
             }
         }
     });
