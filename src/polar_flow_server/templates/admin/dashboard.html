@@ -68,8 +68,91 @@
     </div>
 </div>
 
+<!-- Today's Readiness -->
+{% if recovery_status.has_data %}
+<div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <div class="flex items-center gap-3 mb-3">
+                <h2 class="text-lg font-semibold text-gray-900">Today's Readiness</h2>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+                    {% if recovery_status.readiness == 'excellent' %}bg-green-100 text-green-800
+                    {% elif recovery_status.readiness == 'good' %}bg-blue-100 text-blue-800
+                    {% elif recovery_status.readiness == 'fair' %}bg-yellow-100 text-yellow-800
+                    {% else %}bg-red-100 text-red-800{% endif %}">
+                    {{ recovery_status.readiness|title }} ({{ recovery_status.readiness_score }}/100)
+                </span>
+            </div>
+            <p class="text-gray-700 font-medium mb-3">{{ recovery_status.training_advice }}</p>
+            <div class="space-y-2">
+                {% for rec in recovery_status.recommendations %}
+                <div class="flex items-start gap-2 text-sm text-gray-600">
+                    <svg class="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>{{ rec }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="ml-6 flex-shrink-0">
+            <!-- Readiness gauge visualization -->
+            <div class="w-24 h-24 relative">
+                <svg class="w-24 h-24 transform -rotate-90">
+                    <circle cx="48" cy="48" r="40" stroke="#e5e7eb" stroke-width="8" fill="none"/>
+                    <circle cx="48" cy="48" r="40"
+                        stroke="{% if recovery_status.readiness == 'excellent' %}#22c55e{% elif recovery_status.readiness == 'good' %}#3b82f6{% elif recovery_status.readiness == 'fair' %}#eab308{% else %}#ef4444{% endif %}"
+                        stroke-width="8" fill="none"
+                        stroke-dasharray="{{ (recovery_status.readiness_score / 100) * 251.2 }} 251.2"
+                        stroke-linecap="round"/>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="text-2xl font-bold text-gray-900">{{ recovery_status.readiness_score }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Dashboard Tabs (frontend only) -->
+<div class="mb-6 border-b border-gray-200">
+    <div class="flex items-center gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Dashboard sections">
+        <button type="button" data-tab="overview" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700" role="tab" aria-selected="true">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+            </svg>
+            Overview
+        </button>
+        <button type="button" data-tab="trends" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8"></path>
+            </svg>
+            Trends &amp; Baselines
+        </button>
+        <button type="button" data-tab="sleep" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+            </svg>
+            Sleep
+        </button>
+        <button type="button" data-tab="heart" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+            </svg>
+            Heart Rate
+        </button>
+        <button type="button" data-tab="training" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Training Load
+        </button>
+    </div>
+</div>
+
 <!-- Top Metrics: grouped for scanability -->
-<div class="mb-6" id="stats-container">
+<div class="mb-6" id="stats-container" data-tab-panel="overview">
     <div class="text-xs text-gray-500 uppercase tracking-wide mb-3">Recovery &amp; Sleep</div>
     <div class="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-4">
         <!-- Latest HRV -->
@@ -202,55 +285,8 @@
     </div>
 </div>
 
-<!-- Today's Readiness -->
-{% if recovery_status.has_data %}
-<div class="bg-white shadow rounded-lg p-6 mb-6">
-    <div class="flex items-start justify-between">
-        <div class="flex-1">
-            <div class="flex items-center gap-3 mb-3">
-                <h2 class="text-lg font-semibold text-gray-900">Today's Readiness</h2>
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
-                    {% if recovery_status.readiness == 'excellent' %}bg-green-100 text-green-800
-                    {% elif recovery_status.readiness == 'good' %}bg-blue-100 text-blue-800
-                    {% elif recovery_status.readiness == 'fair' %}bg-yellow-100 text-yellow-800
-                    {% else %}bg-red-100 text-red-800{% endif %}">
-                    {{ recovery_status.readiness|title }} ({{ recovery_status.readiness_score }}/100)
-                </span>
-            </div>
-            <p class="text-gray-700 font-medium mb-3">{{ recovery_status.training_advice }}</p>
-            <div class="space-y-2">
-                {% for rec in recovery_status.recommendations %}
-                <div class="flex items-start gap-2 text-sm text-gray-600">
-                    <svg class="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span>{{ rec }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        <div class="ml-6 flex-shrink-0">
-            <!-- Readiness gauge visualization -->
-            <div class="w-24 h-24 relative">
-                <svg class="w-24 h-24 transform -rotate-90">
-                    <circle cx="48" cy="48" r="40" stroke="#e5e7eb" stroke-width="8" fill="none"/>
-                    <circle cx="48" cy="48" r="40"
-                        stroke="{% if recovery_status.readiness == 'excellent' %}#22c55e{% elif recovery_status.readiness == 'good' %}#3b82f6{% elif recovery_status.readiness == 'fair' %}#eab308{% else %}#ef4444{% endif %}"
-                        stroke-width="8" fill="none"
-                        stroke-dasharray="{{ (recovery_status.readiness_score / 100) * 251.2 }} 251.2"
-                        stroke-linecap="round"/>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <span class="text-2xl font-bold text-gray-900">{{ recovery_status.readiness_score }}</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Two Column Layout for Tables -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden" data-tab-panel="sleep">
     <!-- Recent Sleep Data -->
     <div class="bg-white shadow rounded-lg overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-200">
@@ -337,10 +373,10 @@
     </div>
 </div>
 
-<!-- Charts Section -->
-<div class="mb-6">
+<!-- Chart Controls -->
+<div class="mb-4 hidden" data-tab-panel="sleep,heart,training">
     <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-gray-900">Trends & Analytics</h2>
+        <h2 class="text-lg font-semibold text-gray-900">Charts</h2>
         <div class="flex items-center gap-4">
             <!-- Export Dropdown -->
             <div class="relative">
@@ -357,7 +393,7 @@
                     <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
                 </div>
             </div>
-            <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="refreshCharts()">
+            <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="handleChartRangeChange()">
                 <option value="7">Last 7 days</option>
                 <option value="14">Last 14 days</option>
                 <option value="30" selected>Last 30 days</option>
@@ -365,25 +401,23 @@
         </div>
     </div>
 
-    <!-- Chart Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Sleep Score Chart -->
+</div>
+
+<!-- Sleep Charts -->
+<div class="mb-6 hidden" data-tab-panel="sleep">
+    <div class="grid grid-cols-1 gap-6">
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score & Duration</h3>
             <div class="h-64">
                 <canvas id="sleepChart"></canvas>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Activity Chart -->
-        <div class="bg-white shadow rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">Daily Steps</h3>
-            <div class="h-64">
-                <canvas id="activityChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Heart Rate Chart -->
+<!-- Heart Charts -->
+<div class="mb-6 hidden" data-tab-panel="heart">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Heart Rate (Min/Avg/Max)</h3>
             <div class="h-64">
@@ -391,15 +425,49 @@
             </div>
         </div>
 
-        <!-- HRV Chart -->
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">HRV & Recovery</h3>
             <div class="h-64">
                 <canvas id="hrvChart"></canvas>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Cardio Load Chart -->
+<!-- Continuous HR Details -->
+{% if latest_hr %}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Heart Rate ({{ latest_hr.date }})</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Min</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_min if latest_hr.hr_min else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Avg</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_avg if latest_hr.hr_avg else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Max</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_max if latest_hr.hr_max else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Samples</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Training Charts -->
+<div class="mb-6 hidden" data-tab-panel="training">
+    <div class="grid grid-cols-1 gap-6">
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">Daily Steps</h3>
+            <div class="h-64">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
         <div class="bg-white shadow rounded-lg p-4 lg:col-span-2">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Training Load (Strain vs Tolerance)</h3>
             <div class="h-64">
@@ -411,7 +479,7 @@
 
 <!-- Cardio Load Details -->
 {% if latest_cardio %}
-<div class="bg-white shadow rounded-lg p-6 mb-6">
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="training">
     <h2 class="text-lg font-semibold text-gray-900 mb-4">Training Load ({{ latest_cardio.date }})</h2>
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <div>
@@ -442,34 +510,9 @@
 </div>
 {% endif %}
 
-<!-- Continuous HR Details -->
-{% if latest_hr %}
-<div class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Heart Rate ({{ latest_hr.date }})</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Min</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_min if latest_hr.hr_min else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Avg</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_avg if latest_hr.hr_avg else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Max</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_max if latest_hr.hr_max else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Samples</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <!-- Biosensing Data (SpO2, Temperature) -->
 {% if latest_spo2 or latest_skin_temp %}
-<div class="bg-gradient-to-r from-purple-50 to-indigo-50 shadow rounded-lg p-6 mb-6">
+<div class="bg-gradient-to-r from-purple-50 to-indigo-50 shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
     <h2 class="text-lg font-semibold text-gray-900 mb-4">
         <span class="inline-flex items-center">
             <svg class="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -515,7 +558,7 @@
 
 <!-- Personal Baselines (Analytics) -->
 {% if user_baselines %}
-<div class="bg-white shadow rounded-lg p-6 mb-6">
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="trends">
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900">
             <span class="inline-flex items-center">
@@ -586,7 +629,7 @@
 
 <!-- Detected Patterns (Analytics) -->
 {% if user_patterns %}
-<div class="bg-white shadow rounded-lg p-6 mb-6">
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="trends">
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-gray-900">
             <span class="inline-flex items-center">
@@ -652,7 +695,7 @@
 
 <!-- Analytics Empty State -->
 {% if not user_baselines and not user_patterns %}
-<div class="bg-gradient-to-r from-indigo-50 to-purple-50 shadow rounded-lg p-6 mb-6">
+<div class="bg-gradient-to-r from-indigo-50 to-purple-50 shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="trends">
     <div class="text-center py-6">
         <svg class="mx-auto h-12 w-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
@@ -669,8 +712,76 @@
 
 <!-- Chart.js Initialization -->
 <script>
-// Chart instances (for cleanup on refresh)
-let sleepChart, activityChart, hrChart, hrvChart, cardioChart;
+// Chart instances, keyed by chart name. Charts are only ever created while their
+// tab panel is visible, so Chart.js measures the real canvas size and the default
+// entrance animation behaves consistently every time (no more reveal glitch).
+const charts = { sleep: null, activity: null, hr: null, hrv: null, cardio: null };
+
+// Which chart keys belong to each tab.
+const chartsByTab = {
+    sleep: ['sleep'],
+    heart: ['hr', 'hrv'],
+    training: ['activity', 'cardio']
+};
+
+// Tabs whose charts have already been created for the current day range.
+const initializedChartTabs = new Set();
+
+function resizeTabCharts(tab) {
+    (chartsByTab[tab] || []).forEach(key => {
+        const chart = charts[key];
+        if (chart) {
+            chart.resize();
+            chart.update('none');
+        }
+    });
+}
+
+function setActiveDashboardTab(tab) {
+    const buttons = document.querySelectorAll('.dashboard-tab-btn');
+    const panels = document.querySelectorAll('[data-tab-panel]');
+
+    buttons.forEach(btn => {
+        const isActive = btn.dataset.tab === tab;
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        btn.classList.toggle('border-indigo-600', isActive);
+        btn.classList.toggle('text-indigo-700', isActive);
+        btn.classList.toggle('border-transparent', !isActive);
+        btn.classList.toggle('text-gray-500', !isActive);
+    });
+
+    panels.forEach(panel => {
+        const allowedTabs = panel.dataset.tabPanel.split(',').map(value => value.trim());
+        panel.classList.toggle('hidden', !allowedTabs.includes(tab));
+    });
+
+    if (chartsByTab[tab]) {
+        if (!initializedChartTabs.has(tab)) {
+            initializedChartTabs.add(tab);
+            // The panel is already visible at this point, so charts render at their real size.
+            loadChartsForTab(tab);
+        } else {
+            // Wait a tick so layout settles before resizing canvases.
+            requestAnimationFrame(() => resizeTabCharts(tab));
+        }
+    }
+}
+
+function initDashboardTabs() {
+    const tabs = ['overview', 'sleep', 'heart', 'training', 'trends'];
+    const hashTab = window.location.hash.replace('#tab-', '');
+    const initialTab = tabs.includes(hashTab) ? hashTab : 'overview';
+
+    document.querySelectorAll('.dashboard-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            setActiveDashboardTab(tab);
+            history.replaceState(null, '', `#tab-${tab}`);
+        });
+    });
+
+    setActiveDashboardTab(initialTab);
+}
 
 // Close export menu when clicking outside
 document.addEventListener('click', function(e) {
@@ -715,6 +826,10 @@ const chartDescriptions = {
 const commonOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: {
+        duration: 700,
+        easing: 'easeOutQuart'
+    },
     interaction: {
         intersect: false,
         mode: 'index'
@@ -768,27 +883,52 @@ function createTooltipCallback(descriptions) {
     };
 }
 
-// Fetch and render all charts
-async function refreshCharts() {
+// Fetch and render only the charts belonging to the given tab. Charts are only
+// ever created while their tab panel is visible, so the entrance animation is
+// consistent whether it's the first tab shown or one opened later.
+async function loadChartsForTab(tab) {
     const days = document.getElementById('chart-days').value;
 
-    // Destroy existing charts
-    [sleepChart, activityChart, hrChart, hrvChart, cardioChart].forEach(chart => {
-        if (chart) chart.destroy();
-    });
+    if (tab === 'sleep') {
+        const sleepData = await fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json());
+        renderSleepChart(sleepData);
+    } else if (tab === 'heart') {
+        const [hrData, hrvData] = await Promise.all([
+            fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
+            fetch(`/admin/api/charts/hrv?days=${days}`).then(r => r.json())
+        ]);
+        renderHrChart(hrData);
+        renderHrvChart(hrvData);
+    } else if (tab === 'training') {
+        const [activityData, cardioData] = await Promise.all([
+            fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
+            fetch(`/admin/api/charts/cardio-load?days=${days}`).then(r => r.json())
+        ]);
+        renderActivityChart(activityData);
+        renderCardioChart(cardioData);
+    }
+}
 
-    // Fetch all data in parallel
-    const [sleepData, activityData, hrData, hrvData, cardioData] = await Promise.all([
-        fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json()),
-        fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
-        fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
-        fetch(`/admin/api/charts/hrv?days=${days}`).then(r => r.json()),
-        fetch(`/admin/api/charts/cardio-load?days=${days}`).then(r => r.json())
-    ]);
+// Called when the day-range selector changes. Rebuilds the currently visible
+// tab's charts immediately and marks the others stale so they reload with the
+// new range next time they're opened.
+function handleChartRangeChange() {
+    const activeBtn = document.querySelector('.dashboard-tab-btn[aria-selected="true"]');
+    const activeTab = activeBtn ? activeBtn.dataset.tab : null;
 
-    // Sleep Chart (Sleep Score + Duration)
+    initializedChartTabs.clear();
+
+    if (activeTab && chartsByTab[activeTab]) {
+        initializedChartTabs.add(activeTab);
+        loadChartsForTab(activeTab);
+    }
+}
+
+// Sleep Chart (Sleep Score + Duration)
+function renderSleepChart(sleepData) {
+    if (charts.sleep) charts.sleep.destroy();
     const sleepLabels = sleepData.labels.map(formatDateLabel);
-    sleepChart = new Chart(document.getElementById('sleepChart'), {
+    charts.sleep = new Chart(document.getElementById('sleepChart'), {
         type: 'line',
         data: {
             labels: sleepLabels,
@@ -846,10 +986,13 @@ async function refreshCharts() {
             }
         }
     });
+}
 
-    // Activity Chart (Steps)
+// Activity Chart (Steps)
+function renderActivityChart(activityData) {
+    if (charts.activity) charts.activity.destroy();
     const activityLabels = activityData.labels.map(formatDateLabel);
-    activityChart = new Chart(document.getElementById('activityChart'), {
+    charts.activity = new Chart(document.getElementById('activityChart'), {
         type: 'bar',
         data: {
             labels: activityLabels,
@@ -884,10 +1027,13 @@ async function refreshCharts() {
             }
         }
     });
+}
 
-    // Heart Rate Chart (Min/Avg/Max as area bands)
+// Heart Rate Chart (Min/Avg/Max as area bands)
+function renderHrChart(hrData) {
+    if (charts.hr) charts.hr.destroy();
     const hrLabels = hrData.labels.map(formatDateLabel);
-    hrChart = new Chart(document.getElementById('hrChart'), {
+    charts.hr = new Chart(document.getElementById('hrChart'), {
         type: 'line',
         data: {
             labels: hrLabels,
@@ -949,10 +1095,13 @@ async function refreshCharts() {
             }
         }
     });
+}
 
-    // HRV Chart
+// HRV Chart
+function renderHrvChart(hrvData) {
+    if (charts.hrv) charts.hrv.destroy();
     const hrvLabels = hrvData.labels.map(formatDateLabel);
-    hrvChart = new Chart(document.getElementById('hrvChart'), {
+    charts.hrv = new Chart(document.getElementById('hrvChart'), {
         type: 'line',
         data: {
             labels: hrvLabels,
@@ -1008,10 +1157,13 @@ async function refreshCharts() {
             }
         }
     });
+}
 
-    // Cardio Load Chart (Strain vs Tolerance)
+// Cardio Load Chart (Strain vs Tolerance)
+function renderCardioChart(cardioData) {
+    if (charts.cardio) charts.cardio.destroy();
     const cardioLabels = cardioData.labels.map(formatDateLabel);
-    cardioChart = new Chart(document.getElementById('cardioChart'), {
+    charts.cardio = new Chart(document.getElementById('cardioChart'), {
         type: 'line',
         data: {
             labels: cardioLabels,
@@ -1080,8 +1232,8 @@ async function refreshCharts() {
     });
 }
 
-// Initialize charts on page load
-document.addEventListener('DOMContentLoaded', refreshCharts);
+// Initialize dashboard tabs (charts are lazy-loaded per tab, on first visit)
+document.addEventListener('DOMContentLoaded', initDashboardTabs);
 
 </script>
 {% endblock %}
