@@ -711,6 +711,13 @@ async def admin_dashboard(
     activity_result = await session.execute(latest_activity_stmt)
     latest_activity = activity_result.scalar_one_or_none()
 
+    # Get latest activity samples (minute-by-minute steps, for "Today at a Glance")
+    latest_activity_samples_stmt = (
+        select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1)
+    )
+    activity_samples_result = await session.execute(latest_activity_samples_stmt)
+    latest_activity_samples = activity_samples_result.scalar_one_or_none()
+
     # Get latest breathing rate from Nightly Recharge
     latest_breathing_rate = None
     breathing_stmt = (
@@ -788,6 +795,7 @@ async def admin_dashboard(
             "latest_spo2": latest_spo2,
             "latest_skin_temp": latest_skin_temp,
             "latest_activity": latest_activity,
+            "latest_activity_samples": latest_activity_samples,
             "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,

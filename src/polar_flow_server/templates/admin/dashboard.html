@@ -323,6 +323,66 @@
     </div>
 </div>
 
+<!-- Today at a Glance: quick mini-charts for the current day -->
+<div class="mb-6" data-tab-panel="overview">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-3">Today at a Glance</div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- Sleep Stages (most recent night) -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">
+                Sleep Stages{% if recent_sleep %} ({{ recent_sleep[0].date }}){% endif %}
+            </h3>
+            {% if recent_sleep and (recent_sleep[0].light_sleep_seconds or recent_sleep[0].deep_sleep_seconds or recent_sleep[0].rem_sleep_seconds) %}
+            <div class="h-56">
+                <canvas
+                    id="todaySleepStagesChart"
+                    data-light-min="{{ (recent_sleep[0].light_sleep_seconds / 60) if recent_sleep[0].light_sleep_seconds else 0 }}"
+                    data-deep-min="{{ (recent_sleep[0].deep_sleep_seconds / 60) if recent_sleep[0].deep_sleep_seconds else 0 }}"
+                    data-rem-min="{{ (recent_sleep[0].rem_sleep_seconds / 60) if recent_sleep[0].rem_sleep_seconds else 0 }}"
+                ></canvas>
+            </div>
+            {% else %}
+            <div class="h-56 flex items-center justify-center text-sm text-gray-400">No sleep stage data yet</div>
+            {% endif %}
+        </div>
+
+        <!-- Heart Rate throughout the day (latest continuous HR record) -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">
+                Heart Rate Today{% if latest_hr %} ({{ latest_hr.date }}){% endif %}
+            </h3>
+            {% if latest_hr and latest_hr.samples_json %}
+            <div class="h-56">
+                <canvas id="todayHrChart"></canvas>
+            </div>
+            {% else %}
+            <div class="h-56 flex items-center justify-center text-sm text-gray-400">No heart rate samples yet</div>
+            {% endif %}
+        </div>
+
+        <!-- Steps throughout the day (latest activity samples record) -->
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">
+                Steps Today{% if latest_activity_samples %} ({{ latest_activity_samples.date }}){% endif %}
+            </h3>
+            {% if latest_activity_samples and latest_activity_samples.samples_json %}
+            <div class="h-56">
+                <canvas id="todayStepsChart"></canvas>
+            </div>
+            {% else %}
+            <div class="h-56 flex items-center justify-center text-sm text-gray-400">No step samples yet</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if latest_hr and latest_hr.samples_json %}
+<script id="today-hr-samples" type="application/json">{{ latest_hr.samples_json | safe }}</script>
+{% endif %}
+{% if latest_activity_samples and latest_activity_samples.samples_json %}
+<script id="today-steps-samples" type="application/json">{{ latest_activity_samples.samples_json | safe }}</script>
+{% endif %}
+
 <!-- Chart Controls -->
 <div class="mb-4 hidden" data-tab-panel="sleep,heart,training">
     <div class="flex items-center justify-between mb-4">
@@ -1388,8 +1448,308 @@ function renderCardioChart(cardioData) {
     });
 }
 
+// Today's Sleep Stages (doughnut) - uses the most recent Sleep row already
+// loaded into the page context (light/deep/rem minutes passed via data
+// attributes), no extra fetch needed.
+//
+// Draws each slice's share as a percentage label inside the slice itself.
+// This is a small local Chart.js plugin (public plugin API) scoped only to
+// this chart via the `plugins: [...]` array - no extra dependency needed.
+//
+// Uses the same white text + soft shadow treatment on every slice regardless
+// of its background color, so all percentage labels look visually consistent.
+const doughnutPercentLabelsPlugin = {
+    id: 'doughnutPercentLabels',
+    afterDraw(chart) {
+        const meta = chart.getDatasetMeta(0);
+        const values = chart.data.datasets[0].data;
+        const total = values.reduce((sum, v) => sum + v, 0);
+        if (!total) return;
+
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = '600 13px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetY = 1;
+        ctx.fillStyle = '#ffffff';
+
+        meta.data.forEach((arc, index) => {
+            const value = values[index];
+            const percent = (value / total) * 100;
+            if (percent < 4) return; // Skip tiny slices to avoid label overlap.
+
+            const { startAngle, endAngle, innerRadius, outerRadius, x, y } = arc.getProps(
+                ['startAngle', 'endAngle', 'innerRadius', 'outerRadius', 'x', 'y'],
+                true
+            );
+            const midAngle = (startAngle + endAngle) / 2;
+            const midRadius = (innerRadius + outerRadius) / 2;
+            const labelX = x + Math.cos(midAngle) * midRadius;
+            const labelY = y + Math.sin(midAngle) * midRadius;
+
+            const label = `${Math.round(percent)}%`;
+            ctx.fillText(label, labelX, labelY);
+        });
+
+        ctx.restore();
+    }
+};
+
+// Draws the total duration in the empty center of the doughnut (e.g. "7h 32m"
+// under a small "Total sleep" label), giving the ring a focal point instead of
+// leaving the middle blank. Also a small local plugin, no extra dependency.
+const doughnutCenterTextPlugin = {
+    id: 'doughnutCenterText',
+    afterDraw(chart) {
+        const values = chart.data.datasets[0].data;
+        const totalMinutes = values.reduce((sum, v) => sum + v, 0);
+        if (!totalMinutes) return;
+
+        const { ctx, chartArea } = chart;
+        const centerX = (chartArea.left + chartArea.right) / 2;
+        const centerY = (chartArea.top + chartArea.bottom) / 2;
+
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = Math.round(totalMinutes % 60);
+        const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+        ctx.save();
+        ctx.textAlign = 'center';
+
+        ctx.textBaseline = 'bottom';
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillText('Total sleep', centerX, centerY - 2);
+
+        ctx.textBaseline = 'top';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillStyle = '#1f2937';
+        ctx.fillText(durationLabel, centerX, centerY + 2);
+
+        ctx.restore();
+    }
+};
+
+function renderTodaySleepStagesChart() {
+    const canvas = document.getElementById('todaySleepStagesChart');
+    if (!canvas) return;
+
+    const light = parseFloat(canvas.dataset.lightMin || '0');
+    const deep = parseFloat(canvas.dataset.deepMin || '0');
+    const rem = parseFloat(canvas.dataset.remMin || '0');
+
+    new Chart(canvas, {
+        type: 'doughnut',
+        plugins: [doughnutPercentLabelsPlugin, doughnutCenterTextPlugin],
+        data: {
+            labels: ['Light', 'Deep', 'REM'],
+            datasets: [{
+                data: [light, deep, rem],
+                backgroundColor: ['#818cf8', '#4338ca', '#22d3ee'],
+                hoverBackgroundColor: ['#6366f1', '#3730a3', '#06b6d4'],
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                borderRadius: 8,
+                spacing: 3,
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '58%',
+            radius: '96%',
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const total = ctx.dataset.data.reduce((sum, v) => sum + v, 0);
+                            const percent = total ? Math.round((ctx.raw / total) * 100) : 0;
+                            return `${ctx.label}: ${Math.round(ctx.raw)} min (${percent}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Today's Heart Rate (line) - parses the samples_json already loaded on the
+// latest ContinuousHeartRate row, embedded server-side as inline JSON. Samples
+// arrive every ~5 minutes, so they're rolled up into coarser buckets (average)
+// before charting to keep the line readable instead of cramped/noisy.
+const ROLLUP_BUCKET_MINUTES = 15;
+
+// Groups timestamped samples into fixed-size time-of-day buckets and
+// aggregates each bucket's values (e.g. average or sum). Returns rolled-up
+// {label, value} points sorted by time, keeping charts readable regardless of
+// how many raw samples were collected.
+function rollupByTimeBucket(samples, minutesPerBucket, getMinuteOfDay, getValue, aggregate) {
+    const buckets = new Map();
+
+    samples.forEach((sample) => {
+        const minuteOfDay = getMinuteOfDay(sample);
+        if (minuteOfDay == null || Number.isNaN(minuteOfDay)) return;
+        const bucketIndex = Math.floor(minuteOfDay / minutesPerBucket);
+        if (!buckets.has(bucketIndex)) buckets.set(bucketIndex, []);
+        buckets.get(bucketIndex).push(getValue(sample));
+    });
+
+    return Array.from(buckets.keys())
+        .sort((a, b) => a - b)
+        .map((bucketIndex) => {
+            const bucketStartMinute = bucketIndex * minutesPerBucket;
+            const hh = String(Math.floor(bucketStartMinute / 60)).padStart(2, '0');
+            const mm = String(bucketStartMinute % 60).padStart(2, '0');
+            return {
+                label: `${hh}:${mm}`,
+                value: aggregate(buckets.get(bucketIndex))
+            };
+        });
+}
+
+function average(values) {
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function total(values) {
+    return values.reduce((sum, v) => sum + v, 0);
+}
+
+function timeStringToMinutes(timeStr) {
+    if (!timeStr) return null;
+    const [h, m] = timeStr.split(':').map(Number);
+    return (h * 60) + m;
+}
+
+function isoTimestampToMinutes(timestamp) {
+    const d = new Date(timestamp);
+    if (Number.isNaN(d.getTime())) return null;
+    return (d.getHours() * 60) + d.getMinutes();
+}
+
+function renderTodayHrChart() {
+    const canvas = document.getElementById('todayHrChart');
+    const dataEl = document.getElementById('today-hr-samples');
+    if (!canvas || !dataEl) return;
+
+    let samples = [];
+    try {
+        samples = JSON.parse(dataEl.textContent || '[]');
+    } catch (e) {
+        samples = [];
+    }
+    if (!samples.length) return;
+
+    const rolledUp = rollupByTimeBucket(
+        samples,
+        ROLLUP_BUCKET_MINUTES,
+        (s) => timeStringToMinutes(s.sample_time),
+        (s) => s.heart_rate,
+        average
+    );
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: rolledUp.map(p => p.label),
+            datasets: [{
+                label: 'Heart Rate',
+                data: rolledUp.map(p => Math.round(p.value)),
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.raw} bpm (avg over ${ROLLUP_BUCKET_MINUTES}m)`
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+                y: { beginAtZero: false, grid: { color: '#f3f4f6' }, title: { display: true, text: 'BPM' } }
+            }
+        }
+    });
+}
+
+// Today's Steps (bar) - parses the samples_json already loaded on the latest
+// ActivitySamples row, embedded server-side as inline JSON (minute-by-minute
+// step counts per interval). Rolled up into coarser buckets (sum) so the bars
+// read as a clean intraday activity profile instead of hundreds of spikes.
+function renderTodayStepsChart() {
+    const canvas = document.getElementById('todayStepsChart');
+    const dataEl = document.getElementById('today-steps-samples');
+    if (!canvas || !dataEl) return;
+
+    let samples = [];
+    try {
+        samples = JSON.parse(dataEl.textContent || '[]');
+    } catch (e) {
+        samples = [];
+    }
+    if (!samples.length) return;
+
+    const rolledUp = rollupByTimeBucket(
+        samples,
+        ROLLUP_BUCKET_MINUTES,
+        (s) => isoTimestampToMinutes(s.timestamp),
+        (s) => s.steps,
+        total
+    );
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: rolledUp.map(p => p.label),
+            datasets: [{
+                label: 'Steps',
+                data: rolledUp.map(p => p.value),
+                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                borderRadius: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.raw} steps (${ROLLUP_BUCKET_MINUTES}m total)`
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: '#f3f4f6' }, title: { display: true, text: 'Steps' } }
+            }
+        }
+    });
+}
+
 // Initialize dashboard tabs (charts are lazy-loaded per tab, on first visit)
-document.addEventListener('DOMContentLoaded', initDashboardTabs);
+document.addEventListener('DOMContentLoaded', () => {
+    initDashboardTabs();
+    renderTodaySleepStagesChart();
+    renderTodayHrChart();
+    renderTodayStepsChart();
+});
 
 </script>
 {% endblock %}
