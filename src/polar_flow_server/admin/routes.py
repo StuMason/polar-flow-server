@@ -768,11 +768,6 @@ async def admin_dashboard(
         cardio=latest_cardio,
     )
 
-    # Get API keys data
-    api_keys_stmt = select(APIKey).order_by(APIKey.created_at.desc())
-    api_keys_result = await session.execute(api_keys_stmt)
-    api_keys = api_keys_result.scalars().all()
-
     # Get scheduler status
     scheduler = get_scheduler()
     scheduler_status = (
@@ -869,8 +864,6 @@ async def admin_dashboard(
             "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,
-            # API keys
-            "api_keys": api_keys,
             # Sync scheduler
             "sync_interval_minutes": settings.sync_interval_minutes,
             "scheduler_status": scheduler_status,
@@ -1164,12 +1157,18 @@ async def admin_settings(
     user_result = await session.execute(user_stmt)
     connected_user = user_result.scalar_one_or_none()
 
+    # Get API keys
+    api_keys_stmt = select(APIKey).order_by(APIKey.created_at.desc())
+    api_keys_result = await session.execute(api_keys_stmt)
+    api_keys = api_keys_result.scalars().all()
+
     return Template(
         template_name="admin/settings.html",
         context={
             "has_credentials": bool(app_settings and app_settings.polar_client_id),
             "client_id": app_settings.polar_client_id if app_settings else None,
             "connected_user": connected_user,
+            "api_keys": api_keys,
         },
     )
 
