@@ -32,6 +32,13 @@
             crossorigin="anonymous"></script>
     <style>
         [x-cloak] { display: none !important; }
+        /* Always reserve space for the vertical scrollbar so switching between
+           tabs of different content height (e.g. dashboard tabs) doesn't shift
+           the whole page horizontally when the scrollbar appears/disappears. */
+        html {
+            scrollbar-gutter: stable;
+            overflow-y: scroll;
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">

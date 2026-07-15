@@ -115,34 +115,34 @@
 </div>
 {% endif %}
 
-<!-- Dashboard Tabs (frontend only) -->
-<div class="mb-6 border-b border-gray-200">
+<!-- Dashboard Tabs (frontend only) - desktop/tablet top bar -->
+<div class="mb-6 hidden border-b border-gray-200 md:block">
     <div class="flex items-center gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Dashboard sections">
-        <button type="button" data-tab="overview" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700" role="tab" aria-selected="true">
+        <button type="button" data-tab="overview" data-tab-variant="top" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-indigo-600 text-indigo-700" role="tab" aria-selected="true">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
             </svg>
             Overview
         </button>
-        <button type="button" data-tab="trends" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+        <button type="button" data-tab="trends" data-tab-variant="top" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8"></path>
             </svg>
             Trends &amp; Baselines
         </button>
-        <button type="button" data-tab="sleep" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+        <button type="button" data-tab="sleep" data-tab-variant="top" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
             </svg>
             Sleep
         </button>
-        <button type="button" data-tab="heart" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+        <button type="button" data-tab="heart" data-tab-variant="top" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
             </svg>
             Heart Rate
         </button>
-        <button type="button" data-tab="training" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
+        <button type="button" data-tab="training" data-tab-variant="top" class="dashboard-tab-btn inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" role="tab" aria-selected="false">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
             </svg>
@@ -150,6 +150,44 @@
         </button>
     </div>
 </div>
+
+<!-- Dashboard Tabs (frontend only) - mobile floating bottom bar -->
+<nav
+    class="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-gray-200 bg-white/95 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur pb-[env(safe-area-inset-bottom)] md:hidden"
+    role="tablist"
+    aria-label="Dashboard sections"
+>
+    <button type="button" data-tab="overview" data-tab-variant="bottom" class="dashboard-tab-btn flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-indigo-600" role="tab" aria-selected="true">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+        </svg>
+        Overview
+    </button>
+    <button type="button" data-tab="sleep" data-tab-variant="bottom" class="dashboard-tab-btn flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-gray-500" role="tab" aria-selected="false">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+        </svg>
+        Sleep
+    </button>
+    <button type="button" data-tab="heart" data-tab-variant="bottom" class="dashboard-tab-btn flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-gray-500" role="tab" aria-selected="false">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+        </svg>
+        Heart
+    </button>
+    <button type="button" data-tab="training" data-tab-variant="bottom" class="dashboard-tab-btn flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-gray-500" role="tab" aria-selected="false">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        Training
+    </button>
+    <button type="button" data-tab="trends" data-tab-variant="bottom" class="dashboard-tab-btn flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium text-gray-500" role="tab" aria-selected="false">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8"></path>
+        </svg>
+        Trends
+    </button>
+</nav>
 
 <!-- Top Metrics: grouped for scanability -->
 <div class="mb-6" id="stats-container" data-tab-panel="overview">
@@ -710,6 +748,9 @@
 </div>
 {% endif %}
 
+<!-- Reserve space so the fixed mobile bottom nav never covers the last section -->
+<div class="h-20 md:hidden" aria-hidden="true"></div>
+
 <!-- Chart.js Initialization -->
 <script>
 // Chart instances, keyed by chart name. Charts are only ever created while their
@@ -744,10 +785,18 @@ function setActiveDashboardTab(tab) {
     buttons.forEach(btn => {
         const isActive = btn.dataset.tab === tab;
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-        btn.classList.toggle('border-indigo-600', isActive);
-        btn.classList.toggle('text-indigo-700', isActive);
-        btn.classList.toggle('border-transparent', !isActive);
-        btn.classList.toggle('text-gray-500', !isActive);
+
+        if (btn.dataset.tabVariant === 'bottom') {
+            // Mobile floating nav: highlight with color only, no underline border.
+            btn.classList.toggle('text-indigo-600', isActive);
+            btn.classList.toggle('text-gray-500', !isActive);
+        } else {
+            // Desktop/tablet top bar: underline style.
+            btn.classList.toggle('border-indigo-600', isActive);
+            btn.classList.toggle('text-indigo-700', isActive);
+            btn.classList.toggle('border-transparent', !isActive);
+            btn.classList.toggle('text-gray-500', !isActive);
+        }
     });
 
     panels.forEach(panel => {
