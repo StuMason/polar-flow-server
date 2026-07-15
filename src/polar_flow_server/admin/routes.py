@@ -643,33 +643,6 @@ async def admin_dashboard(
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
-    # Get data counts for all endpoints
-    sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
-    exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-    activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
-    recharge_count = (await session.execute(select(func.count(NightlyRecharge.id)))).scalar() or 0
-    cardio_load_count = (await session.execute(select(func.count(CardioLoad.id)))).scalar() or 0
-    alertness_count = (
-        await session.execute(select(func.count(SleepWiseAlertness.id)))
-    ).scalar() or 0
-    bedtime_count = (await session.execute(select(func.count(SleepWiseBedtime.id)))).scalar() or 0
-    activity_samples_count = (
-        await session.execute(select(func.count(ActivitySamples.id)))
-    ).scalar() or 0
-    continuous_hr_count = (
-        await session.execute(select(func.count(ContinuousHeartRate.id)))
-    ).scalar() or 0
-
-    # Biosensing counts (v1.4.0)
-    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
-    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
-    body_temp_count = (await session.execute(select(func.count(BodyTemperature.id)))).scalar() or 0
-    skin_temp_count = (await session.execute(select(func.count(SkinTemperature.id)))).scalar() or 0
-
-    # Analytics counts
-    baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
-    pattern_count = (await session.execute(select(func.count(PatternAnalysis.id)))).scalar() or 0
-
     # Get latest sleep data (last 7 days)
     since_date = date.today() - timedelta(days=7)
     recent_sleep_stmt = (
@@ -768,38 +741,10 @@ async def admin_dashboard(
         cardio=latest_cardio,
     )
 
-    # Get scheduler status
-    scheduler = get_scheduler()
-    scheduler_status = (
-        scheduler.get_status()
-        if scheduler
-        else {
-            "enabled": settings.sync_enabled,
-            "is_running": False,
-            "interval_minutes": settings.sync_interval_minutes,
-            "next_run_at": None,
-            "last_run_at": None,
-            "last_run_stats": None,
-        }
-    )
-
     # Get recent sync logs
     sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
     sync_logs_result = await session.execute(sync_logs_stmt)
     recent_sync_logs = sync_logs_result.scalars().all()
-
-    # Calculate sync stats
-    last_24h = datetime.now(UTC) - timedelta(hours=24)
-    sync_stats_stmt = select(SyncLog).where(SyncLog.started_at >= last_24h)
-    sync_stats_result = await session.execute(sync_stats_stmt)
-    recent_syncs = sync_stats_result.scalars().all()
-
-    sync_stats = {
-        "total_24h": len(recent_syncs),
-        "successful_24h": sum(1 for s in recent_syncs if s.status == "success"),
-        "failed_24h": sum(1 for s in recent_syncs if s.status == "failed"),
-        "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
-    }
 
     # Get analytics data: baselines and patterns for the connected user
     user_baselines: list[UserBaseline] = []
@@ -832,24 +777,6 @@ async def admin_dashboard(
     return Template(
         template_name="admin/dashboard.html",
         context={
-            # Core data counts
-            "sleep_count": sleep_count,
-            "exercise_count": exercise_count,
-            "activity_count": activity_count,
-            "recharge_count": recharge_count,
-            "cardio_load_count": cardio_load_count,
-            "alertness_count": alertness_count,
-            "bedtime_count": bedtime_count,
-            "activity_samples_count": activity_samples_count,
-            "continuous_hr_count": continuous_hr_count,
-            # Biosensing counts
-            "spo2_count": spo2_count,
-            "ecg_count": ecg_count,
-            "body_temp_count": body_temp_count,
-            "skin_temp_count": skin_temp_count,
-            # Analytics counts
-            "baseline_count": baseline_count,
-            "pattern_count": pattern_count,
             # Latest data
             "recent_sleep": recent_sleep,
             "recent_recharge": recent_recharge,
@@ -864,11 +791,8 @@ async def admin_dashboard(
             "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,
-            # Sync scheduler
-            "sync_interval_minutes": settings.sync_interval_minutes,
-            "scheduler_status": scheduler_status,
+            # Sync history (for top badge)
             "recent_sync_logs": recent_sync_logs,
-            "sync_stats": sync_stats,
             # Analytics
             "user_baselines": user_baselines,
             "user_patterns": user_patterns,
@@ -1162,6 +1086,66 @@ async def admin_settings(
     api_keys_result = await session.execute(api_keys_stmt)
     api_keys = api_keys_result.scalars().all()
 
+    # Get data counts for all endpoints
+    sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
+    exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
+    activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
+    recharge_count = (await session.execute(select(func.count(NightlyRecharge.id)))).scalar() or 0
+    cardio_load_count = (await session.execute(select(func.count(CardioLoad.id)))).scalar() or 0
+    alertness_count = (
+        await session.execute(select(func.count(SleepWiseAlertness.id)))
+    ).scalar() or 0
+    bedtime_count = (await session.execute(select(func.count(SleepWiseBedtime.id)))).scalar() or 0
+    activity_samples_count = (
+        await session.execute(select(func.count(ActivitySamples.id)))
+    ).scalar() or 0
+    continuous_hr_count = (
+        await session.execute(select(func.count(ContinuousHeartRate.id)))
+    ).scalar() or 0
+
+    # Biosensing counts (v1.4.0)
+    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
+    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
+    body_temp_count = (await session.execute(select(func.count(BodyTemperature.id)))).scalar() or 0
+    skin_temp_count = (await session.execute(select(func.count(SkinTemperature.id)))).scalar() or 0
+
+    # Analytics counts
+    baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
+    pattern_count = (await session.execute(select(func.count(PatternAnalysis.id)))).scalar() or 0
+
+    # Get scheduler status
+    scheduler = get_scheduler()
+    scheduler_status = (
+        scheduler.get_status()
+        if scheduler
+        else {
+            "enabled": settings.sync_enabled,
+            "is_running": False,
+            "interval_minutes": settings.sync_interval_minutes,
+            "next_run_at": None,
+            "last_run_at": None,
+            "last_run_stats": None,
+        }
+    )
+
+    # Get recent sync logs
+    sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
+    sync_logs_result = await session.execute(sync_logs_stmt)
+    recent_sync_logs = sync_logs_result.scalars().all()
+
+    # Calculate sync stats
+    last_24h = datetime.now(UTC) - timedelta(hours=24)
+    sync_stats_stmt = select(SyncLog).where(SyncLog.started_at >= last_24h)
+    sync_stats_result = await session.execute(sync_stats_stmt)
+    recent_syncs = sync_stats_result.scalars().all()
+
+    sync_stats = {
+        "total_24h": len(recent_syncs),
+        "successful_24h": sum(1 for s in recent_syncs if s.status == "success"),
+        "failed_24h": sum(1 for s in recent_syncs if s.status == "failed"),
+        "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
+    }
+
     return Template(
         template_name="admin/settings.html",
         context={
@@ -1169,6 +1153,29 @@ async def admin_settings(
             "client_id": app_settings.polar_client_id if app_settings else None,
             "connected_user": connected_user,
             "api_keys": api_keys,
+            # Core data counts
+            "sleep_count": sleep_count,
+            "exercise_count": exercise_count,
+            "activity_count": activity_count,
+            "recharge_count": recharge_count,
+            "cardio_load_count": cardio_load_count,
+            "alertness_count": alertness_count,
+            "bedtime_count": bedtime_count,
+            "activity_samples_count": activity_samples_count,
+            "continuous_hr_count": continuous_hr_count,
+            # Biosensing counts
+            "spo2_count": spo2_count,
+            "ecg_count": ecg_count,
+            "body_temp_count": body_temp_count,
+            "skin_temp_count": skin_temp_count,
+            # Analytics counts
+            "baseline_count": baseline_count,
+            "pattern_count": pattern_count,
+            # Sync scheduler
+            "sync_interval_minutes": settings.sync_interval_minutes,
+            "scheduler_status": scheduler_status,
+            "recent_sync_logs": recent_sync_logs,
+            "sync_stats": sync_stats,
         },
     )
 
