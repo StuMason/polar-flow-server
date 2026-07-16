@@ -32,7 +32,7 @@ class NightlyRecharge(Base, UserScopedMixin, TimestampMixin):
     # Recharge date
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
 
-    # ANS charge (0-100)
+    # ANS charge (-10 to +10)
     ans_charge: Mapped[float | None] = mapped_column(Float)
     ans_charge_status: Mapped[int | None] = mapped_column(
         Integer,
