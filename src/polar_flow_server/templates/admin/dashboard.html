@@ -497,7 +497,7 @@
                             {% if recharge.hrv_avg %}{{ recharge.hrv_avg|round(0) }} ms{% else %}--{% endif %}
                         </td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                            {% if recharge.ans_charge %}{{ recharge.ans_charge|round(0) }}%{% else %}--{% endif %}
+                            {% if recharge.ans_charge is not none %}{{ recharge.ans_charge|round(1) }}{% else %}--{% endif %}
                         </td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm">
                             {% if recharge.nightly_recharge_status %}
