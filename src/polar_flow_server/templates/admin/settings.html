@@ -245,19 +245,10 @@
 
     <!-- Background Sync -->
     <div class="bg-white shadow rounded-lg p-6 mt-6">
-        {% set scheduler = scheduler_status|default({
-            'is_running': false,
-            'enabled': false,
-            'next_run_at': none,
-            'last_run_at': none
-        }, true) %}
-        {% set interval_minutes = sync_interval_minutes|default(60, true) %}
-        {% set stats = sync_stats|default({
-            'successful_24h': 0,
-            'total_24h': 0,
-            'failed_24h': 0
-        }, true) %}
-        {% set logs = recent_sync_logs|default([], true) %}
+        {% set scheduler = scheduler_status %}
+        {% set interval_minutes = sync_interval_minutes %}
+        {% set stats = sync_stats %}
+        {% set logs = recent_sync_logs %}
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h2 class="text-lg font-semibold text-gray-900">Background Sync</h2>
