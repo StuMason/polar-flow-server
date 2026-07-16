@@ -928,7 +928,7 @@ const chartDescriptions = {
     hrv: {
         title: 'Recovery Metrics',
         hrv_avg: 'Heart Rate Variability in ms. Higher = better recovery. Track your baseline.',
-        ans_charge: 'ANS Charge (%). How well your autonomic nervous system recovered overnight.'
+        ans_charge: 'ANS Charge (-10 to +10). Higher values indicate better overnight ANS recovery.'
     },
     cardio: {
         title: 'Training Load',
@@ -1332,7 +1332,7 @@ function renderHrvChart(hrvData) {
                     yAxisID: 'y'
                 },
                 {
-                    label: 'ANS Charge (%)',
+                    label: 'ANS Charge',
                     data: hrvData.datasets.ans_charge,
                     borderColor: '#06b6d4',
                     borderDash: [5, 5],
@@ -1355,10 +1355,10 @@ function renderHrvChart(hrvData) {
                             if (label === 'HRV (ms)') {
                                 return '  Higher = better recovery. Track your personal baseline.';
                             }
-                            if (label === 'ANS Charge (%)') {
-                                if (v >= 70) return '  Excellent recovery';
-                                if (v >= 50) return '  Good recovery';
-                                if (v >= 30) return '  Moderate - take it easy';
+                            if (label === 'ANS Charge') {
+                                if (v >= 5) return '  Excellent recovery';
+                                if (v >= 1) return '  Good recovery';
+                                if (v >= -3) return '  Moderate - take it easy';
                                 return '  Poor - prioritize rest';
                             }
                             return '';
@@ -1369,7 +1369,7 @@ function renderHrvChart(hrvData) {
             scales: {
                 ...commonOptions.scales,
                 y: { ...commonOptions.scales.y, title: { display: true, text: 'HRV (ms)' } },
-                y1: { position: 'right', beginAtZero: true, max: 100, title: { display: true, text: 'ANS %' }, grid: { display: false } }
+                y1: { position: 'right', min: -10, max: 10, title: { display: true, text: 'ANS Charge' }, grid: { display: false } }
             }
         }
     });
