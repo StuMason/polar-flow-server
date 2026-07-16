@@ -522,7 +522,7 @@
 
 <!-- Heart Charts -->
 <div class="mb-6 hidden" data-tab-panel="heart">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Heart Rate (Min/Avg/Max)</h3>
             <div class="h-64">
@@ -530,39 +530,57 @@
             </div>
         </div>
 
+        <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-sm font-medium text-gray-700 mb-4">
+                Heart Rate Today{% if latest_hr %} ({{ latest_hr.date }}){% endif %}
+            </h3>
+            {% if latest_hr %}
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-gray-500 text-xs uppercase">Min</div>
+                    <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_min if latest_hr.hr_min else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+                </div>
+                <div>
+                    <div class="text-gray-500 text-xs uppercase">Avg</div>
+                    <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_avg if latest_hr.hr_avg else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+                </div>
+                <div>
+                    <div class="text-gray-500 text-xs uppercase">Max</div>
+                    <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_max if latest_hr.hr_max else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
+                </div>
+                <div>
+                    <div class="text-gray-500 text-xs uppercase">Samples</div>
+                    <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
+                </div>
+            </div>
+
+            {% if latest_hr.samples_json %}
+            <div class="mt-4 h-40">
+                <canvas id="todayHrHeartTabChart"></canvas>
+            </div>
+            {% else %}
+            <p class="mt-4 text-xs text-gray-500">No intraday heart-rate samples available for this date.</p>
+            {% endif %}
+            {% else %}
+            <div class="h-40 flex items-center justify-center text-sm text-gray-400">No heart rate summary yet</div>
+            {% endif %}
+        </div>
+
         <div class="bg-white shadow rounded-lg p-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-3">HRV & Recovery</h3>
+            <h3 class="text-sm font-medium text-gray-700 mb-3">HRV (RMSSD)</h3>
             <div class="h-64">
                 <canvas id="hrvChart"></canvas>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Continuous HR Details -->
-{% if latest_hr %}
-<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Heart Rate ({{ latest_hr.date }})</h2>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Min</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_min if latest_hr.hr_min else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Avg</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_avg if latest_hr.hr_avg else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Max</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.hr_max if latest_hr.hr_max else '--' }} <span class="text-sm font-normal text-gray-500">bpm</span></div>
-        </div>
-        <div>
-            <div class="text-gray-500 text-xs uppercase">Samples</div>
-            <div class="text-xl font-bold text-gray-900">{{ latest_hr.sample_count }}</div>
+        <div class="bg-white shadow rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-3">ANS Charge</h3>
+            <div class="h-64">
+                <canvas id="ansChart"></canvas>
+            </div>
         </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Training Charts -->
 <div class="mb-6 hidden" data-tab-panel="training">
@@ -823,12 +841,12 @@
 // Chart instances, keyed by chart name. Charts are only ever created while their
 // tab panel is visible, so Chart.js measures the real canvas size and the default
 // entrance animation behaves consistently every time (no more reveal glitch).
-const charts = { sleepScore: null, sleepDuration: null, activity: null, hr: null, hrv: null, cardio: null };
+const charts = { sleepScore: null, sleepDuration: null, activity: null, hr: null, hrv: null, ans: null, todayHrHeart: null, cardio: null };
 
 // Which chart keys belong to each tab.
 const chartsByTab = {
     sleep: ['sleepScore', 'sleepDuration'],
-    heart: ['hr', 'hrv'],
+    heart: ['hr', 'hrv', 'ans', 'todayHrHeart'],
     training: ['activity', 'cardio']
 };
 
@@ -1016,6 +1034,8 @@ async function loadChartsForTab(tab) {
         ]);
         renderHrChart(hrData);
         renderHrvChart(hrvData);
+        renderAnsChart(hrvData);
+        renderTodayHrHeartTabChart();
     } else if (tab === 'training') {
         const [activityData, cardioData] = await Promise.all([
             fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
@@ -1092,6 +1112,46 @@ const scoreLevelLinesPlugin = {
     }
 };
 Chart.register(scoreLevelLinesPlugin);
+
+// Dashed guide lines for ANS charge interpretation on the secondary y-axis.
+const ansReferenceLinesPlugin = {
+    id: 'ansReferenceLines',
+    afterDraw(chart, _args, options) {
+        if (!options || !options.levels || !options.levels.length) return;
+        const { ctx, chartArea, scales } = chart;
+        const yScale = scales[options.yScaleId || 'y1'];
+        if (!yScale) return;
+
+        ctx.save();
+        ctx.textBaseline = 'middle';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'right';
+
+        options.levels.forEach((level) => {
+            if (typeof level.value !== 'number') return;
+
+            const y = yScale.getPixelForValue(level.value);
+            if (y < chartArea.top || y > chartArea.bottom) return;
+
+            ctx.strokeStyle = level.color || '#9ca3af';
+            ctx.lineWidth = 1;
+            ctx.setLineDash(level.dash || [4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (level.label) {
+                ctx.fillStyle = level.color || '#6b7280';
+                ctx.fillText(level.label, chartArea.right - 6, y - 8);
+            }
+        });
+
+        ctx.restore();
+    }
+};
+Chart.register(ansReferenceLinesPlugin);
 
 function renderSleepScoreChart(sleepData) {
     if (charts.sleepScore) charts.sleepScore.destroy();
@@ -1328,16 +1388,7 @@ function renderHrvChart(hrvData) {
                     borderColor: '#8b5cf6',
                     backgroundColor: 'rgba(139, 92, 246, 0.1)',
                     fill: true,
-                    tension: 0.3,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'ANS Charge',
-                    data: hrvData.datasets.ans_charge,
-                    borderColor: '#06b6d4',
-                    borderDash: [5, 5],
-                    tension: 0.3,
-                    yAxisID: 'y1'
+                    tension: 0.3
                 }
             ]
         },
@@ -1348,28 +1399,68 @@ function renderHrvChart(hrvData) {
                 tooltip: {
                     ...commonOptions.plugins.tooltip,
                     callbacks: {
-                        afterTitle: () => 'Recovery Metrics',
+                        afterTitle: () => 'HRV Trend',
+                        afterLabel: () => '  Higher = better recovery. Track your personal baseline.'
+                    }
+                }
+            },
+            scales: {
+                ...commonOptions.scales,
+                y: { ...commonOptions.scales.y, title: { display: true, text: 'HRV (ms)' } }
+            }
+        }
+    });
+}
+
+// ANS Charge Chart
+function renderAnsChart(hrvData) {
+    if (charts.ans) charts.ans.destroy();
+    const hrvLabels = hrvData.labels.map(formatDateLabel);
+    charts.ans = new Chart(document.getElementById('ansChart'), {
+        type: 'line',
+        data: {
+            labels: hrvLabels,
+            datasets: [
+                {
+                    label: 'ANS Charge',
+                    data: hrvData.datasets.ans_charge,
+                    borderColor: '#06b6d4',
+                    borderDash: [5, 5],
+                    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+                    fill: true,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                ansReferenceLines: {
+                    yScaleId: 'y',
+                    levels: [
+                        { value: 5, label: '+5', color: '#22c55e', dash: [5, 5] },
+                        { value: 0, label: '0', color: '#6b7280', dash: [6, 3] },
+                        { value: -5, label: '-5', color: '#f59e0b', dash: [5, 5] }
+                    ]
+                },
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        afterTitle: () => 'ANS Charge Trend',
                         afterLabel: (ctx) => {
-                            const label = ctx.dataset.label;
                             const v = ctx.raw;
-                            if (label === 'HRV (ms)') {
-                                return '  Higher = better recovery. Track your personal baseline.';
-                            }
-                            if (label === 'ANS Charge') {
-                                if (v >= 5) return '  Excellent recovery';
-                                if (v >= 1) return '  Good recovery';
-                                if (v >= -3) return '  Moderate - take it easy';
-                                return '  Poor - prioritize rest';
-                            }
-                            return '';
+                            if (v >= 5) return '  Excellent recovery';
+                            if (v >= 1) return '  Good recovery';
+                            if (v >= -3) return '  Moderate - take it easy';
+                            return '  Poor - prioritize rest';
                         }
                     }
                 }
             },
             scales: {
                 ...commonOptions.scales,
-                y: { ...commonOptions.scales.y, title: { display: true, text: 'HRV (ms)' } },
-                y1: { position: 'right', min: -10, max: 10, title: { display: true, text: 'ANS Charge' }, grid: { display: false } }
+                y: { ...commonOptions.scales.y, min: -10, max: 10, title: { display: true, text: 'ANS Charge' } }
             }
         }
     });
@@ -1692,6 +1783,64 @@ function renderTodayHrChart() {
             scales: {
                 x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
                 y: { beginAtZero: false, grid: { color: '#f3f4f6' }, title: { display: true, text: 'BPM' } }
+            }
+        }
+    });
+}
+
+function renderTodayHrHeartTabChart() {
+    const canvas = document.getElementById('todayHrHeartTabChart');
+    const dataEl = document.getElementById('today-hr-samples');
+    if (!canvas || !dataEl) return;
+
+    let samples = [];
+    try {
+        samples = JSON.parse(dataEl.textContent || '[]');
+    } catch (e) {
+        samples = [];
+    }
+    if (!samples.length) return;
+
+    if (charts.todayHrHeart) charts.todayHrHeart.destroy();
+
+    const rolledUp = rollupByTimeBucket(
+        samples,
+        ROLLUP_BUCKET_MINUTES,
+        (s) => timeStringToMinutes(s.sample_time),
+        (s) => s.heart_rate,
+        average
+    );
+
+    charts.todayHrHeart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: rolledUp.map(p => p.label),
+            datasets: [{
+                label: 'Today HR',
+                data: rolledUp.map(p => Math.round(p.value)),
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 450 },
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.raw} bpm (avg over ${ROLLUP_BUCKET_MINUTES}m)`
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+                y: { beginAtZero: false, title: { display: true, text: 'BPM' }, grid: { color: '#f3f4f6' } }
             }
         }
     });
