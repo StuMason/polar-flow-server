@@ -263,11 +263,11 @@ def _calculate_recovery_status(
             recommendations.append("Poor sleep. Prioritize recovery over training.")
         factors.append(sleep_score)
 
-    # HRV/ANS factor (0-100)
+    # HRV/ANS factor (0-100), normalized from Polar's ANS charge scale (-10 to +10)
     ans_score: float = 50.0  # default
     if recharge:
-        if recharge.ans_charge:
-            ans_score = float(recharge.ans_charge)
+        if recharge.ans_charge is not None:
+            ans_score = min(100.0, max(0.0, (float(recharge.ans_charge) + 10.0) * 5.0))
             if ans_score >= 70:
                 recommendations.append("ANS recovery is excellent. Your body is ready for stress.")
             elif ans_score >= 50:
