@@ -54,7 +54,14 @@ class ContinuousHRTransformer:
         hr_avg = None
 
         if samples:
-            hr_values = [s.heart_rate for s in samples]
+            # Ignore non-physiological placeholders when computing aggregates.
+            hr_values = [
+                s.heart_rate for s in samples if s.heart_rate is not None and s.heart_rate > 0
+            ]
+        else:
+            hr_values = []
+
+        if hr_values:
             hr_min = min(hr_values)
             hr_max = max(hr_values)
             hr_avg = round(sum(hr_values) / len(hr_values))

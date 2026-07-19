@@ -196,7 +196,7 @@ async def seed_analytics_data(
         recharge = NightlyRecharge(
             user_id=user_id,
             date=current_date,
-            ans_charge=random.uniform(40, 80),
+            ans_charge=random.uniform(-10, 10),
             ans_charge_status=random.randint(-1, 2),
             hrv_avg=hrv,
             hrv_status=0 if 25 <= hrv <= 45 else (-1 if hrv < 25 else 1),
