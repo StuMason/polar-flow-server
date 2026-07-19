@@ -1,5 +1,6 @@
 """Application configuration."""
 
+import os
 from enum import Enum
 from pathlib import Path
 from typing import Literal
@@ -130,58 +131,78 @@ class Settings(BaseSettings):
     def get_encryption_key(self) -> bytes:
         """Get encryption key for Polar tokens.
 
-        In self-hosted mode, generates and persists key to ~/.polar-flow/encryption.key
-        to ensure tokens survive server restarts.
+        In self-hosted mode, generates and persists key to /data/encryption.key
+        (or ~/.polar-flow/encryption.key if /data is not writable) to ensure
+        tokens survive server restarts.
 
         Raises:
             ValueError: If encryption key not set in SaaS mode
         """
+        import logging
+
+        from cryptography.fernet import Fernet
+        from pathlib import Path
+
+        logger = logging.getLogger(__name__)
+
         if self.encryption_key:
+            logger.info("Loaded encryption key from environment")
             return self.encryption_key.encode()
 
         if self.is_saas():
             raise ValueError("ENCRYPTION_KEY must be set in SaaS mode")
 
         # Self-hosted: persist key to file so tokens survive restarts
-        from pathlib import Path
-
-        from cryptography.fernet import Fernet
-
-        key_file = Path.home() / ".polar-flow" / "encryption.key"
+        key_dir = Path("/data")
+        if not key_dir.is_dir() or not os.access(key_dir, os.W_OK):
+            key_dir = Path.home() / ".polar-flow"
+        key_file = key_dir / "encryption.key"
         key_file.parent.mkdir(parents=True, exist_ok=True)
 
         if key_file.exists():
+            logger.info("Loaded encryption key from file", path=str(key_file))
             return key_file.read_bytes().strip()
 
         # Generate new key and persist
         key = Fernet.generate_key()
         key_file.write_bytes(key)
         key_file.chmod(0o600)  # Owner read/write only
+        logger.info("Generated fresh encryption key", path=str(key_file))
         return key
 
     def get_session_secret(self) -> str:
         """Get session secret for admin cookies.
 
-        In self-hosted mode, generates and persists secret to ~/.polar-flow/session.key
-        to ensure sessions survive server restarts.
+        In self-hosted mode, generates and persists secret to /data/session.key
+        (or ~/.polar-flow/session.key if /data is not writable) to ensure sessions
+        survive server restarts.
         """
-        if self.session_secret:
-            return self.session_secret
-
-        # Self-hosted: persist secret to file so sessions survive restarts
+        import logging
         import secrets
         from pathlib import Path
 
-        secret_file = Path.home() / ".polar-flow" / "session.key"
+        logger = logging.getLogger(__name__)
+
+        if self.session_secret:
+            logger.info("Loaded session secret from environment")
+            return self.session_secret
+
+        # Self-hosted: persist secret to file so sessions survive restarts
+        key_dir = Path("/data")
+        if not key_dir.is_dir() or not os.access(key_dir, os.W_OK):
+            key_dir = Path.home() / ".polar-flow"
+        secret_file = key_dir / "session.key"
         secret_file.parent.mkdir(parents=True, exist_ok=True)
 
         if secret_file.exists():
+            logger.info("Loaded session secret from file", path=str(secret_file))
             return secret_file.read_text().strip()
 
         # Generate new secret and persist
         secret = secrets.token_urlsafe(32)
         secret_file.write_text(secret)
         secret_file.chmod(0o600)  # Owner read/write only
+        logger.info("Generated fresh session secret", path=str(secret_file))
         return secret
 
 
