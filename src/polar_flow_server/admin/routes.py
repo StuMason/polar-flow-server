@@ -9,6 +9,7 @@ import re
 import secrets
 from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
+from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from typing import Any
 from urllib.parse import urlencode
 
@@ -493,28 +494,63 @@ async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> 
     )
 
 
-def _get_client_ip(request: Request[Any, Any, Any]) -> str:
-    """Get client IP from request, checking proxy headers only from trusted sources.
+def _trusted_proxy_matchers() -> tuple[set[str], list[IPv4Network | IPv6Network]]:
+    """Parse settings.trusted_proxies into literal hosts and IP networks."""
+    literals: set[str] = set()
+    networks: list[IPv4Network | IPv6Network] = []
+    for entry in settings.trusted_proxies.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            networks.append(ip_network(entry, strict=False))
+        except ValueError:
+            # Not an IP/CIDR — treat as a literal peer name (e.g. "localhost")
+            literals.add(entry)
+    return literals, networks
 
-    Only trusts X-Forwarded-For/X-Real-IP when request comes from localhost
-    (i.e., from a reverse proxy like nginx/Coolify running on the same host).
-    This prevents IP spoofing attacks where attackers set fake headers.
+
+def _is_trusted_proxy(host: str) -> bool:
+    literals, networks = _trusted_proxy_matchers()
+    if host in literals:
+        return True
+    try:
+        addr = ip_address(host)
+    except ValueError:
+        return False
+    return any(addr in network for network in networks)
+
+
+def _get_client_ip(request: Request[Any, Any, Any]) -> str:
+    """Get the real client IP, honouring proxy headers only from trusted proxies.
+
+    The direct peer must be in TRUSTED_PROXIES (IPs/CIDRs, e.g. the Docker
+    network the reverse proxy lives on) for X-Forwarded-For/X-Real-IP to be
+    considered at all. X-Forwarded-For is then walked right-to-left, skipping
+    trusted proxies: the first untrusted hop is the client. Never take the
+    leftmost entry — clients can prepend arbitrary values before the proxy
+    appends the real address, which would let an attacker pick their own
+    identity (dodging rate limits or locking out a victim's IP).
     """
     client = request.client
     direct_ip = client.host if client else "unknown"
 
-    # Only trust proxy headers if request comes from localhost (reverse proxy)
-    trusted_proxies = {"127.0.0.1", "::1", "localhost"}
-    if direct_ip in trusted_proxies:
-        # Check X-Forwarded-For header (set by proxies like nginx, Coolify)
-        forwarded_for = request.headers.get("x-forwarded-for")
-        if forwarded_for:
-            # Take the first IP (original client)
-            return forwarded_for.split(",")[0].strip()
-        # Check X-Real-IP header
-        real_ip = request.headers.get("x-real-ip")
-        if real_ip:
-            return real_ip
+    if not _is_trusted_proxy(direct_ip):
+        return direct_ip
+
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    hops = [hop.strip() for hop in forwarded_for.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if not _is_trusted_proxy(hop):
+            return hop
+    if hops:
+        # Every hop is a trusted proxy — the innermost is the closest to a client
+        return hops[0]
+
+    # X-Real-IP is set (not appended) by the proxy itself, safe from trusted peers
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
 
     return direct_ip
 
