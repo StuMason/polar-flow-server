@@ -1,5 +1,10 @@
 """polar-flow-server - Self-hosted health analytics server for Polar devices."""
 
-__version__ = "1.3.3"
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version("polar-flow-server")
+except PackageNotFoundError:  # running from a source checkout without an install
+    __version__ = "0.0.0+unknown"
 
 __all__ = ["__version__"]
