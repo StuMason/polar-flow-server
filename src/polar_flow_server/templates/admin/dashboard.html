@@ -1439,9 +1439,9 @@ function renderAnsChart(hrvData) {
                 ansReferenceLines: {
                     yScaleId: 'y',
                     levels: [
-                        { value: 5, label: '+5', color: '#22c55e', dash: [5, 5] },
+                        { value: 4, label: '+4', color: '#22c55e', dash: [5, 5] },
                         { value: 0, label: '0', color: '#6b7280', dash: [6, 3] },
-                        { value: -5, label: '-5', color: '#f59e0b', dash: [5, 5] }
+                        { value: -4, label: '-4', color: '#f59e0b', dash: [5, 5] }
                     ]
                 },
                 tooltip: {
@@ -1450,9 +1450,9 @@ function renderAnsChart(hrvData) {
                         afterTitle: () => 'ANS Charge Trend',
                         afterLabel: (ctx) => {
                             const v = ctx.raw;
-                            if (v >= 5) return '  Excellent recovery';
-                            if (v >= 1) return '  Good recovery';
-                            if (v >= -3) return '  Moderate - take it easy';
+                            if (v >= 4) return '  Excellent recovery';
+                            if (v >= 0) return '  Good recovery';
+                            if (v >= -4) return '  Moderate - take it easy';
                             return '  Poor - prioritize rest';
                         }
                     }
@@ -1733,6 +1733,10 @@ function isoTimestampToMinutes(timestamp) {
     return (h * 60) + m;
 }
 
+function isValidHeartRateValue(value) {
+    return value !== null && value !== undefined && value > 0;
+}
+
 function renderTodayHrChart() {
     const canvas = document.getElementById('todayHrChart');
     const dataEl = document.getElementById('today-hr-samples');
@@ -1746,8 +1750,11 @@ function renderTodayHrChart() {
     }
     if (!samples.length) return;
 
+    const validSamples = samples.filter((s) => isValidHeartRateValue(s.heart_rate));
+    if (!validSamples.length) return;
+
     const rolledUp = rollupByTimeBucket(
-        samples,
+        validSamples,
         ROLLUP_BUCKET_MINUTES,
         (s) => timeStringToMinutes(s.sample_time),
         (s) => s.heart_rate,
@@ -1801,10 +1808,13 @@ function renderTodayHrHeartTabChart() {
     }
     if (!samples.length) return;
 
+    const validSamples = samples.filter((s) => isValidHeartRateValue(s.heart_rate));
+    if (!validSamples.length) return;
+
     if (charts.todayHrHeart) charts.todayHrHeart.destroy();
 
     const rolledUp = rollupByTimeBucket(
-        samples,
+        validSamples,
         ROLLUP_BUCKET_MINUTES,
         (s) => timeStringToMinutes(s.sample_time),
         (s) => s.heart_rate,
