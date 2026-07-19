@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://polar:polar@localhost:5432/polar",
         description="PostgreSQL database URL",
     )
+    database_pool: Literal["default", "null"] = Field(
+        default="default",
+        description="Connection pooling strategy: 'default' (pooled) or 'null' "
+        "(fresh connection per use; needed when the app runs across event loops, "
+        "e.g. under the integration test client)",
+    )
 
     # Security
     api_key: str | None = Field(
@@ -61,6 +67,13 @@ class Settings(BaseSettings):
     session_secret: str | None = Field(
         default=None,
         description="Secret key for session cookies (auto-generated if not set)",
+    )
+    secure_cookies: bool = Field(
+        default=False,
+        description="Mark session/CSRF cookies Secure (browser only sends them "
+        "over HTTPS). Enable whenever the instance is served via HTTPS — the "
+        "browser checks the page origin, so TLS terminating at a reverse proxy "
+        "is fine. Leave off only for plain-http access (e.g. localhost dev).",
     )
     jwt_secret: str | None = Field(
         default=None,
