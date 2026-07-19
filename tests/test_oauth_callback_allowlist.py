@@ -76,9 +76,7 @@ class TestOAuthStartEndpoint:
         )
         assert response.status_code == 401
 
-    async def test_start_with_registered_callback_reaches_config_check(
-        self, app_client, allow
-    ):
+    async def test_start_with_registered_callback_reaches_config_check(self, app_client, allow):
         """Past validation, the next failure is unconfigured OAuth creds (404)
         — proving the allowlist let the registered origin through."""
         allow("https://app.example.com")
@@ -91,9 +89,7 @@ class TestOAuthStartEndpoint:
 
 
 class TestCallbackErrorHygiene:
-    async def test_exception_text_never_reaches_the_callback(
-        self, app_client, allow, monkeypatch
-    ):
+    async def test_exception_text_never_reaches_the_callback(self, app_client, allow, monkeypatch):
         """Force the token exchange to blow up with a sensitive message and
         assert only the generic 'server_error' token is redirected."""
         import httpx as httpx_module
@@ -124,9 +120,7 @@ class TestCallbackErrorHygiene:
 
         monkeypatch.setattr(httpx_module, "AsyncClient", ExplodingClient)
 
-        await _saas_oauth_states.set(
-            "test-state", "https://app.example.com/cb", None
-        )
+        await _saas_oauth_states.set("test-state", "https://app.example.com/cb", None)
         response = await app_client.get(
             "/oauth/callback",
             params={"code": "fake-code", "state": "test-state"},
