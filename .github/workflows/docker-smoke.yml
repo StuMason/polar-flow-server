@@ -1,0 +1,82 @@
+name: Docker Smoke Test
+
+# Builds the image and boots the REAL prod compose, then verifies the
+# properties the sandbox/unit tests can't: migrations run, /health answers,
+# the app runs as the unprivileged user, encryption keys survive a container
+# recreate, and the compose refuses to start without a Postgres password.
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - docker-entrypoint.sh
+      - docker-compose.prod.yml
+      - pyproject.toml
+      - uv.lock
+      - alembic/**
+      - src/**
+      - .github/workflows/docker-smoke.yml
+      - .github/docker-compose.smoke.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-entrypoint.sh
+      - docker-compose.prod.yml
+      - pyproject.toml
+      - uv.lock
+      - alembic/**
+      - src/**
+      - .github/workflows/docker-smoke.yml
+      - .github/docker-compose.smoke.yml
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f docker-compose.prod.yml -f .github/docker-compose.smoke.yml
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t polar-flow-server:smoke .
+
+      - name: Compose refuses to start without POSTGRES_PASSWORD
+        run: |
+          if $COMPOSE config > /dev/null 2>&1; then
+            echo "::error::compose accepted a missing POSTGRES_PASSWORD"
+            exit 1
+          fi
+          echo "OK: missing password rejected"
+
+      - name: Boot the stack
+        run: |
+          export POSTGRES_PASSWORD=smoke-test-password
+          $COMPOSE up -d --wait --wait-timeout 120
+
+      - name: Health endpoint answers
+        run: |
+          curl -fsS http://localhost:8000/health
+          echo
+
+      - name: App runs as the unprivileged user
+        run: |
+          export POSTGRES_PASSWORD=smoke-test-password
+          uid=$($COMPOSE exec -T polar-flow-server id -u)
+          echo "uid=$uid"
+          test "$uid" != "0"
+
+      - name: Encryption key survives a container recreate
+        run: |
+          export POSTGRES_PASSWORD=smoke-test-password
+          before=$($COMPOSE exec -T polar-flow-server sha256sum /data/keys/encryption.key)
+          $COMPOSE up -d --force-recreate --wait --wait-timeout 120 polar-flow-server
+          after=$($COMPOSE exec -T polar-flow-server sha256sum /data/keys/encryption.key)
+          echo "before: $before"
+          echo "after:  $after"
+          test "$before" = "$after"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          export POSTGRES_PASSWORD=smoke-test-password
+          $COMPOSE logs || true

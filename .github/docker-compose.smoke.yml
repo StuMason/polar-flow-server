@@ -1,0 +1,5 @@
+# Overlay for the docker-smoke workflow: run the prod compose against the
+# image built in CI instead of the published one.
+services:
+  polar-flow-server:
+    image: polar-flow-server:smoke
