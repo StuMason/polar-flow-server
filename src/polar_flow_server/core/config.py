@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://polar:polar@localhost:5432/polar",
         description="PostgreSQL database URL",
     )
+    database_pool: Literal["default", "null"] = Field(
+        default="default",
+        description="Connection pooling strategy: 'default' (pooled) or 'null' "
+        "(fresh connection per use; needed when the app runs across event loops, "
+        "e.g. under the integration test client)",
+    )
 
     # Security
     api_key: str | None = Field(
@@ -61,6 +67,13 @@ class Settings(BaseSettings):
     session_secret: str | None = Field(
         default=None,
         description="Secret key for session cookies (auto-generated if not set)",
+    )
+    trusted_proxies: str = Field(
+        default="127.0.0.1,::1",
+        description="Comma-separated IPs/CIDRs of reverse proxies whose "
+        "X-Forwarded-For/X-Real-IP headers are trusted for client IP detection "
+        "(e.g. '127.0.0.1,::1,172.16.0.0/12' when the proxy is another Docker "
+        "container). Requests from other peers use the direct socket address.",
     )
     jwt_secret: str | None = Field(
         default=None,
