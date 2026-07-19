@@ -61,7 +61,7 @@ async def test_chart_hrv_data_preserves_missing_ans_as_null(
     )
     await async_session.commit()
 
-    result = await admin_routes.chart_hrv_data(  # type: ignore[arg-type]
+    result = await admin_routes.chart_hrv_data.fn(  # type: ignore[arg-type]
         request=None,
         session=async_session,
         days=30,
