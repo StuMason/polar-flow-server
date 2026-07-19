@@ -57,9 +57,7 @@ class SecurityHeadersMiddleware:
 
         # TLS terminates at the reverse proxy; it tells us via X-Forwarded-Proto
         request_headers = dict(scope.get("headers") or [])
-        forwarded_proto = request_headers.get(b"x-forwarded-proto", b"").decode(
-            "latin-1"
-        )
+        forwarded_proto = request_headers.get(b"x-forwarded-proto", b"").decode("latin-1")
         is_https = scope.get("scheme") == "https" or forwarded_proto == "https"
 
         async def send_wrapper(message: Message) -> None:

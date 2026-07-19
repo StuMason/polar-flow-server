@@ -40,9 +40,7 @@ class TestSecurityHeaders:
         assert "strict-transport-security" not in response.headers
 
     async def test_hsts_present_when_edge_is_https(self, app_client):
-        response = await app_client.get(
-            "/health", headers={"X-Forwarded-Proto": "https"}
-        )
+        response = await app_client.get("/health", headers={"X-Forwarded-Proto": "https"})
         assert "strict-transport-security" in response.headers
 
 
@@ -65,9 +63,7 @@ class TestSecureCookiesFlag:
 
 
 class TestSessionCookieName:
-    async def test_session_cookie_is_named_session_not_the_secret(
-        self, app_client, admin_account
-    ):
+    async def test_session_cookie_is_named_session_not_the_secret(self, app_client, admin_account):
         """Issue #97: the session secret must never appear as the cookie NAME."""
         response = await app_client.post(
             "/admin/login",
@@ -75,9 +71,7 @@ class TestSessionCookieName:
             follow_redirects=False,
         )
         assert response.status_code == 303
-        cookie_names = [
-            c.split("=", 1)[0] for c in response.headers.get_list("set-cookie")
-        ]
+        cookie_names = [c.split("=", 1)[0] for c in response.headers.get_list("set-cookie")]
         assert "session" in cookie_names
         secret = settings.get_session_secret()
         assert secret not in cookie_names
@@ -128,9 +122,7 @@ class TestScriptBlockEscaping:
 
         from jinja2 import Environment
 
-        template_source = (
-            Path("src/polar_flow_server/templates/admin/dashboard.html").read_text()
-        )
+        template_source = Path("src/polar_flow_server/templates/admin/dashboard.html").read_text()
         expressions = re.findall(r"\{\{ [a-z_.]+samples_json[^}]*\}\}", template_source)
         assert len(expressions) == 2, "expected the two JSON island expressions"
 
