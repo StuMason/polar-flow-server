@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://polar:polar@localhost:5432/polar",
         description="PostgreSQL database URL",
     )
+    database_pool: Literal["default", "null"] = Field(
+        default="default",
+        description="Connection pooling strategy: 'default' (pooled) or 'null' "
+        "(fresh connection per use; needed when the app runs across event loops, "
+        "e.g. under the integration test client)",
+    )
 
     # Security
     api_key: str | None = Field(

@@ -36,6 +36,7 @@ from polar_flow_server.core.api_keys import (
 )
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.security import token_encryption
+from polar_flow_server.core.setup_token import announce_setup_token, verify_setup_token
 from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.activity_samples import ActivitySamples
 from polar_flow_server.models.api_key import APIKey
@@ -201,6 +202,9 @@ class LoginRateLimiter:
 
 # Global rate limiter instance
 _login_rate_limiter = LoginRateLimiter(max_attempts=5, lockout_minutes=15)
+
+# Serializes first-run admin creation (see setup_account_submit)
+_setup_lock = asyncio.Lock()
 
 # Simple email validation pattern
 _EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -398,6 +402,10 @@ async def setup_account_form(
     if await admin_user_exists(session):
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
+    # (Re-)print the token so `docker logs` right after loading this page
+    # always shows it — visitors only see the form, never the token.
+    announce_setup_token()
+
     return Template(
         template_name="admin/setup_account.html",
         context={"csrf_token": _get_csrf_token(request)},
@@ -410,7 +418,9 @@ async def setup_account_submit(
 ) -> Template | Redirect:
     """Create the first admin account.
 
-    Only accessible if no admin user exists yet.
+    Only accessible if no admin user exists yet, and only with the setup
+    token from the server log — otherwise the first visitor to reach an
+    exposed instance could claim it.
     """
     if await admin_user_exists(session):
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
@@ -420,9 +430,13 @@ async def setup_account_submit(
     password = form_data.get("password", "")
     password_confirm = form_data.get("password_confirm", "")
     name = form_data.get("name", "").strip() or None
+    setup_token = str(form_data.get("setup_token", ""))
 
     # Validation
     errors = []
+    if not verify_setup_token(setup_token):
+        errors.append("Invalid setup token — check the server logs for the current one")
+
     if not email:
         errors.append("Email is required")
     elif not _EMAIL_PATTERN.match(email):
@@ -447,14 +461,18 @@ async def setup_account_submit(
             },
         )
 
-    # Create admin user
+    # Create admin user. Serialize check+create so two concurrent submits
+    # can't both pass the exists-check and create two admins.
     try:
-        admin = await create_admin_user(
-            email=str(email),
-            password=str(password),
-            session=session,
-            name=str(name) if name else None,
-        )
+        async with _setup_lock:
+            if await admin_user_exists(session):
+                return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+            admin = await create_admin_user(
+                email=str(email),
+                password=str(password),
+                session=session,
+                name=str(name) if name else None,
+            )
         # Log them in immediately
         login_admin(request, admin)
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)

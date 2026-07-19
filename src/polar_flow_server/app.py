@@ -17,6 +17,7 @@ from litestar.template.config import TemplateConfig
 
 from polar_flow_server import __version__
 from polar_flow_server.admin import admin_router
+from polar_flow_server.admin.auth import admin_user_exists
 from polar_flow_server.api import api_routers
 from polar_flow_server.core.config import settings
 from polar_flow_server.core.database import (
@@ -25,6 +26,7 @@ from polar_flow_server.core.database import (
     engine,
     init_database,
 )
+from polar_flow_server.core.setup_token import announce_setup_token
 from polar_flow_server.middleware import RateLimitHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
@@ -69,6 +71,15 @@ async def lifespan(app: Litestar) -> AsyncIterator[None]:
     # Initialize database tables
     await init_database()
     logger.info("Database initialized")
+
+    # First run: print the setup token so only the operator (who can read
+    # the logs) can create the admin account.
+    try:
+        async with async_session_maker() as check_session:
+            if not await admin_user_exists(check_session):
+                announce_setup_token()
+    except Exception as exc:  # pragma: no cover - never block startup on this
+        logger.warning("Could not check for existing admin user", error=str(exc))
 
     # Start background sync scheduler
     scheduler = SyncScheduler(async_session_maker)
@@ -119,20 +130,16 @@ def create_app() -> Litestar:
         header_name="X-CSRF-Token",
         cookie_httponly=False,  # JS needs to read this cookie to send in header
         exclude=[
-            # Entry points (no session yet)
+            # Entry points (no session yet). Note: setup/account is protected
+            # by the one-time setup token instead; /admin/setup/oauth is NOT
+            # excluded — it runs logged-in and the form sends the CSRF token.
             "/admin/login",
-            "/admin/setup",
+            "/admin/setup/account",
             # External OAuth callbacks (redirects from Polar)
             "/admin/oauth/callback",
             "/oauth/",  # SaaS OAuth flow (callback, exchange, start)
             # Safe to exclude (just destroys session)
             "/admin/logout",
-            # Admin API key management (session-authenticated, CSRF handled by JS)
-            # TODO: Debug why CSRF validation fails even with correct token
-            "/admin/api-keys/",
-            # Admin sync and settings (HTMX sends CSRF token)
-            "/admin/sync",
-            "/admin/settings",
             # API routes use API key auth, not CSRF
             "/api/v1/users/",
             # Health check (no auth needed)
