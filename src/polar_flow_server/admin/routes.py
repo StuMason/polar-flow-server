@@ -699,6 +699,10 @@ async def admin_dashboard(
     spo2_result = await session.execute(latest_spo2_stmt)
     latest_spo2 = spo2_result.scalar_one_or_none()
 
+    # Biosensing record counts used by Heart Rate tab cards
+    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
+    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
+
     # Get latest skin temperature (night-time, has baseline deviation)
     latest_skin_temp_stmt = (
         select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
@@ -794,6 +798,8 @@ async def admin_dashboard(
             "latest_alertness": latest_alertness,
             "latest_spo2": latest_spo2,
             "latest_skin_temp": latest_skin_temp,
+            "spo2_count": spo2_count,
+            "ecg_count": ecg_count,
             "latest_activity": latest_activity,
             "latest_activity_samples": latest_activity_samples,
             "latest_breathing_rate": latest_breathing_rate,
