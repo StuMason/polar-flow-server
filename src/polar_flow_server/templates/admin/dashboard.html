@@ -1627,9 +1627,18 @@ function timeStringToMinutes(timeStr) {
 }
 
 function isoTimestampToMinutes(timestamp) {
-    const d = new Date(timestamp);
-    if (Number.isNaN(d.getTime())) return null;
-    return (d.getHours() * 60) + d.getMinutes();
+    if (!timestamp) return null;
+
+    // Parse clock time directly from the source string to avoid browser
+    // timezone conversion shifting intraday buckets.
+    const match = String(timestamp).match(/T(\d{2}):(\d{2})/);
+    if (!match) return null;
+
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (Number.isNaN(h) || Number.isNaN(m)) return null;
+
+    return (h * 60) + m;
 }
 
 function renderTodayHrChart() {
