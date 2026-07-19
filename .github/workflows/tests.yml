@@ -14,6 +14,23 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
 
+    services:
+      # Integration tests (app_client fixture) run the real app against this.
+      # Credentials must match the URL hardcoded in tests/conftest.py.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: polar
+          POSTGRES_PASSWORD: polar
+          POSTGRES_DB: polar_test
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U polar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v7
 
