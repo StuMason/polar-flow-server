@@ -46,9 +46,7 @@ class TestGetClientIp:
         """Attacker sends their own XFF; the proxy appends the real address.
         The rightmost untrusted hop wins, never the attacker-chosen first."""
         trusted("127.0.0.1,::1")
-        request = _request(
-            "127.0.0.1", {"X-Forwarded-For": "6.6.6.6, 203.0.113.9"}
-        )
+        request = _request("127.0.0.1", {"X-Forwarded-For": "6.6.6.6, 203.0.113.9"})
         assert _get_client_ip(request) == "203.0.113.9"
 
     def test_docker_network_cidr(self, trusted):
@@ -59,9 +57,7 @@ class TestGetClientIp:
 
     def test_chained_trusted_proxies_are_skipped(self, trusted):
         trusted("127.0.0.1,172.16.0.0/12")
-        request = _request(
-            "172.18.0.5", {"X-Forwarded-For": "203.0.113.9, 172.18.0.2"}
-        )
+        request = _request("172.18.0.5", {"X-Forwarded-For": "203.0.113.9, 172.18.0.2"})
         assert _get_client_ip(request) == "203.0.113.9"
 
     def test_all_hops_trusted_returns_innermost(self, trusted):

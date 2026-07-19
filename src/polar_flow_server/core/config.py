@@ -76,6 +76,7 @@ class Settings(BaseSettings):
         description="Directory where auto-generated encryption/session keys are persisted. "
         "In Docker this MUST live on a persistent volume, or every redeploy regenerates "
         "the keys and stored Polar tokens become undecryptable.",
+    )
     trusted_proxies: str = Field(
         default="127.0.0.1,::1",
         description="Comma-separated IPs/CIDRs of reverse proxies whose "
