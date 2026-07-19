@@ -20,8 +20,16 @@ COPY alembic/ alembic/
 # Install dependencies
 RUN uv sync --frozen --no-dev
 
-# Create data directory
-RUN mkdir -p /data
+# Unprivileged runtime user — a container escape or code-exec bug shouldn't
+# hand out root.
+RUN groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid app --create-home --home-dir /home/app app
+
+# Persistent data directory. KEY_DIR moves the auto-generated encryption/session
+# keys off the (ephemeral) container home dir — mount a volume over /data or the
+# keys are regenerated on every recreate and stored Polar tokens become unreadable.
+RUN mkdir -p /data/keys && chown -R app:app /data
+ENV KEY_DIR=/data/keys
 
 # Copy and set up entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/
@@ -29,6 +37,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8000
+
+USER app
+ENV HOME=/home/app
 
 # Run migrations then start server
 ENTRYPOINT ["docker-entrypoint.sh"]

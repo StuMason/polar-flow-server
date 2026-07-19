@@ -1,13 +1,15 @@
 # Production Docker Compose
-# Just run: docker-compose -f docker-compose.prod.yml up -d
-# Then visit: http://localhost:8000/admin to configure
+# 1. Set a database password:  export POSTGRES_PASSWORD=$(openssl rand -hex 24)
+#    (or put POSTGRES_PASSWORD=... in a .env file next to this compose file)
+# 2. Run: docker-compose -f docker-compose.prod.yml up -d
+# 3. Visit: http://localhost:8000/admin to configure
 
 services:
   postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: polar
-      POSTGRES_PASSWORD: polar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD (e.g. export POSTGRES_PASSWORD=$(openssl rand -hex 24))}
       POSTGRES_DB: polar
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -24,7 +26,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
+      DATABASE_URL: postgresql+asyncpg://polar:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/polar
+    volumes:
+      # Persists auto-generated encryption/session keys (KEY_DIR=/data/keys).
+      # Without this, every recreate regenerates the encryption key and all
+      # stored Polar tokens become permanently undecryptable.
+      - app-data:/data
     ports:
       - "8000:8000"
     healthcheck:
@@ -37,3 +44,4 @@ services:
 
 volumes:
   postgres-data:
+  app-data:
