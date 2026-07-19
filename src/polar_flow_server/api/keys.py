@@ -121,11 +121,7 @@ def _is_localhost(netloc: str) -> bool:
 def _allowed_callback_origins() -> set[str]:
     """Parse OAUTH_ALLOWED_CALLBACK_ORIGINS into normalized origins."""
     raw = settings.oauth_allowed_callback_origins or ""
-    return {
-        origin.strip().lower().rstrip("/")
-        for origin in raw.split(",")
-        if origin.strip()
-    }
+    return {origin.strip().lower().rstrip("/") for origin in raw.split(",") if origin.strip()}
 
 
 def _validate_callback_url(callback_url: str) -> tuple[bool, str]:
@@ -169,8 +165,7 @@ def _validate_callback_url(callback_url: str) -> tuple[bool, str]:
     allowed_origins = _allowed_callback_origins()
     if not allowed_origins:
         return False, (
-            "No callback origins are registered on this server "
-            "(set OAUTH_ALLOWED_CALLBACK_ORIGINS)"
+            "No callback origins are registered on this server (set OAUTH_ALLOWED_CALLBACK_ORIGINS)"
         )
     origin = f"{parsed.scheme}://{parsed.netloc}".lower()
     if origin not in allowed_origins:
