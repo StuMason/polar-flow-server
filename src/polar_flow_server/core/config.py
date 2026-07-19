@@ -119,6 +119,20 @@ class Settings(BaseSettings):
         description="Log level",
     )
 
+    # Trusted proxy configuration
+    # Comma-separated list of trusted proxy IPs or CIDR networks that may set
+    # X-Forwarded-For / X-Real-IP headers. In containerized reverse-proxy
+    # deployments (e.g. Docker network gateway) this MUST include the proxy
+    # IP so per-client rate limiting works correctly. Example: "172.17.0.0/16,127.0.0.1"
+    trusted_proxies: str = Field(
+        default="127.0.0.1,::1",
+        description="Comma-separated trusted proxy IPs/CIDRs for forwarded headers",
+    )
+
+    def get_trusted_proxies(self) -> list[str]:
+        """Return list of trusted proxy IPs/CIDRs."""
+        return [p.strip() for p in self.trusted_proxies.split(",") if p.strip()]
+
     def is_self_hosted(self) -> bool:
         """Check if running in self-hosted mode."""
         return self.deployment_mode == DeploymentMode.SELF_HOSTED
