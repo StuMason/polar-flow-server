@@ -1512,8 +1512,9 @@ const doughnutCenterTextPlugin = {
         const centerX = (chartArea.left + chartArea.right) / 2;
         const centerY = (chartArea.top + chartArea.bottom) / 2;
 
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = Math.round(totalMinutes % 60);
+        const roundedTotalMinutes = Math.round(totalMinutes);
+        const hours = Math.floor(roundedTotalMinutes / 60);
+        const minutes = roundedTotalMinutes % 60;
         const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
         ctx.save();
