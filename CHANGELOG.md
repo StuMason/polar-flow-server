@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-19
+
 ### Added
+
+**Tabbed Admin Dashboard** (#43, #44 - thanks @gbremond)
+- Dashboard reorganised into tabs: Overview, Trends & Baselines, Sleep, Heart Rate, Training Load
+- URL hash deep links (`#tab-sleep`) and lazy per-tab chart loading
+- "Today at a Glance" section: sleep stages doughnut, intraday heart rate, and intraday steps mini-charts
+- Sleep chart split into separate Sleep Score and Sleep Duration charts with threshold reference lines
+- Floating bottom navigation on mobile, kept in sync with the desktop tab bar
+- Metric cards regrouped into Recovery & Sleep / Heart & Vitals / Activity & Load sections
 
 **User-Scoped CSV Export API**
 - New endpoints for programmatic CSV downloads:
@@ -29,6 +39,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Admin and OAuth routes hidden from Swagger docs (internal use only)
 - Admin CSV exports now filter by connected user's `polar_user_id` (multi-tenancy fix)
+- Admin infrastructure panels (API keys, background sync, record counts, sync stats) moved from the dashboard to Settings (#43)
+
+---
+
+## [1.3.4] - 2026-03-02
+
+### Fixed
+
+- 403 Forbidden for all self-hosted users (see the v1.3.4 release notes)
 
 ---
 
