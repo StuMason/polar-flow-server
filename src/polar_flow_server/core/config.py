@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://polar:polar@localhost:5432/polar",
         description="PostgreSQL database URL",
     )
+    database_pool: Literal["default", "null"] = Field(
+        default="default",
+        description="Connection pooling strategy: 'default' (pooled) or 'null' "
+        "(fresh connection per use; needed when the app runs across event loops, "
+        "e.g. under the integration test client)",
+    )
 
     # Security
     api_key: str | None = Field(
@@ -65,6 +71,13 @@ class Settings(BaseSettings):
     jwt_secret: str | None = Field(
         default=None,
         description="JWT secret for authentication (SaaS mode only)",
+    )
+    oauth_allowed_callback_origins: str | None = Field(
+        default=None,
+        description="Comma-separated origins (scheme://host[:port]) allowed as "
+        "callback_url targets for the SaaS /oauth/start flow. The flow delivers "
+        "single-use auth codes to the callback, so it stays DISABLED until the "
+        "operator registers the client origins here.",
     )
     jwt_algorithm: str = Field(default="HS256", description="JWT algorithm")
     jwt_expiry_minutes: int = Field(default=15, description="JWT access token expiry")
