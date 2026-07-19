@@ -88,9 +88,7 @@ class TestCsrfAllowsLegitimateRequests:
     async def test_api_key_create_with_token(self, app_client, admin_account):
         token = await _get_csrf_token(app_client)
         await _login(app_client, admin_account)
-        response = await app_client.post(
-            "/admin/api-keys/create", headers={"X-CSRF-Token": token}
-        )
+        response = await app_client.post("/admin/api-keys/create", headers={"X-CSRF-Token": token})
         assert response.status_code == HTTP_200_OK
         assert "Authentication required" not in response.text
 
