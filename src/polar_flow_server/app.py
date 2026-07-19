@@ -160,7 +160,11 @@ def create_app() -> Litestar:
                 ),
             ),
         ],
-        middleware=[SecurityHeadersMiddleware, session_config.middleware, RateLimitHeadersMiddleware],
+        middleware=[
+            SecurityHeadersMiddleware,
+            session_config.middleware,
+            RateLimitHeadersMiddleware,
+        ],
         csrf_config=csrf_config,
         stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",
