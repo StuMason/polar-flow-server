@@ -1,8 +1,12 @@
 name: Claude Code Review
 
 on:
+  # Auto-review once when a PR opens (or reopens / leaves draft). Deliberately
+  # NOT on `synchronize` — re-reviewing every push is noise. To re-review after
+  # changes, comment `@claude` (handled by claude.yml, which runs with secrets
+  # in base-repo context and so works for fork PRs too).
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
+    types: [opened, ready_for_review, reopened]
 
 jobs:
   claude-review:
