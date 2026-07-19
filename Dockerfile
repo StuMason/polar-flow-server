@@ -20,8 +20,11 @@ COPY alembic/ alembic/
 # Install dependencies
 RUN uv sync --frozen --no-dev
 
-# Create data directory
-RUN mkdir -p /data
+# Persistent data directory. KEY_DIR moves the auto-generated encryption/session
+# keys off the (ephemeral) container home dir — mount a volume over /data or the
+# keys are regenerated on every recreate and stored Polar tokens become unreadable.
+RUN mkdir -p /data/keys
+ENV KEY_DIR=/data/keys
 
 # Copy and set up entrypoint
 COPY docker-entrypoint.sh /usr/local/bin/

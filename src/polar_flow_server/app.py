@@ -25,6 +25,7 @@ from polar_flow_server.core.database import (
     engine,
     init_database,
 )
+from polar_flow_server.core.security import verify_stored_tokens_decryptable
 from polar_flow_server.middleware import RateLimitHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
@@ -69,6 +70,14 @@ async def lifespan(app: Litestar) -> AsyncIterator[None]:
     # Initialize database tables
     await init_database()
     logger.info("Database initialized")
+
+    # Detect encryption-key drift early (lost key file = every stored Polar
+    # token is unreadable) rather than failing silently at the next sync.
+    try:
+        async with async_session_maker() as check_session:
+            await verify_stored_tokens_decryptable(check_session)
+    except Exception as exc:  # pragma: no cover - never block startup on the check
+        logger.warning("Token decryptability check failed to run", error=str(exc))
 
     # Start background sync scheduler
     scheduler = SyncScheduler(async_session_maker)
