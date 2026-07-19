@@ -120,9 +120,7 @@ class TestSetupFlow:
                 follow_redirects=False,
             )
 
-        results = await asyncio.gather(
-            submit("first@example.com"), submit("second@example.com")
-        )
+        results = await asyncio.gather(submit("first@example.com"), submit("second@example.com"))
         assert {r.status_code for r in results} == {303}
         assert await _admin_count() == 1
 
