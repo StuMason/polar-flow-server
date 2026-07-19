@@ -1565,7 +1565,9 @@ async def chart_hrv_data(
         "labels": [r.date.isoformat() for r in recharge_data],
         "datasets": {
             "hrv_avg": [r.hrv_avg or 0 for r in recharge_data],
-            "ans_charge": [r.ans_charge if r.ans_charge is not None else None for r in recharge_data],
+            "ans_charge": [
+                r.ans_charge if r.ans_charge is not None else None for r in recharge_data
+            ],
         },
     }
 
