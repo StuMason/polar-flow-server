@@ -25,7 +25,7 @@ from polar_flow_server.core.database import (
     engine,
     init_database,
 )
-from polar_flow_server.middleware import RateLimitHeadersMiddleware
+from polar_flow_server.middleware import RateLimitHeadersMiddleware, SecurityHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
 
@@ -98,16 +98,20 @@ def create_app() -> Litestar:
     # In production with multiple instances, use Redis instead
     session_store = MemoryStore()
 
-    # Session middleware config with explicit security settings
-    # Note: We don't set secure=True because Coolify/nginx terminates SSL
-    # and forwards HTTP internally. The cookies would be rejected over HTTP.
-    # Security is still enforced at the proxy level.
+    # Session middleware config with explicit security settings.
+    # `secure` comes from SECURE_COOKIES: the browser checks the PAGE origin
+    # (https://...), not the app's internal transport, so this is safe to
+    # enable behind a TLS-terminating proxy — just not for plain-http access.
+    # `key` is the COOKIE NAME, not a secret (server-side sessions don't take
+    # one — the ID is random). Passing the session secret here leaked it to
+    # every browser as the cookie's name (issue #97).
     session_config = ServerSideSessionConfig(
-        key=settings.get_session_secret(),
+        key="session",
         store="session_store",
         max_age=86400,  # 24 hours
         httponly=True,  # Prevent JS access to session cookie
         samesite="lax",  # CSRF protection
+        secure=settings.secure_cookies,
     )
 
     # CSRF protection config
@@ -118,6 +122,7 @@ def create_app() -> Litestar:
         cookie_name="csrf_token",
         header_name="X-CSRF-Token",
         cookie_httponly=False,  # JS needs to read this cookie to send in header
+        cookie_secure=settings.secure_cookies,
         exclude=[
             # Entry points (no session yet)
             "/admin/login",
@@ -155,7 +160,7 @@ def create_app() -> Litestar:
                 ),
             ),
         ],
-        middleware=[session_config.middleware, RateLimitHeadersMiddleware],
+        middleware=[SecurityHeadersMiddleware, session_config.middleware, RateLimitHeadersMiddleware],
         csrf_config=csrf_config,
         stores={"session_store": session_store},
         debug=settings.log_level == "DEBUG",

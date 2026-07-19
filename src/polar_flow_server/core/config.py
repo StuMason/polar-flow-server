@@ -68,6 +68,13 @@ class Settings(BaseSettings):
         default=None,
         description="Secret key for session cookies (auto-generated if not set)",
     )
+    secure_cookies: bool = Field(
+        default=False,
+        description="Mark session/CSRF cookies Secure (browser only sends them "
+        "over HTTPS). Enable whenever the instance is served via HTTPS — the "
+        "browser checks the page origin, so TLS terminating at a reverse proxy "
+        "is fine. Leave off only for plain-http access (e.g. localhost dev).",
+    )
     jwt_secret: str | None = Field(
         default=None,
         description="JWT secret for authentication (SaaS mode only)",

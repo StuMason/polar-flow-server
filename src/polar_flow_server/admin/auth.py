@@ -156,13 +156,33 @@ async def require_admin_auth(
         raise NotAuthorizedException(detail="Authentication required")
 
 
-def login_admin(connection: ASGIConnection[Any, Any, Any, Any], admin: AdminUser) -> None:
-    """Set up authenticated session for admin.
+async def rotate_session_id(connection: ASGIConnection[Any, Any, Any, Any]) -> None:
+    """Issue a fresh session ID, discarding the pre-login one (anti-fixation).
+
+    The server-side session middleware reuses whatever session ID the request
+    arrived with. Rotating at login means a session ID planted or observed
+    before authentication is worthless afterwards. Mirrors what
+    ``connection.clear_session`` does to the connection state, plus deleting
+    the old server-side entry and dropping any pre-login session data.
+    """
+    from litestar.types import Empty
+
+    old_id = connection.cookies.pop("session", None)
+    connection._connection_state.session_id = Empty  # noqa: SLF001 - same as clear_session
+    connection.scope["session"] = {}
+    if old_id and old_id != "null":
+        store = connection.app.stores.get("session_store")
+        await store.delete(old_id)
+
+
+async def login_admin(connection: ASGIConnection[Any, Any, Any, Any], admin: AdminUser) -> None:
+    """Set up authenticated session for admin (on a freshly rotated session ID).
 
     Args:
         connection: The ASGI connection
         admin: The authenticated admin user
     """
+    await rotate_session_id(connection)
     connection.session["admin_id"] = admin.id
     connection.session["admin_email"] = admin.email
 

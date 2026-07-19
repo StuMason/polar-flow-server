@@ -377,10 +377,10 @@
 </div>
 
 {% if latest_hr and latest_hr.samples_json %}
-<script id="today-hr-samples" type="application/json">{{ latest_hr.samples_json | safe }}</script>
+<script id="today-hr-samples" type="application/json">{{ latest_hr.samples_json | replace('</', '<\/') | safe }}</script>
 {% endif %}
 {% if latest_activity_samples and latest_activity_samples.samples_json %}
-<script id="today-steps-samples" type="application/json">{{ latest_activity_samples.samples_json | safe }}</script>
+<script id="today-steps-samples" type="application/json">{{ latest_activity_samples.samples_json | replace('</', '<\/') | safe }}</script>
 {% endif %}
 
 <!-- Chart Controls -->

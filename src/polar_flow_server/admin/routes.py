@@ -456,7 +456,7 @@ async def setup_account_submit(
             name=str(name) if name else None,
         )
         # Log them in immediately
-        login_admin(request, admin)
+        await login_admin(request, admin)
         return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
     except Exception as e:
         return Template(
@@ -566,7 +566,7 @@ async def login_submit(
 
     # Successful login - clear any failed attempts
     await _login_rate_limiter.record_success(client_ip)
-    login_admin(request, admin)
+    await login_admin(request, admin)
     return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
 
 

@@ -21,6 +21,10 @@ def serve(
 ) -> None:
     """Start the API server.
 
+    Always runs a single worker process: admin sessions, login rate limiting
+    and OAuth state live in process memory, so multiple workers would silently
+    break logins. Don't run this app under uvicorn --workers N.
+
     Example:
         polar-flow-server serve
         polar-flow-server serve --host 0.0.0.0 --port 8080 --reload
