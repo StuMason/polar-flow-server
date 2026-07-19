@@ -118,8 +118,23 @@ def _is_localhost(netloc: str) -> bool:
     return host in {"localhost", "127.0.0.1", "::1", "[::1]"}
 
 
+def _allowed_callback_origins() -> set[str]:
+    """Parse OAUTH_ALLOWED_CALLBACK_ORIGINS into normalized origins."""
+    raw = settings.oauth_allowed_callback_origins or ""
+    return {
+        origin.strip().lower().rstrip("/")
+        for origin in raw.split(",")
+        if origin.strip()
+    }
+
+
 def _validate_callback_url(callback_url: str) -> tuple[bool, str]:
-    """Validate that callback_url is well-formed and secure.
+    """Validate that callback_url is well-formed, secure, and registered.
+
+    The OAuth flow delivers single-use auth codes to this URL, so on top of
+    the shape checks its origin must be on the server-side allowlist —
+    otherwise anyone who gets a user to click an /oauth/start link with an
+    attacker callback_url receives that user's code and API key.
 
     Returns (is_valid, error_message).
     """
@@ -149,6 +164,17 @@ def _validate_callback_url(callback_url: str) -> tuple[bool, str]:
         # In development, only allow http for actual localhost
         if not _is_localhost(parsed.netloc):
             return False, "HTTP only allowed for localhost in development"
+
+    # Origin must be registered by the operator
+    allowed_origins = _allowed_callback_origins()
+    if not allowed_origins:
+        return False, (
+            "No callback origins are registered on this server "
+            "(set OAUTH_ALLOWED_CALLBACK_ORIGINS)"
+        )
+    origin = f"{parsed.scheme}://{parsed.netloc}".lower()
+    if origin not in allowed_origins:
+        return False, "callback_url origin is not registered on this server"
 
     return True, ""
 
@@ -410,10 +436,12 @@ async def oauth_callback_saas(
         )
         return Redirect(path=f"{callback_url}?{success_params}", status_code=HTTP_303_SEE_OTHER)
 
-    except Exception as e:
-        logger.exception(f"SaaS OAuth callback failed: {e}")
+    except Exception:
+        logger.exception("SaaS OAuth callback failed")
         await session.rollback()
-        error_params = urlencode({"error": str(e), "status": "failed"})
+        # Generic token only — raw exception text can leak internals to the
+        # third-party callback. Details are in the server log above.
+        error_params = urlencode({"error": "server_error", "status": "failed"})
         return Redirect(path=f"{callback_url}?{error_params}", status_code=HTTP_303_SEE_OTHER)
 
 
