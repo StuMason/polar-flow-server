@@ -84,6 +84,13 @@ class Settings(BaseSettings):
         "(e.g. '127.0.0.1,::1,172.16.0.0/12' when the proxy is another Docker "
         "container). Requests from other peers use the direct socket address.",
     )
+    secure_cookies: bool = Field(
+        default=False,
+        description="Mark session/CSRF cookies Secure (browser only sends them "
+        "over HTTPS). Enable whenever the instance is served via HTTPS — the "
+        "browser checks the page origin, so TLS terminating at a reverse proxy "
+        "is fine. Leave off only for plain-http access (e.g. localhost dev).",
+    )
     jwt_secret: str | None = Field(
         default=None,
         description="JWT secret for authentication (SaaS mode only)",
