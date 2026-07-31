@@ -77,6 +77,13 @@ class Settings(BaseSettings):
         "In Docker this MUST live on a persistent volume, or every redeploy regenerates "
         "the keys and stored Polar tokens become undecryptable.",
     )
+    trusted_proxies: str = Field(
+        default="127.0.0.1,::1",
+        description="Comma-separated IPs/CIDRs of reverse proxies whose "
+        "X-Forwarded-For/X-Real-IP headers are trusted for client IP detection "
+        "(e.g. '127.0.0.1,::1,172.16.0.0/12' when the proxy is another Docker "
+        "container). Requests from other peers use the direct socket address.",
+    )
     jwt_secret: str | None = Field(
         default=None,
         description="JWT secret for authentication (SaaS mode only)",
