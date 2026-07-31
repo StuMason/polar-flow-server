@@ -1,8 +1,21 @@
 """Shared test fixtures."""
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
+
+# Integration tests (the `app_client` fixture) run the REAL app — lifespan,
+# middleware, DI — against a dedicated Postgres database so they can never
+# touch a developer's actual data. Must be set before any polar_flow_server
+# import so the global Settings/engine pick it up. CI provides the matching
+# postgres service container (see .github/workflows/tests.yml).
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://polar:polar@localhost:5432/polar_test"
+os.environ["SYNC_ENABLED"] = "false"
+os.environ["SYNC_ON_STARTUP"] = "false"
+# The test client runs the app in its own event loop (anyio portal); pooled
+# asyncpg connections cannot cross loops, so use a fresh connection per use.
+os.environ["DATABASE_POOL"] = "null"
 
 import pytest
 from sqlalchemy import event
@@ -194,3 +207,59 @@ async def analytics_user_3d(async_session: AsyncSession, test_user):
         days=3,
     )
     return test_user, counts
+
+
+# =============================================================================
+# Integration fixtures — the real app (lifespan, middleware, DI) against the
+# dedicated polar_test Postgres database. Skipped automatically if Postgres
+# is unreachable so unit tests still run anywhere.
+# =============================================================================
+
+
+@pytest.fixture
+async def app_client():
+    """Full-stack test client: real app with lifespan against polar_test."""
+    from litestar.testing import AsyncTestClient
+    from sqlalchemy.exc import OperationalError
+
+    import polar_flow_server.models  # noqa: F401 - register all models on Base
+    from polar_flow_server.app import create_app
+    from polar_flow_server.core.database import engine
+    from polar_flow_server.models.base import Base
+
+    # pytest-asyncio gives every test its own event loop, but the app engine
+    # is a module-level global — dispose its pool so connections are always
+    # created in the current loop (stale ones raise InterfaceError).
+    await engine.dispose()
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+    except (OperationalError, OSError) as exc:  # pragma: no cover
+        pytest.skip(f"Postgres test database unavailable: {exc}")
+
+    try:
+        async with AsyncTestClient(app=create_app()) as client:
+            yield client
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+async def admin_account(app_client):
+    """Create an admin user directly in the test database."""
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.core.password import hash_password
+    from polar_flow_server.models.admin_user import AdminUser
+
+    credentials = {"email": "admin@example.com", "password": "correct-horse-battery"}
+    async with async_session_maker() as session:
+        session.add(
+            AdminUser(
+                email=credentials["email"],
+                password_hash=hash_password(credentials["password"]),
+                is_active=True,
+            )
+        )
+        await session.commit()
+    return credentials

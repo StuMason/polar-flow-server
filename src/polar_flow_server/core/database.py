@@ -23,6 +23,14 @@ def create_engine() -> AsyncEngine:
     Returns:
         Async SQLAlchemy engine configured for PostgreSQL
     """
+    if settings.database_pool == "null":
+        # No connection pooling: each checkout opens a fresh connection.
+        # Required when connections would otherwise be shared across event
+        # loops (the integration test client runs the app in its own loop).
+        from sqlalchemy.pool import NullPool
+
+        return create_async_engine(settings.database_url, echo=False, poolclass=NullPool)
+
     return create_async_engine(
         settings.database_url,
         echo=False,
