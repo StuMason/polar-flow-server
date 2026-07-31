@@ -35,6 +35,38 @@ class TestSecurityHeaders:
         for host in ("unpkg.com", "cdn.tailwindcss.com", "cdn.jsdelivr.net"):
             assert host in csp
 
+    async def test_csp_covers_every_host_the_pages_actually_load(self, app_client):
+        """Living check: every external host referenced by the admin templates
+        and the /schema doc UIs must appear in the CSP, or that page renders
+        broken for users after upgrade (this caught cdn.redoc.ly + Google
+        Fonts on the default /schema page)."""
+        import re
+        from pathlib import Path
+
+        csp = (await app_client.get("/health")).headers["content-security-policy"]
+
+        referenced_hosts: set[str] = set()
+        templates_dir = Path("src/polar_flow_server/templates")
+        for template in templates_dir.rglob("*.html"):
+            referenced_hosts.update(
+                re.findall(r'(?:src|href)="https://([^/"]+)', template.read_text())
+            )
+        referenced_hosts.discard("admin.polaraccesslink.com")  # plain nav link
+
+        for path in (
+            "/schema",
+            "/schema/swagger",
+            "/schema/redoc",
+            "/schema/elements",
+            "/schema/rapidoc",
+        ):
+            response = await app_client.get(path)
+            assert response.status_code == 200
+            referenced_hosts.update(re.findall(r"https://([^/\"']+)", response.text))
+
+        missing = {host for host in referenced_hosts if host not in csp}
+        assert not missing, f"hosts loaded by pages but absent from CSP: {missing}"
+
     async def test_hsts_absent_on_plain_http(self, app_client):
         response = await app_client.get("/health")
         assert "strict-transport-security" not in response.headers

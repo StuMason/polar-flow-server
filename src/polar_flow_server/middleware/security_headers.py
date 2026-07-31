@@ -14,14 +14,20 @@ from litestar.types import ASGIApp, Message, Receive, Scope, Send
 _CSP = "; ".join(
     [
         "default-src 'self'",
-        # Inline scripts are used heavily by the admin templates; CDNs pinned
-        # to the three hosts base.html actually loads from
+        # Inline scripts are used heavily by the admin templates. CDNs pinned
+        # to the hosts the admin UI (base.html) and the /schema doc UIs
+        # (swagger from jsdelivr, redoc from cdn.redoc.ly, elements/rapidoc
+        # from unpkg) actually load from — tests/test_security_headers.py
+        # asserts every host those pages reference is covered here.
         "script-src 'self' 'unsafe-inline' "
-        "https://unpkg.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
-        # Tailwind's CDN build injects styles at runtime; swagger css from jsdelivr
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-        "img-src 'self' data:",
-        "font-src 'self' data: https://cdn.jsdelivr.net",
+        "https://unpkg.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net "
+        "https://cdn.redoc.ly",
+        # Tailwind's CDN build injects styles at runtime; doc-UI css comes
+        # from jsdelivr/unpkg, redoc pulls Google Fonts css
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
+        "https://unpkg.com https://fonts.googleapis.com",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
         "connect-src 'self'",
         "worker-src 'self' blob:",
         "object-src 'none'",
