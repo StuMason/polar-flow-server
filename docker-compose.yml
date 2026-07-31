@@ -30,7 +30,7 @@ services:
       LOG_LEVEL: DEBUG
       API_KEY: pfs_test_key_for_development_only
     volumes:
-      - ~/.polar-flow:/root/.polar-flow
+      - ~/.polar-flow:/data/keys  # KEY_DIR — reuse host keys in dev
       - ./src:/app/src  # Mount source for hot reload
       - ./alembic:/app/alembic  # Mount alembic for migrations
       - ./alembic.ini:/app/alembic.ini  # Mount alembic config

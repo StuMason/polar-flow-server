@@ -1,11 +1,14 @@
 """Application configuration."""
 
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class DeploymentMode(str, Enum):
@@ -61,6 +64,12 @@ class Settings(BaseSettings):
     session_secret: str | None = Field(
         default=None,
         description="Secret key for session cookies (auto-generated if not set)",
+    )
+    key_dir: Path = Field(
+        default_factory=lambda: Path.home() / ".polar-flow",
+        description="Directory where auto-generated encryption/session keys are persisted. "
+        "In Docker this MUST live on a persistent volume, or every redeploy regenerates "
+        "the keys and stored Polar tokens become undecryptable.",
     )
     jwt_secret: str | None = Field(
         default=None,
@@ -127,10 +136,27 @@ class Settings(BaseSettings):
         """Check if running in SaaS mode."""
         return self.deployment_mode == DeploymentMode.SAAS
 
+    def _key_file(self, name: str) -> Path:
+        """Resolve a key file inside key_dir, migrating from the legacy location.
+
+        Keys used to live in ~/.polar-flow unconditionally. If key_dir points
+        somewhere else (e.g. /data/keys in Docker) and the file only exists at
+        the legacy path, copy it across so existing installs keep their keys.
+        """
+        key_file = self.key_dir / name
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+
+        legacy_file = Path.home() / ".polar-flow" / name
+        if not key_file.exists() and legacy_file != key_file and legacy_file.exists():
+            key_file.write_bytes(legacy_file.read_bytes())
+            key_file.chmod(0o600)
+            logger.info("Migrated %s from legacy location %s to %s", name, legacy_file, key_file)
+        return key_file
+
     def get_encryption_key(self) -> bytes:
         """Get encryption key for Polar tokens.
 
-        In self-hosted mode, generates and persists key to ~/.polar-flow/encryption.key
+        In self-hosted mode, generates and persists key to <key_dir>/encryption.key
         to ensure tokens survive server restarts.
 
         Raises:
@@ -142,14 +168,9 @@ class Settings(BaseSettings):
         if self.is_saas():
             raise ValueError("ENCRYPTION_KEY must be set in SaaS mode")
 
-        # Self-hosted: persist key to file so tokens survive restarts
-        from pathlib import Path
-
         from cryptography.fernet import Fernet
 
-        key_file = Path.home() / ".polar-flow" / "encryption.key"
-        key_file.parent.mkdir(parents=True, exist_ok=True)
-
+        key_file = self._key_file("encryption.key")
         if key_file.exists():
             return key_file.read_bytes().strip()
 
@@ -157,12 +178,19 @@ class Settings(BaseSettings):
         key = Fernet.generate_key()
         key_file.write_bytes(key)
         key_file.chmod(0o600)  # Owner read/write only
+        logger.warning(
+            "Generated a NEW token encryption key at %s. If Polar accounts were connected "
+            "before, their stored tokens can no longer be decrypted and each account must "
+            "re-authorize. Persist this file (or set ENCRYPTION_KEY) so this cannot happen "
+            "again — in Docker, mount a volume over the key directory.",
+            key_file,
+        )
         return key
 
     def get_session_secret(self) -> str:
         """Get session secret for admin cookies.
 
-        In self-hosted mode, generates and persists secret to ~/.polar-flow/session.key
+        In self-hosted mode, generates and persists secret to <key_dir>/session.key
         to ensure sessions survive server restarts.
         """
         if self.session_secret:
@@ -170,11 +198,8 @@ class Settings(BaseSettings):
 
         # Self-hosted: persist secret to file so sessions survive restarts
         import secrets
-        from pathlib import Path
 
-        secret_file = Path.home() / ".polar-flow" / "session.key"
-        secret_file.parent.mkdir(parents=True, exist_ok=True)
-
+        secret_file = self._key_file("session.key")
         if secret_file.exists():
             return secret_file.read_text().strip()
 
@@ -182,6 +207,12 @@ class Settings(BaseSettings):
         secret = secrets.token_urlsafe(32)
         secret_file.write_text(secret)
         secret_file.chmod(0o600)  # Owner read/write only
+        logger.warning(
+            "Generated a new session secret at %s — all existing admin sessions are now "
+            "invalid. Persist this file (or set SESSION_SECRET) to keep sessions across "
+            "restarts.",
+            secret_file,
+        )
         return secret
 
 

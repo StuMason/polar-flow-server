@@ -25,6 +25,11 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://polar:polar@postgres:5432/polar
+    volumes:
+      # Persists auto-generated encryption/session keys (KEY_DIR=/data/keys).
+      # Without this, every recreate regenerates the encryption key and all
+      # stored Polar tokens become permanently undecryptable.
+      - app-data:/data
     ports:
       - "8000:8000"
     healthcheck:
@@ -37,3 +42,4 @@ services:
 
 volumes:
   postgres-data:
+  app-data:
