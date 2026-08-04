@@ -11,15 +11,23 @@ prompt caches warm.
 """
 
 from datetime import date, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field
 from sqlalchemy import select
 
 from polar_flow_server.mcp_server.context import resolve_scoped_user_id
+from polar_flow_server.models.activity import Activity
 from polar_flow_server.models.cardio_load import CardioLoad
+from polar_flow_server.models.continuous_hr import ContinuousHeartRate
+from polar_flow_server.models.ecg import ECG
+from polar_flow_server.models.exercise import Exercise
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
+from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
+from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
+from polar_flow_server.models.spo2 import SpO2
+from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 
 DaysParam = Annotated[
     int,
@@ -166,6 +174,397 @@ async def get_recovery(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
             for r in cardio
         ],
     }
+
+
+async def get_activity(days: DaysParam = 30, user_id: UserIdParam = None) -> dict[str, Any]:
+    """Get daily activity summaries, most recent day first.
+
+    Each record has steps, active and total calories (kcal), distance (km),
+    active minutes, and Polar's activity score (0-100, how much of the daily
+    activity goal was reached). Useful for spotting sedentary streaks or
+    unusually big days when explaining recovery or sleep changes.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+
+    since = date.today() - timedelta(days=days)
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(Activity)
+            .where(Activity.user_id == uid, Activity.date >= since)
+            .order_by(Activity.date.desc())
+        )
+        records = result.scalars().all()
+
+    return {
+        "days": days,
+        "count": len(records),
+        "records": [
+            {
+                "date": str(r.date),
+                "steps": r.steps,
+                "calories_active": r.calories_active,
+                "calories_total": r.calories_total,
+                "distance_km": round(r.distance_meters / 1000, 2) if r.distance_meters else None,
+                "active_minutes": (
+                    round(r.active_time_seconds / 60, 1) if r.active_time_seconds else None
+                ),
+                "activity_score": r.activity_score,
+            }
+            for r in records
+        ],
+    }
+
+
+async def get_exercises(
+    days: DaysParam = 30,
+    exercise_id: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Pass an id from a previous get_exercises call to fetch that "
+                "workout's full detail (speed, cadence, power, ascent/descent, "
+                "notes) instead of the list."
+            ),
+        ),
+    ] = None,
+    user_id: UserIdParam = None,
+) -> dict[str, Any]:
+    """Get workout history, or one workout's full detail.
+
+    Without `exercise_id`: recent workouts, newest first, each with sport,
+    start time, duration (minutes), distance (km), calories, average/max
+    heart rate (bpm), and training load. With `exercise_id`: every recorded
+    metric for that single workout, including speed (m/s), cadence, power
+    (watts), and elevation. Training load is Polar's cardio strain estimate
+    for the session - compare against get_recovery's tolerance.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+
+    if exercise_id is not None:
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(Exercise).where(Exercise.user_id == uid, Exercise.id == exercise_id)
+            )
+            r = result.scalar_one_or_none()
+        if r is None:
+            raise ValueError(f"Exercise {exercise_id} not found")
+        return {
+            "id": r.id,
+            "polar_exercise_id": r.polar_exercise_id,
+            "start_time": str(r.start_time),
+            "sport": r.sport,
+            "duration_seconds": r.duration_seconds,
+            "distance_meters": r.distance_meters,
+            "calories": r.calories,
+            "average_heart_rate_bpm": r.average_heart_rate,
+            "max_heart_rate_bpm": r.max_heart_rate,
+            "average_speed_mps": r.average_speed_mps,
+            "max_speed_mps": r.max_speed_mps,
+            "average_cadence": r.average_cadence,
+            "max_cadence": r.max_cadence,
+            "average_power_watts": r.average_power,
+            "max_power_watts": r.max_power,
+            "training_load": r.training_load,
+            "ascent_meters": r.ascent_meters,
+            "descent_meters": r.descent_meters,
+            "notes": r.notes,
+        }
+
+    since = date.today() - timedelta(days=days)
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(Exercise)
+            .where(Exercise.user_id == uid, Exercise.start_time >= since)
+            .order_by(Exercise.start_time.desc())
+        )
+        records = result.scalars().all()
+
+    return {
+        "days": days,
+        "count": len(records),
+        "records": [
+            {
+                "id": r.id,
+                "start_time": str(r.start_time),
+                "sport": r.sport,
+                "duration_minutes": (
+                    round(r.duration_seconds / 60, 1) if r.duration_seconds else None
+                ),
+                "distance_km": round(r.distance_meters / 1000, 2) if r.distance_meters else None,
+                "calories": r.calories,
+                "average_heart_rate_bpm": r.average_heart_rate,
+                "max_heart_rate_bpm": r.max_heart_rate,
+                "training_load": r.training_load,
+            }
+            for r in records
+        ],
+    }
+
+
+BiosensingMetric = Literal[
+    "spo2",
+    "ecg",
+    "body_temperature",
+    "skin_temperature",
+    "heart_rate",
+    "alertness",
+    "bedtime",
+]
+
+
+async def get_biosensing(
+    metric: Annotated[
+        BiosensingMetric,
+        Field(description="Which biosensing stream to read."),
+    ],
+    days: DaysParam = 30,
+    user_id: UserIdParam = None,
+) -> dict[str, Any]:
+    """Get one biosensing data stream, most recent first.
+
+    Metrics: `spo2` blood oxygen tests (percent, plus HR/HRV during the
+    test); `ecg` measurement summaries (HR, HRV in ms, RRI); `body_temperature`
+    spot measurements (deg C, min/avg/max); `skin_temperature` nightly values
+    with deviation from the user's baseline and an is_elevated flag (useful
+    for illness or cycle tracking); `heart_rate` daily continuous-HR
+    summaries (min/avg/max bpm - the daily min approximates true resting
+    HR); `alertness` SleepWise predicted alertness periods (grade and
+    classification); `bedtime` SleepWise circadian bedtime recommendations
+    (preferred sleep window and gate times).
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+
+    since = date.today() - timedelta(days=days)
+    async with async_session_maker() as session:
+        records = await _query_biosensing(session, metric, uid, since)
+
+    return {"metric": metric, "days": days, "count": len(records), "records": records}
+
+
+async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
+    """Get the user's personal baselines for key health metrics.
+
+    Baselines exist for hrv_rmssd, sleep_score, resting_hr, training_load,
+    and training_load_ratio. Each has rolling averages (7d/30d/90d), median
+    and IQR statistics with lower/upper anomaly bounds (values outside them
+    are abnormal FOR THIS USER), min/max, sample count, and a status that
+    says how much history backs it (ready/partial/insufficient). Use these
+    to judge whether a current reading from other tools is meaningfully
+    high or low rather than comparing to population norms.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.services.baseline import BaselineService
+
+    async with async_session_maker() as session:
+        baselines = await BaselineService(session).get_user_baselines(uid)
+
+    return {
+        "count": len(baselines),
+        "baselines": [
+            {
+                "metric_name": b.metric_name,
+                "baseline_value": b.baseline_value,
+                "baseline_7d": b.baseline_7d,
+                "baseline_30d": b.baseline_30d,
+                "baseline_90d": b.baseline_90d,
+                "median": b.median_value,
+                "q1": b.q1,
+                "q3": b.q3,
+                "iqr": b.iqr,
+                "std_dev": b.std_dev,
+                "min": b.min_value,
+                "max": b.max_value,
+                "lower_bound": b.lower_bound,
+                "upper_bound": b.upper_bound,
+                "sample_count": b.sample_count,
+                "status": b.status,
+                "data_start_date": str(b.data_start_date) if b.data_start_date else None,
+                "data_end_date": str(b.data_end_date) if b.data_end_date else None,
+                "calculated_at": b.calculated_at.isoformat() if b.calculated_at else None,
+            }
+            for b in baselines
+        ],
+    }
+
+
+async def get_patterns(user_id: UserIdParam = None) -> dict[str, Any]:
+    """Get detected patterns and current anomalies.
+
+    `patterns` are stored analyses across the user's history:
+    sleep_hrv_correlation (does better sleep raise their HRV),
+    overtraining_risk (0-100 composite with contributing factors and
+    recovery recommendations in details), hrv_trend and sleep_trend (7-day
+    vs 30-day direction, as a percentage). Each has a score, confidence,
+    significance level, and interpretation details. `anomalies` re-checks
+    the latest metric values against baseline IQR bounds right now -
+    severity "warning" is outside 1.5x IQR, "critical" outside 3x IQR.
+    Patterns need ~21 days of history; both lists are empty before that.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.services.pattern import AnomalyService, PatternService
+
+    async with async_session_maker() as session:
+        patterns = await PatternService(session).get_user_patterns(uid)
+        anomalies = await AnomalyService(session).detect_all_anomalies(uid)
+
+    return {
+        "patterns": [
+            {
+                "pattern_type": p.pattern_type,
+                "pattern_name": p.pattern_name,
+                "score": p.score,
+                "confidence": p.confidence,
+                "significance": p.significance,
+                "metrics_involved": p.metrics_involved,
+                "sample_count": p.sample_count,
+                "details": p.details,
+                "analyzed_at": p.analyzed_at.isoformat() if p.analyzed_at else None,
+            }
+            for p in patterns
+        ],
+        "anomaly_count": len(anomalies),
+        "anomalies": anomalies,
+    }
+
+
+async def _query_biosensing(
+    session: Any, metric: str, uid: str, since: date
+) -> list[dict[str, Any]]:
+    """Run the per-metric biosensing query and serialize the rows."""
+    if metric == "spo2":
+        rows = await session.execute(
+            select(SpO2)
+            .where(SpO2.user_id == uid, SpO2.test_time >= since)
+            .order_by(SpO2.test_time.desc())
+        )
+        return [
+            {
+                "test_time": str(r.test_time),
+                "blood_oxygen_percent": r.blood_oxygen_percent,
+                "spo2_class": r.spo2_class,
+                "avg_heart_rate_bpm": r.avg_heart_rate,
+                "hrv_ms": r.hrv_ms,
+                "altitude_meters": r.altitude_meters,
+            }
+            for r in rows.scalars().all()
+        ]
+    if metric == "ecg":
+        rows = await session.execute(
+            select(ECG)
+            .where(ECG.user_id == uid, ECG.test_time >= since)
+            .order_by(ECG.test_time.desc())
+        )
+        return [
+            {
+                "test_time": str(r.test_time),
+                "avg_heart_rate_bpm": r.avg_heart_rate,
+                "hrv_ms": r.hrv_ms,
+                "hrv_level": r.hrv_level,
+                "rri_ms": r.rri_ms,
+                "duration_seconds": r.duration_seconds,
+                "sample_count": r.sample_count,
+            }
+            for r in rows.scalars().all()
+        ]
+    if metric == "body_temperature":
+        rows = await session.execute(
+            select(BodyTemperature)
+            .where(BodyTemperature.user_id == uid, BodyTemperature.start_time >= since)
+            .order_by(BodyTemperature.start_time.desc())
+        )
+        return [
+            {
+                "start_time": str(r.start_time),
+                "end_time": str(r.end_time),
+                "measurement_type": r.measurement_type,
+                "sensor_location": r.sensor_location,
+                "temp_min_celsius": r.temp_min,
+                "temp_avg_celsius": r.temp_avg,
+                "temp_max_celsius": r.temp_max,
+                "sample_count": r.sample_count,
+            }
+            for r in rows.scalars().all()
+        ]
+    if metric == "skin_temperature":
+        rows = await session.execute(
+            select(SkinTemperature)
+            .where(SkinTemperature.user_id == uid, SkinTemperature.sleep_date >= since)
+            .order_by(SkinTemperature.sleep_date.desc())
+        )
+        return [
+            {
+                "sleep_date": str(r.sleep_date),
+                "temperature_celsius": r.temperature_celsius,
+                "deviation_from_baseline": r.deviation_from_baseline,
+                "is_elevated": r.is_elevated,
+            }
+            for r in rows.scalars().all()
+        ]
+    if metric == "heart_rate":
+        rows = await session.execute(
+            select(ContinuousHeartRate)
+            .where(ContinuousHeartRate.user_id == uid, ContinuousHeartRate.date >= since)
+            .order_by(ContinuousHeartRate.date.desc())
+        )
+        return [
+            {
+                "date": str(r.date),
+                "hr_min_bpm": r.hr_min,
+                "hr_avg_bpm": r.hr_avg,
+                "hr_max_bpm": r.hr_max,
+                "sample_count": r.sample_count,
+            }
+            for r in rows.scalars().all()
+        ]
+    if metric == "alertness":
+        rows = await session.execute(
+            select(SleepWiseAlertness)
+            .where(
+                SleepWiseAlertness.user_id == uid,
+                SleepWiseAlertness.period_start_time >= since,
+            )
+            .order_by(SleepWiseAlertness.period_start_time.desc())
+        )
+        return [
+            {
+                "period_start_time": str(r.period_start_time),
+                "period_end_time": str(r.period_end_time),
+                "grade": r.grade,
+                "grade_classification": r.grade_classification,
+            }
+            for r in rows.scalars().all()
+        ]
+    # bedtime - the Literal type means no other value can reach here
+    rows = await session.execute(
+        select(SleepWiseBedtime)
+        .where(
+            SleepWiseBedtime.user_id == uid,
+            SleepWiseBedtime.period_start_time >= since,
+        )
+        .order_by(SleepWiseBedtime.period_start_time.desc())
+    )
+    return [
+        {
+            "period_start_time": str(r.period_start_time),
+            "period_end_time": str(r.period_end_time),
+            "preferred_sleep_start": str(r.preferred_sleep_start),
+            "preferred_sleep_end": str(r.preferred_sleep_end),
+            "sleep_gate_start": str(r.sleep_gate_start),
+            "sleep_gate_end": str(r.sleep_gate_end),
+            "quality": r.quality,
+        }
+        for r in rows.scalars().all()
+    ]
 
 
 def _hours(seconds: int | None) -> float | None:

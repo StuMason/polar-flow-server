@@ -33,6 +33,11 @@ _TOOLS = (
     tools.get_health_insights,
     tools.get_sleep,
     tools.get_recovery,
+    tools.get_activity,
+    tools.get_exercises,
+    tools.get_biosensing,
+    tools.get_baselines,
+    tools.get_patterns,
 )
 
 
