@@ -264,7 +264,18 @@ def _calculate_recovery_status(
     - readiness_score: 0-100
     - recommendations: list of actionable advice
     - training_advice: what type of training is appropriate today
+
+    Metrics older than 48h are excluded rather than silently blended in —
+    "Today's Readiness" built on last week's sleep is worse than no number.
     """
+    stale_cutoff = date.today() - timedelta(days=2)
+    if sleep and sleep.date < stale_cutoff:
+        sleep = None
+    if recharge and recharge.date < stale_cutoff:
+        recharge = None
+    if cardio and cardio.date < stale_cutoff:
+        cardio = None
+
     recommendations: list[str] = []
     factors: list[float] = []
 
@@ -868,11 +879,27 @@ async def admin_dashboard(
         patterns_result = await session.execute(patterns_stmt)
         user_patterns = list(patterns_result.scalars().all())
 
+    # Record dates feeding the stat tiles' age badges (issue #70): the tiles
+    # show "latest" values, which can silently be days old after a sync gap.
+    tile_dates = {
+        "hrv": latest_recharge.date if latest_recharge else None,
+        "sleep": recent_sleep[0].date if recent_sleep else None,
+        "breathing": breathing_record.date if breathing_record else None,
+        "alertness": latest_alertness.period_start_time.date() if latest_alertness else None,
+        "resting_hr": resting_hr_record.date if resting_hr_record else None,
+        "daily_hr": latest_hr.date if latest_hr else None,
+        "spo2": latest_spo2.test_time.date() if latest_spo2 else None,
+        "skin_temp": latest_skin_temp.sleep_date if latest_skin_temp else None,
+        "activity": latest_activity.date if latest_activity else None,
+        "cardio": latest_cardio.date if latest_cardio else None,
+    }
+
     return Template(
         template_name="admin/dashboard.html",
         context={
             # Latest data
             "recent_sleep": recent_sleep,
+            "tile_dates": tile_dates,
             "recent_recharge": recent_recharge,
             "latest_hrv": latest_hrv,
             "latest_resting_hr": latest_resting_hr,
