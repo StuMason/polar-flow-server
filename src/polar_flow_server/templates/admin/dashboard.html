@@ -1017,32 +1017,100 @@ function createTooltipCallback(descriptions) {
     };
 }
 
+// Which fetched-data canvases belong to each tab (todayHr* charts render
+// from server-embedded JSON and are not part of this).
+const chartCanvasesByTab = {
+    sleep: ['sleepScoreChart', 'sleepDurationChart'],
+    heart: ['hrChart', 'hrvChart', 'ansChart'],
+    training: ['activityChart', 'cardioChart']
+};
+
+// Fetch one chart payload. An expired session means every response would be
+// a 401 — bounce to login instead of leaving silently blank charts. Any other
+// failure throws so the tab shows its error state.
+async function fetchChartData(url) {
+    const r = await fetch(url);
+    if (r.status === 401) {
+        window.location.href = '/admin/login';
+        throw new Error('session expired');
+    }
+    if (!r.ok) {
+        throw new Error(`chart request failed (${r.status})`);
+    }
+    return r.json();
+}
+
+// Show an inline note in place of a chart canvas (no data / load failure).
+function showChartNote(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.classList.add('hidden');
+    let note = canvas.parentElement.querySelector('.chart-note');
+    if (!note) {
+        note = document.createElement('p');
+        note.className = 'chart-note flex h-full items-center justify-center text-sm text-gray-400';
+        canvas.parentElement.appendChild(note);
+    }
+    note.textContent = message;
+}
+
+function clearChartNote(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.classList.remove('hidden');
+    const note = canvas.parentElement.querySelector('.chart-note');
+    if (note) note.remove();
+}
+
+// Render via renderFn when the payload has rows; otherwise say so instead of
+// drawing an empty axis-less white box.
+function renderIfData(data, canvasIds, renderFn) {
+    if (data.labels && data.labels.length) {
+        canvasIds.forEach(clearChartNote);
+        renderFn();
+    } else {
+        canvasIds.forEach(id => showChartNote(id, 'No data yet — run a sync to see this chart.'));
+    }
+}
+
 // Fetch and render only the charts belonging to the given tab. Charts are only
 // ever created while their tab panel is visible, so the entrance animation is
 // consistent whether it's the first tab shown or one opened later.
 async function loadChartsForTab(tab) {
     const days = document.getElementById('chart-days').value;
 
-    if (tab === 'sleep') {
-        const sleepData = await fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json());
-        renderSleepScoreChart(sleepData);
-        renderSleepDurationChart(sleepData);
-    } else if (tab === 'heart') {
-        const [hrData, hrvData] = await Promise.all([
-            fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
-            fetch(`/admin/api/charts/hrv?days=${days}`).then(r => r.json())
-        ]);
-        renderHrChart(hrData);
-        renderHrvChart(hrvData);
-        renderAnsChart(hrvData);
-        renderTodayHrHeartTabChart();
-    } else if (tab === 'training') {
-        const [activityData, cardioData] = await Promise.all([
-            fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
-            fetch(`/admin/api/charts/cardio-load?days=${days}`).then(r => r.json())
-        ]);
-        renderActivityChart(activityData);
-        renderCardioChart(cardioData);
+    try {
+        if (tab === 'sleep') {
+            const sleepData = await fetchChartData(`/admin/api/charts/sleep?days=${days}`);
+            renderIfData(sleepData, chartCanvasesByTab.sleep, () => {
+                renderSleepScoreChart(sleepData);
+                renderSleepDurationChart(sleepData);
+            });
+        } else if (tab === 'heart') {
+            const [hrData, hrvData] = await Promise.all([
+                fetchChartData(`/admin/api/charts/heart-rate?days=${days}`),
+                fetchChartData(`/admin/api/charts/hrv?days=${days}`)
+            ]);
+            renderIfData(hrData, ['hrChart'], () => renderHrChart(hrData));
+            renderIfData(hrvData, ['hrvChart', 'ansChart'], () => {
+                renderHrvChart(hrvData);
+                renderAnsChart(hrvData);
+            });
+            renderTodayHrHeartTabChart();
+        } else if (tab === 'training') {
+            const [activityData, cardioData] = await Promise.all([
+                fetchChartData(`/admin/api/charts/activity?days=${days}`),
+                fetchChartData(`/admin/api/charts/cardio-load?days=${days}`)
+            ]);
+            renderIfData(activityData, ['activityChart'], () => renderActivityChart(activityData));
+            renderIfData(cardioData, ['cardioChart'], () => renderCardioChart(cardioData));
+        }
+    } catch (e) {
+        // Let the next visit to this tab retry instead of staying blank.
+        initializedChartTabs.delete(tab);
+        (chartCanvasesByTab[tab] || []).forEach(id =>
+            showChartNote(id, "Couldn't load chart data — check your connection and try again.")
+        );
     }
 }
 

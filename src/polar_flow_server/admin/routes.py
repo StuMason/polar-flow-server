@@ -10,11 +10,13 @@ import secrets
 from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlencode
 
 import httpx
 from litestar import Request, get, post
+from litestar.exceptions import NotAuthorizedException
+from litestar.params import Parameter
 from litestar.response import Redirect, Response, Template
 from litestar.status_codes import HTTP_200_OK, HTTP_303_SEE_OTHER
 from polar_flow import PolarFlow
@@ -236,6 +238,17 @@ def _get_base_url(request: Request[Any, Any, Any]) -> str:
     host = request.headers.get("X-Forwarded-Host") or request.headers.get("Host", "localhost:8000")
 
     return f"{proto}://{host}"
+
+
+async def _connected_user_id(session: AsyncSession) -> str | None:
+    """polar_user_id of the connected user, or None before OAuth setup.
+
+    Health-data queries must be scoped to this user (same rule the CSV
+    exports follow) so a second user row never leaks into the dashboard.
+    """
+    result = await session.execute(select(User).where(User.is_active == True).limit(1))  # noqa: E712
+    user = result.scalar_one_or_none()
+    return user.polar_user_id if user else None
 
 
 def _calculate_recovery_status(
@@ -697,21 +710,29 @@ async def admin_dashboard(
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
+    # All health-data queries below are scoped to the connected user, matching
+    # the CSV exports — with >1 user row an unscoped "latest" mixes users' data.
+    uid = await _connected_user_id(session)
+
+    def scoped(stmt: Any, model: Any) -> Any:
+        return stmt.where(model.user_id == uid) if uid else stmt
+
     # Get latest sleep data (last 7 days)
     since_date = date.today() - timedelta(days=7)
-    recent_sleep_stmt = (
-        select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7)
+    recent_sleep_stmt = scoped(
+        select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7), Sleep
     )
     result = await session.execute(recent_sleep_stmt)
     recent_sleep = result.scalars().all()
 
     # Get latest HRV from Nightly Recharge
     latest_hrv = None
-    latest_hrv_stmt = (
+    latest_hrv_stmt = scoped(
         select(NightlyRecharge)
         .where(NightlyRecharge.hrv_avg.isnot(None))
         .order_by(NightlyRecharge.date.desc())
-        .limit(1)
+        .limit(1),
+        NightlyRecharge,
     )
     hrv_result = await session.execute(latest_hrv_stmt)
     latest_recharge = hrv_result.scalar_one_or_none()
@@ -720,11 +741,12 @@ async def admin_dashboard(
 
     # Get latest Resting HR from Nightly Recharge (separate query - may be different record)
     latest_resting_hr = None
-    resting_hr_stmt = (
+    resting_hr_stmt = scoped(
         select(NightlyRecharge)
         .where(NightlyRecharge.heart_rate_avg.isnot(None))
         .order_by(NightlyRecharge.date.desc())
-        .limit(1)
+        .limit(1),
+        NightlyRecharge,
     )
     resting_hr_result = await session.execute(resting_hr_stmt)
     resting_hr_record = resting_hr_result.scalar_one_or_none()
@@ -732,57 +754,67 @@ async def admin_dashboard(
         latest_resting_hr = resting_hr_record.heart_rate_avg
 
     # Get latest cardio load
-    latest_cardio_stmt = select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1)
+    latest_cardio_stmt = scoped(
+        select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1), CardioLoad
+    )
     cardio_result = await session.execute(latest_cardio_stmt)
     latest_cardio = cardio_result.scalar_one_or_none()
 
     # Get latest continuous HR
-    latest_hr_stmt = select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1)
+    latest_hr_stmt = scoped(
+        select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1),
+        ContinuousHeartRate,
+    )
     hr_result = await session.execute(latest_hr_stmt)
     latest_hr = hr_result.scalar_one_or_none()
 
     # Get latest alertness
-    latest_alertness_stmt = (
-        select(SleepWiseAlertness).order_by(SleepWiseAlertness.period_start_time.desc()).limit(1)
+    latest_alertness_stmt = scoped(
+        select(SleepWiseAlertness).order_by(SleepWiseAlertness.period_start_time.desc()).limit(1),
+        SleepWiseAlertness,
     )
     alertness_result = await session.execute(latest_alertness_stmt)
     latest_alertness = alertness_result.scalar_one_or_none()
 
     # Get latest SpO2
-    latest_spo2_stmt = select(SpO2).order_by(SpO2.test_time.desc()).limit(1)
+    latest_spo2_stmt = scoped(select(SpO2).order_by(SpO2.test_time.desc()).limit(1), SpO2)
     spo2_result = await session.execute(latest_spo2_stmt)
     latest_spo2 = spo2_result.scalar_one_or_none()
 
     # Biosensing record counts used by Heart Rate tab cards
-    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
-    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
+    spo2_count = (await session.execute(scoped(select(func.count(SpO2.id)), SpO2))).scalar() or 0
+    ecg_count = (await session.execute(scoped(select(func.count(ECG.id)), ECG))).scalar() or 0
 
     # Get latest skin temperature (night-time, has baseline deviation)
-    latest_skin_temp_stmt = (
-        select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
+    latest_skin_temp_stmt = scoped(
+        select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1),
+        SkinTemperature,
     )
     skin_temp_result = await session.execute(latest_skin_temp_stmt)
     latest_skin_temp = skin_temp_result.scalar_one_or_none()
 
     # Get latest activity (for steps)
-    latest_activity_stmt = select(Activity).order_by(Activity.date.desc()).limit(1)
+    latest_activity_stmt = scoped(
+        select(Activity).order_by(Activity.date.desc()).limit(1), Activity
+    )
     activity_result = await session.execute(latest_activity_stmt)
     latest_activity = activity_result.scalar_one_or_none()
 
     # Get latest activity samples (minute-by-minute steps, for "Today at a Glance")
-    latest_activity_samples_stmt = (
-        select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1)
+    latest_activity_samples_stmt = scoped(
+        select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1), ActivitySamples
     )
     activity_samples_result = await session.execute(latest_activity_samples_stmt)
     latest_activity_samples = activity_samples_result.scalar_one_or_none()
 
     # Get latest breathing rate from Nightly Recharge
     latest_breathing_rate = None
-    breathing_stmt = (
+    breathing_stmt = scoped(
         select(NightlyRecharge)
         .where(NightlyRecharge.breathing_rate_avg.isnot(None))
         .order_by(NightlyRecharge.date.desc())
-        .limit(1)
+        .limit(1),
+        NightlyRecharge,
     )
     breathing_result = await session.execute(breathing_stmt)
     breathing_record = breathing_result.scalar_one_or_none()
@@ -790,11 +822,12 @@ async def admin_dashboard(
         latest_breathing_rate = breathing_record.breathing_rate_avg
 
     # Get recent recharge data (last 7 days)
-    recent_recharge_stmt = (
+    recent_recharge_stmt = scoped(
         select(NightlyRecharge)
         .where(NightlyRecharge.date >= since_date)
         .order_by(NightlyRecharge.date.desc())
-        .limit(7)
+        .limit(7),
+        NightlyRecharge,
     )
     recharge_list_result = await session.execute(recent_recharge_stmt)
     recent_recharge = recharge_list_result.scalars().all()
@@ -815,16 +848,11 @@ async def admin_dashboard(
     user_baselines: list[UserBaseline] = []
     user_patterns: list[PatternAnalysis] = []
 
-    # Get connected user
-    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
-    connected_user_result = await session.execute(connected_user_stmt)
-    connected_user = connected_user_result.scalar_one_or_none()
-
-    if connected_user:
+    if uid:
         # Fetch baselines for this user
         baselines_stmt = (
             select(UserBaseline)
-            .where(UserBaseline.user_id == connected_user.polar_user_id)
+            .where(UserBaseline.user_id == uid)
             .order_by(UserBaseline.metric_name)
         )
         baselines_result = await session.execute(baselines_stmt)
@@ -833,7 +861,7 @@ async def admin_dashboard(
         # Fetch patterns for this user
         patterns_stmt = (
             select(PatternAnalysis)
-            .where(PatternAnalysis.user_id == connected_user.polar_user_id)
+            .where(PatternAnalysis.user_id == uid)
             .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
         )
         patterns_result = await session.execute(patterns_stmt)
@@ -1487,17 +1515,20 @@ async def admin_create_api_key(
 async def chart_sleep_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get sleep data for charts.
 
     Returns sleep score, duration, and stage breakdown for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
+    if uid:
+        stmt = stmt.where(Sleep.user_id == uid)
     result = await session.execute(stmt)
     sleep_data = result.scalars().all()
 
@@ -1529,17 +1560,20 @@ async def chart_sleep_data(
 async def chart_activity_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get activity data for charts.
 
     Returns steps, calories, and active time for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
+    if uid:
+        stmt = stmt.where(Activity.user_id == uid)
     result = await session.execute(stmt)
     activity_data = result.scalars().all()
 
@@ -1565,21 +1599,24 @@ async def chart_activity_data(
 async def chart_heart_rate_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get heart rate data for charts.
 
     Returns min/avg/max heart rate for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(ContinuousHeartRate)
         .where(ContinuousHeartRate.date >= since_date)
         .order_by(ContinuousHeartRate.date.asc())
     )
+    if uid:
+        stmt = stmt.where(ContinuousHeartRate.user_id == uid)
     result = await session.execute(stmt)
     hr_data = result.scalars().all()
 
@@ -1597,21 +1634,24 @@ async def chart_heart_rate_data(
 async def chart_hrv_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get HRV data from Nightly Recharge for charts.
 
     Returns HRV average and ANS charge for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(NightlyRecharge)
         .where(NightlyRecharge.date >= since_date)
         .order_by(NightlyRecharge.date.asc())
     )
+    if uid:
+        stmt = stmt.where(NightlyRecharge.user_id == uid)
     result = await session.execute(stmt)
     recharge_data = result.scalars().all()
 
@@ -1630,17 +1670,20 @@ async def chart_hrv_data(
 async def chart_cardio_load_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get cardio load data for charts.
 
     Returns strain, tolerance, and load ratio for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
+    if uid:
+        stmt = stmt.where(CardioLoad.user_id == uid)
     result = await session.execute(stmt)
     cardio_data = result.scalars().all()
 
@@ -1666,7 +1709,7 @@ async def chart_cardio_load_data(
 async def export_sleep_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export sleep data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1714,7 +1757,7 @@ async def export_sleep_csv(
 async def export_activity_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export activity data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1762,7 +1805,7 @@ async def export_activity_csv(
 async def export_recharge_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export recharge/HRV data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1808,7 +1851,7 @@ async def export_recharge_csv(
 async def export_cardio_load_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export cardio load data as CSV for the connected user."""
     if not is_authenticated(request):
