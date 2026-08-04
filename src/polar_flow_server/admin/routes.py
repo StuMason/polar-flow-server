@@ -38,6 +38,7 @@ from polar_flow_server.core.api_keys import (
     revoke_api_key,
 )
 from polar_flow_server.core.config import settings
+from polar_flow_server.core.database import async_session_maker
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.core.setup_token import announce_setup_token, verify_setup_token
 from polar_flow_server.models.activity import Activity
@@ -729,120 +730,117 @@ async def admin_dashboard(
     def scoped(stmt: Any, model: Any) -> Any:
         return stmt.where(model.user_id == uid) if uid else stmt
 
-    # Get latest sleep data (last 7 days)
     since_date = date.today() - timedelta(days=7)
-    recent_sleep_stmt = scoped(
-        select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7), Sleep
-    )
-    result = await session.execute(recent_sleep_stmt)
-    recent_sleep = result.scalars().all()
 
-    # Get latest HRV from Nightly Recharge
-    latest_hrv = None
-    latest_hrv_stmt = scoped(
-        select(NightlyRecharge)
-        .where(NightlyRecharge.hrv_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1),
-        NightlyRecharge,
-    )
-    hrv_result = await session.execute(latest_hrv_stmt)
-    latest_recharge = hrv_result.scalar_one_or_none()
-    if latest_recharge:
-        latest_hrv = latest_recharge.hrv_avg
+    # ~17 independent lookups used to run as sequential round trips — on a
+    # remote Postgres that's ~17x RTT per page view (issue #87). They are
+    # built up front and executed concurrently, each on a short-lived
+    # session, so wall-clock is roughly one round trip. Statements are
+    # unchanged; only the scheduling differs.
+    stmts: dict[str, Any] = {
+        "recent_sleep": scoped(
+            select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7),
+            Sleep,
+        ),
+        "latest_hrv": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.hrv_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "resting_hr": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.heart_rate_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "latest_cardio": scoped(
+            select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1), CardioLoad
+        ),
+        "latest_hr": scoped(
+            select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1),
+            ContinuousHeartRate,
+        ),
+        "latest_alertness": scoped(
+            select(SleepWiseAlertness)
+            .order_by(SleepWiseAlertness.period_start_time.desc())
+            .limit(1),
+            SleepWiseAlertness,
+        ),
+        "latest_spo2": scoped(select(SpO2).order_by(SpO2.test_time.desc()).limit(1), SpO2),
+        # Both biosensing counts in one SELECT via scalar subqueries
+        "bio_counts": select(
+            scoped(select(func.count(SpO2.id)), SpO2).scalar_subquery().label("spo2"),
+            scoped(select(func.count(ECG.id)), ECG).scalar_subquery().label("ecg"),
+        ),
+        "latest_skin_temp": scoped(
+            select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1),
+            SkinTemperature,
+        ),
+        "latest_activity": scoped(
+            select(Activity).order_by(Activity.date.desc()).limit(1), Activity
+        ),
+        "latest_activity_samples": scoped(
+            select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1), ActivitySamples
+        ),
+        "breathing": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.breathing_rate_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "recent_recharge": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.date >= since_date)
+            .order_by(NightlyRecharge.date.desc())
+            .limit(7),
+            NightlyRecharge,
+        ),
+        "sync_logs": select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10),
+    }
+    if uid:
+        stmts["baselines"] = (
+            select(UserBaseline)
+            .where(UserBaseline.user_id == uid)
+            .order_by(UserBaseline.metric_name)
+        )
+        stmts["patterns"] = (
+            select(PatternAnalysis)
+            .where(PatternAnalysis.user_id == uid)
+            .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
+        )
 
-    # Get latest Resting HR from Nightly Recharge (separate query - may be different record)
-    latest_resting_hr = None
-    resting_hr_stmt = scoped(
-        select(NightlyRecharge)
-        .where(NightlyRecharge.heart_rate_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1),
-        NightlyRecharge,
-    )
-    resting_hr_result = await session.execute(resting_hr_stmt)
-    resting_hr_record = resting_hr_result.scalar_one_or_none()
-    if resting_hr_record:
-        latest_resting_hr = resting_hr_record.heart_rate_avg
+    async def _run(stmt: Any) -> Any:
+        async with async_session_maker() as short_session:
+            return await short_session.execute(stmt)
 
-    # Get latest cardio load
-    latest_cardio_stmt = scoped(
-        select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1), CardioLoad
-    )
-    cardio_result = await session.execute(latest_cardio_stmt)
-    latest_cardio = cardio_result.scalar_one_or_none()
+    gathered = await asyncio.gather(*(_run(stmt) for stmt in stmts.values()))
+    results = dict(zip(stmts.keys(), gathered, strict=True))
 
-    # Get latest continuous HR
-    latest_hr_stmt = scoped(
-        select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1),
-        ContinuousHeartRate,
-    )
-    hr_result = await session.execute(latest_hr_stmt)
-    latest_hr = hr_result.scalar_one_or_none()
-
-    # Get latest alertness
-    latest_alertness_stmt = scoped(
-        select(SleepWiseAlertness).order_by(SleepWiseAlertness.period_start_time.desc()).limit(1),
-        SleepWiseAlertness,
-    )
-    alertness_result = await session.execute(latest_alertness_stmt)
-    latest_alertness = alertness_result.scalar_one_or_none()
-
-    # Get latest SpO2
-    latest_spo2_stmt = scoped(select(SpO2).order_by(SpO2.test_time.desc()).limit(1), SpO2)
-    spo2_result = await session.execute(latest_spo2_stmt)
-    latest_spo2 = spo2_result.scalar_one_or_none()
-
-    # Biosensing record counts used by Heart Rate tab cards
-    spo2_count = (await session.execute(scoped(select(func.count(SpO2.id)), SpO2))).scalar() or 0
-    ecg_count = (await session.execute(scoped(select(func.count(ECG.id)), ECG))).scalar() or 0
-
-    # Get latest skin temperature (night-time, has baseline deviation)
-    latest_skin_temp_stmt = scoped(
-        select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1),
-        SkinTemperature,
-    )
-    skin_temp_result = await session.execute(latest_skin_temp_stmt)
-    latest_skin_temp = skin_temp_result.scalar_one_or_none()
-
-    # Get latest activity (for steps)
-    latest_activity_stmt = scoped(
-        select(Activity).order_by(Activity.date.desc()).limit(1), Activity
-    )
-    activity_result = await session.execute(latest_activity_stmt)
-    latest_activity = activity_result.scalar_one_or_none()
-
-    # Get latest activity samples (minute-by-minute steps, for "Today at a Glance")
-    latest_activity_samples_stmt = scoped(
-        select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1), ActivitySamples
-    )
-    activity_samples_result = await session.execute(latest_activity_samples_stmt)
-    latest_activity_samples = activity_samples_result.scalar_one_or_none()
-
-    # Get latest breathing rate from Nightly Recharge
-    latest_breathing_rate = None
-    breathing_stmt = scoped(
-        select(NightlyRecharge)
-        .where(NightlyRecharge.breathing_rate_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1),
-        NightlyRecharge,
-    )
-    breathing_result = await session.execute(breathing_stmt)
-    breathing_record = breathing_result.scalar_one_or_none()
-    if breathing_record:
-        latest_breathing_rate = breathing_record.breathing_rate_avg
-
-    # Get recent recharge data (last 7 days)
-    recent_recharge_stmt = scoped(
-        select(NightlyRecharge)
-        .where(NightlyRecharge.date >= since_date)
-        .order_by(NightlyRecharge.date.desc())
-        .limit(7),
-        NightlyRecharge,
-    )
-    recharge_list_result = await session.execute(recent_recharge_stmt)
-    recent_recharge = recharge_list_result.scalars().all()
+    recent_sleep = results["recent_sleep"].scalars().all()
+    latest_recharge = results["latest_hrv"].scalar_one_or_none()
+    latest_hrv = latest_recharge.hrv_avg if latest_recharge else None
+    resting_hr_record = results["resting_hr"].scalar_one_or_none()
+    latest_resting_hr = resting_hr_record.heart_rate_avg if resting_hr_record else None
+    latest_cardio = results["latest_cardio"].scalar_one_or_none()
+    latest_hr = results["latest_hr"].scalar_one_or_none()
+    latest_alertness = results["latest_alertness"].scalar_one_or_none()
+    latest_spo2 = results["latest_spo2"].scalar_one_or_none()
+    bio_counts = results["bio_counts"].one()
+    spo2_count = bio_counts.spo2 or 0
+    ecg_count = bio_counts.ecg or 0
+    latest_skin_temp = results["latest_skin_temp"].scalar_one_or_none()
+    latest_activity = results["latest_activity"].scalar_one_or_none()
+    latest_activity_samples = results["latest_activity_samples"].scalar_one_or_none()
+    breathing_record = results["breathing"].scalar_one_or_none()
+    latest_breathing_rate = breathing_record.breathing_rate_avg if breathing_record else None
+    recent_recharge = results["recent_recharge"].scalars().all()
+    recent_sync_logs = results["sync_logs"].scalars().all()
+    user_baselines: list[UserBaseline] = list(results["baselines"].scalars().all()) if uid else []
+    user_patterns: list[PatternAnalysis] = list(results["patterns"].scalars().all()) if uid else []
 
     # Calculate recovery recommendations
     recovery_status = _calculate_recovery_status(
@@ -850,34 +848,6 @@ async def admin_dashboard(
         recharge=latest_recharge,
         cardio=latest_cardio,
     )
-
-    # Get recent sync logs
-    sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
-    sync_logs_result = await session.execute(sync_logs_stmt)
-    recent_sync_logs = sync_logs_result.scalars().all()
-
-    # Get analytics data: baselines and patterns for the connected user
-    user_baselines: list[UserBaseline] = []
-    user_patterns: list[PatternAnalysis] = []
-
-    if uid:
-        # Fetch baselines for this user
-        baselines_stmt = (
-            select(UserBaseline)
-            .where(UserBaseline.user_id == uid)
-            .order_by(UserBaseline.metric_name)
-        )
-        baselines_result = await session.execute(baselines_stmt)
-        user_baselines = list(baselines_result.scalars().all())
-
-        # Fetch patterns for this user
-        patterns_stmt = (
-            select(PatternAnalysis)
-            .where(PatternAnalysis.user_id == uid)
-            .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
-        )
-        patterns_result = await session.execute(patterns_stmt)
-        user_patterns = list(patterns_result.scalars().all())
 
     # Record dates feeding the stat tiles' age badges (issue #70): the tiles
     # show "latest" values, which can silently be days old after a sync gap.
@@ -1209,32 +1179,48 @@ async def admin_settings(
     api_keys_result = await session.execute(api_keys_stmt)
     api_keys = api_keys_result.scalars().all()
 
-    # Get data counts for all endpoints
-    sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
-    exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-    activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
-    recharge_count = (await session.execute(select(func.count(NightlyRecharge.id)))).scalar() or 0
-    cardio_load_count = (await session.execute(select(func.count(CardioLoad.id)))).scalar() or 0
-    alertness_count = (
-        await session.execute(select(func.count(SleepWiseAlertness.id)))
-    ).scalar() or 0
-    bedtime_count = (await session.execute(select(func.count(SleepWiseBedtime.id)))).scalar() or 0
-    activity_samples_count = (
-        await session.execute(select(func.count(ActivitySamples.id)))
-    ).scalar() or 0
-    continuous_hr_count = (
-        await session.execute(select(func.count(ContinuousHeartRate.id)))
-    ).scalar() or 0
-
-    # Biosensing counts (v1.4.0)
-    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
-    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
-    body_temp_count = (await session.execute(select(func.count(BodyTemperature.id)))).scalar() or 0
-    skin_temp_count = (await session.execute(select(func.count(SkinTemperature.id)))).scalar() or 0
-
-    # Analytics counts
-    baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
-    pattern_count = (await session.execute(select(func.count(PatternAnalysis.id)))).scalar() or 0
+    # All 15 data counts in ONE round trip (issue #87): scalar subqueries in
+    # a single SELECT instead of 15 sequential queries (~15x RTT on a remote
+    # Postgres).
+    count_models: dict[str, Any] = {
+        "sleep_count": Sleep,
+        "exercise_count": Exercise,
+        "activity_count": Activity,
+        "recharge_count": NightlyRecharge,
+        "cardio_load_count": CardioLoad,
+        "alertness_count": SleepWiseAlertness,
+        "bedtime_count": SleepWiseBedtime,
+        "activity_samples_count": ActivitySamples,
+        "continuous_hr_count": ContinuousHeartRate,
+        "spo2_count": SpO2,
+        "ecg_count": ECG,
+        "body_temp_count": BodyTemperature,
+        "skin_temp_count": SkinTemperature,
+        "baseline_count": UserBaseline,
+        "pattern_count": PatternAnalysis,
+    }
+    counts_stmt = select(
+        *(
+            select(func.count(model.id)).scalar_subquery().label(name)
+            for name, model in count_models.items()
+        )
+    )
+    counts = (await session.execute(counts_stmt)).one()._asdict()
+    sleep_count = counts["sleep_count"] or 0
+    exercise_count = counts["exercise_count"] or 0
+    activity_count = counts["activity_count"] or 0
+    recharge_count = counts["recharge_count"] or 0
+    cardio_load_count = counts["cardio_load_count"] or 0
+    alertness_count = counts["alertness_count"] or 0
+    bedtime_count = counts["bedtime_count"] or 0
+    activity_samples_count = counts["activity_samples_count"] or 0
+    continuous_hr_count = counts["continuous_hr_count"] or 0
+    spo2_count = counts["spo2_count"] or 0
+    ecg_count = counts["ecg_count"] or 0
+    body_temp_count = counts["body_temp_count"] or 0
+    skin_temp_count = counts["skin_temp_count"] or 0
+    baseline_count = counts["baseline_count"] or 0
+    pattern_count = counts["pattern_count"] or 0
 
     # Get scheduler status
     scheduler = get_scheduler()
