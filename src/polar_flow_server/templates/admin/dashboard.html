@@ -3,6 +3,12 @@
 {% block title %}Dashboard - polar-flow-server{% endblock %}
 
 {% block content %}
+{% macro age_badge(d) -%}
+{%- if d is not none -%}{%- set age = d | days_old -%}
+{%- if age >= 1 -%}
+<div class="text-[10px] mt-1 font-medium {% if age >= 3 %}text-amber-600{% else %}text-gray-400{% endif %}">{{ age }}d ago</div>
+{%- endif -%}{%- endif -%}
+{%- endmacro %}
 <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="min-w-0">
         <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -200,6 +206,7 @@
                 <div class="text-indigo-900 text-2xl font-bold mt-1">
                     {% if latest_hrv %}{{ latest_hrv|round(0) }}<span class="text-sm font-normal ml-1">ms</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.hrv) }}
             </div>
         </div>
 
@@ -210,6 +217,7 @@
                 <div class="text-violet-900 text-2xl font-bold mt-1">
                     {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}<span class="text-sm font-normal ml-1">/100</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.sleep) }}
             </div>
         </div>
 
@@ -220,6 +228,7 @@
                 <div class="text-blue-900 text-2xl font-bold mt-1">
                     {% if latest_breathing_rate %}{{ latest_breathing_rate|round(1) }}<span class="text-sm font-normal ml-1">/min</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.breathing) }}
             </div>
         </div>
 
@@ -230,6 +239,7 @@
                 <div class="text-sky-900 text-2xl font-bold mt-1">
                     {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}<span class="text-sm font-normal ml-1">/10</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.alertness) }}
             </div>
         </div>
     </div>
@@ -243,6 +253,7 @@
                 <div class="text-rose-900 text-2xl font-bold mt-1">
                     {% if latest_resting_hr %}{{ latest_resting_hr|round(0) }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.resting_hr) }}
             </div>
         </div>
 
@@ -253,6 +264,7 @@
                 <div class="text-red-900 text-2xl font-bold mt-1">
                     {% if latest_hr and latest_hr.hr_avg %}{{ latest_hr.hr_avg }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.daily_hr) }}
             </div>
         </div>
 
@@ -263,6 +275,7 @@
                 <div class="text-fuchsia-900 text-2xl font-bold mt-1">
                     {% if latest_spo2 %}{{ latest_spo2.blood_oxygen_percent }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.spo2) }}
             </div>
         </div>
 
@@ -275,6 +288,7 @@
                         {% if latest_skin_temp.deviation_from_baseline >= 0 %}+{% endif %}{{ latest_skin_temp.deviation_from_baseline|round(1) }}<span class="text-sm font-normal ml-1">°C</span>
                     {% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.skin_temp) }}
             </div>
         </div>
     </div>
@@ -288,6 +302,7 @@
                 <div class="text-emerald-900 text-2xl font-bold mt-1">
                     {% if latest_activity and latest_activity.steps %}{{ "{:,}".format(latest_activity.steps) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.activity) }}
             </div>
         </div>
 
@@ -298,6 +313,7 @@
                 <div class="text-green-900 text-2xl font-bold mt-1">
                     {% if latest_activity and latest_activity.calories_active %}{{ "{:,}".format(latest_activity.calories_active) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.activity) }}
             </div>
         </div>
 
@@ -308,6 +324,7 @@
                 <div class="text-teal-900 text-2xl font-bold mt-1">
                     {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.cardio) }}
             </div>
         </div>
 
@@ -318,6 +335,7 @@
                 <div class="text-lime-900 text-2xl font-bold mt-1">
                     {% if latest_cardio and latest_cardio.cardio_load_ratio and latest_cardio.cardio_load_ratio > 0 %}{{ latest_cardio.cardio_load_ratio|round(2) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.cardio) }}
             </div>
         </div>
     </div>
@@ -995,10 +1013,12 @@ const commonOptions = {
     }
 };
 
-// Format date labels for display
+// Format date labels for display. Date-only strings parse as UTC midnight
+// via new Date(str), so users west of UTC saw every label a day early —
+// parse the parts as a local date instead, and use the browser locale.
 function formatDateLabel(dateStr) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 // Create custom tooltip callback
