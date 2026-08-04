@@ -354,6 +354,8 @@
             <div class="h-56">
                 <canvas
                     id="todaySleepStagesChart"
+                    role="img"
+                    aria-label="Doughnut chart of last night's light, deep and REM sleep minutes"
                     data-light-min="{{ (recent_sleep[0].light_sleep_seconds / 60) if recent_sleep[0].light_sleep_seconds else 0 }}"
                     data-deep-min="{{ (recent_sleep[0].deep_sleep_seconds / 60) if recent_sleep[0].deep_sleep_seconds else 0 }}"
                     data-rem-min="{{ (recent_sleep[0].rem_sleep_seconds / 60) if recent_sleep[0].rem_sleep_seconds else 0 }}"
@@ -371,7 +373,7 @@
             </h3>
             {% if latest_hr and latest_hr.samples_json %}
             <div class="h-56">
-                <canvas id="todayHrChart"></canvas>
+                <canvas id="todayHrChart" role="img" aria-label="Line chart of today's heart rate through the day"></canvas>
             </div>
             {% else %}
             <div class="h-56 flex items-center justify-center text-sm text-gray-400">No heart rate samples yet</div>
@@ -385,7 +387,7 @@
             </h3>
             {% if latest_activity_samples and latest_activity_samples.samples_json %}
             <div class="h-56">
-                <canvas id="todayStepsChart"></canvas>
+                <canvas id="todayStepsChart" role="img" aria-label="Bar chart of today's steps per hour"></canvas>
             </div>
             {% else %}
             <div class="h-56 flex items-center justify-center text-sm text-gray-400">No step samples yet</div>
@@ -408,17 +410,17 @@
         <div class="flex items-center gap-4">
             <!-- Export Dropdown -->
             <div class="relative">
-                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" onclick="document.getElementById('export-menu').classList.toggle('hidden')">
+                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu" onclick="toggleExportMenu()">
                     <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                     </svg>
                     Export CSV
                 </button>
-                <div id="export-menu" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
-                    <a href="/admin/export/sleep.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
-                    <a href="/admin/export/activity.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
-                    <a href="/admin/export/recharge.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
-                    <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
+                <div id="export-menu" role="menu" aria-labelledby="export-btn" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
+                    <a href="/admin/export/sleep.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
+                    <a href="/admin/export/activity.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
+                    <a href="/admin/export/recharge.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
+                    <a href="/admin/export/cardio-load.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
                 </div>
             </div>
             <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="handleChartRangeChange()">
@@ -437,14 +439,14 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score</h3>
             <div class="h-64">
-                <canvas id="sleepScoreChart"></canvas>
+                <canvas id="sleepScoreChart" role="img" aria-label="Line chart of nightly sleep score over the selected period"></canvas>
             </div>
         </div>
 
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Duration</h3>
             <div class="h-64">
-                <canvas id="sleepDurationChart"></canvas>
+                <canvas id="sleepDurationChart" role="img" aria-label="Stacked chart of sleep stage durations per night"></canvas>
             </div>
         </div>
     </div>
@@ -544,7 +546,7 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Heart Rate (Min/Avg/Max)</h3>
             <div class="h-64">
-                <canvas id="hrChart"></canvas>
+                <canvas id="hrChart" role="img" aria-label="Line chart of daily minimum, average and maximum heart rate"></canvas>
             </div>
         </div>
 
@@ -574,7 +576,7 @@
 
             {% if latest_hr.samples_json %}
             <div class="mt-4 h-40">
-                <canvas id="todayHrHeartTabChart"></canvas>
+                <canvas id="todayHrHeartTabChart" role="img" aria-label="Line chart of today's heart rate through the day"></canvas>
             </div>
             {% else %}
             <p class="mt-4 text-xs text-gray-500">No intraday heart-rate samples available for this date.</p>
@@ -587,14 +589,14 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">HRV (RMSSD)</h3>
             <div class="h-64">
-                <canvas id="hrvChart"></canvas>
+                <canvas id="hrvChart" role="img" aria-label="Line chart of nightly HRV over the selected period"></canvas>
             </div>
         </div>
 
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">ANS Charge</h3>
             <div class="h-64">
-                <canvas id="ansChart"></canvas>
+                <canvas id="ansChart" role="img" aria-label="Line chart of nightly ANS charge over the selected period"></canvas>
             </div>
         </div>
     </div>
@@ -606,13 +608,13 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Daily Steps</h3>
             <div class="h-64">
-                <canvas id="activityChart"></canvas>
+                <canvas id="activityChart" role="img" aria-label="Bar chart of daily steps and calories over the selected period"></canvas>
             </div>
         </div>
         <div class="bg-white shadow rounded-lg p-4 lg:col-span-2">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Training Load (Strain vs Tolerance)</h3>
             <div class="h-64">
-                <canvas id="cardioChart"></canvas>
+                <canvas id="cardioChart" role="img" aria-label="Line chart of cardio load strain and tolerance over the selected period"></canvas>
             </div>
         </div>
     </div>
@@ -888,6 +890,8 @@ function setActiveDashboardTab(tab) {
     buttons.forEach(btn => {
         const isActive = btn.dataset.tab === tab;
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        // Roving tabindex: only the active tab is in the tab order (#72)
+        btn.setAttribute('tabindex', isActive ? '0' : '-1');
 
         if (btn.dataset.tabVariant === 'bottom') {
             // Mobile floating nav: highlight with color only, no underline border.
@@ -919,7 +923,39 @@ function setActiveDashboardTab(tab) {
     }
 }
 
+// ARIA wiring for the tab UI (#72). Panels can be shared between tabs
+// (data-tab-panel="a,b"), so panel ids and aria-controls lists are derived
+// here instead of being hand-maintained in the markup.
+function initTabAccessibility() {
+    const panels = [...document.querySelectorAll('[data-tab-panel]')];
+    panels.forEach((panel, i) => {
+        if (!panel.id) panel.id = `tabpanel-${i}`;
+        panel.setAttribute('role', 'tabpanel');
+    });
+    document.querySelectorAll('.dashboard-tab-btn').forEach(btn => {
+        const ids = panels
+            .filter(p => p.dataset.tabPanel.split(',').map(v => v.trim()).includes(btn.dataset.tab))
+            .map(p => p.id);
+        btn.setAttribute('aria-controls', ids.join(' '));
+    });
+    // Arrow-key navigation per tablist (Left/Right/Home/End)
+    document.querySelectorAll('[role="tablist"]').forEach(list => {
+        const tabs = [...list.querySelectorAll('[role="tab"]')];
+        list.addEventListener('keydown', e => {
+            const idx = tabs.indexOf(document.activeElement);
+            if (idx === -1) return;
+            let next = null;
+            if (e.key === 'ArrowRight') next = tabs[(idx + 1) % tabs.length];
+            else if (e.key === 'ArrowLeft') next = tabs[(idx - 1 + tabs.length) % tabs.length];
+            else if (e.key === 'Home') next = tabs[0];
+            else if (e.key === 'End') next = tabs[tabs.length - 1];
+            if (next) { e.preventDefault(); next.click(); next.focus(); }
+        });
+    });
+}
+
 function initDashboardTabs() {
+    initTabAccessibility();
     const tabs = ['overview', 'sleep', 'heart', 'training', 'trends'];
     const hashTab = window.location.hash.replace('#tab-', '');
     const initialTab = tabs.includes(hashTab) ? hashTab : 'overview';
@@ -935,12 +971,30 @@ function initDashboardTabs() {
     setActiveDashboardTab(initialTab);
 }
 
+function toggleExportMenu(forceClose) {
+    const menu = document.getElementById('export-menu');
+    const btn = document.getElementById('export-btn');
+    const close = forceClose === true || !menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', close);
+    btn.setAttribute('aria-expanded', close ? 'false' : 'true');
+}
+
 // Close export menu when clicking outside
 document.addEventListener('click', function(e) {
     const menu = document.getElementById('export-menu');
     const btn = document.getElementById('export-btn');
-    if (!menu.contains(e.target) && !btn.contains(e.target)) {
-        menu.classList.add('hidden');
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+        toggleExportMenu(true);
+    }
+});
+
+// Escape dismisses the export menu and returns focus to its button (#72)
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const menu = document.getElementById('export-menu');
+    if (menu && !menu.classList.contains('hidden')) {
+        toggleExportMenu(true);
+        document.getElementById('export-btn').focus();
     }
 });
 
