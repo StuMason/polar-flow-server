@@ -59,6 +59,7 @@ from polar_flow_server.models.sync_log import SyncLog, SyncTrigger
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.models.user import User
 from polar_flow_server.services.scheduler import get_scheduler
+from polar_flow_server.services.sync_guard import SyncInProgressError
 from polar_flow_server.services.sync_orchestrator import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -974,6 +975,16 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             template_name="admin/partials/sync_success.html",
             context={
                 "results": sync_log.records_synced or {},
+            },
+        )
+    except SyncInProgressError:
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={
+                "error": (
+                    "A sync is already running. Wait for it to finish — "
+                    "it will appear in the sync history below."
+                )
             },
         )
     except Exception as e:
