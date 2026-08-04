@@ -568,6 +568,52 @@
     </div>
 </div>
 
+{% if oauth_apps %}
+<!-- Connected Applications (MCP OAuth) -->
+<div class="mt-8 bg-white shadow rounded-lg">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">Connected Applications</h2>
+        <p class="text-sm text-gray-500 mt-1">
+            Apps you authorized via the MCP connector sign-in. Revoking access
+            invalidates all of an app's tokens immediately.
+        </p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connected</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active tokens</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for app in oauth_apps %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ app.name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ app.created_at | utc_dt }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ app.active_tokens }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <form method="POST" action="/admin/oauth-apps/revoke" class="inline">
+                            {% if csrf_token %}<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">{% endif %}
+                            <input type="hidden" name="client_id" value="{{ app.client_id }}">
+                            <button
+                                type="submit"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                                Revoke access
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <script>
 let currentKeyId = null;
 let currentKeyPrefix = null;

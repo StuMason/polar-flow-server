@@ -11,7 +11,7 @@ from collections import OrderedDict
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from typing import Annotated, Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from litestar import Request, get, post
@@ -534,8 +534,18 @@ async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> 
 
     return Template(
         template_name="admin/login.html",
-        context={"csrf_token": _get_csrf_token(request)},
+        context={
+            "csrf_token": _get_csrf_token(request),
+            "next": _safe_next_path(request.query_params.get("next")),
+        },
     )
+
+
+def _safe_next_path(raw: str | None) -> str | None:
+    """Only allow post-login redirects to admin-local paths (no open redirect)."""
+    if raw and raw.startswith("/admin/") and "//" not in raw and "\\" not in raw:
+        return raw
+    return None
 
 
 def _trusted_proxy_matchers() -> tuple[set[str], list[IPv4Network | IPv6Network]]:
@@ -647,7 +657,8 @@ async def login_submit(
     # Successful login - clear any failed attempts
     await _login_rate_limiter.record_success(client_ip)
     await login_admin(request, admin)
-    return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+    next_path = _safe_next_path(str(form_data.get("next", "")) or None)
+    return Redirect(path=next_path or "/admin", status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/logout", sync_to_thread=False)
@@ -655,6 +666,102 @@ async def logout(request: Request[Any, Any, Any]) -> Redirect:
     """Log out and redirect to login page."""
     logout_admin(request)
     return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+
+# =============================================================================
+# OAuth consent (the human half of the MCP connector sign-in flow)
+#
+# The SDK's /authorize endpoint validates the client and redirects here with
+# a signed blob of the authorization params. The admin logs in (if needed),
+# approves or denies, and we redirect back to the client with a code or an
+# access_denied error. Only exists when BASE_URL is configured (self-hosted).
+# =============================================================================
+
+
+def _consent_error(request: Request[Any, Any, Any], message: str) -> Template:
+    return Template(
+        template_name="admin/oauth_consent.html",
+        context={"error": message, "csrf_token": _get_csrf_token(request)},
+    )
+
+
+@get("/oauth/consent", sync_to_thread=False)
+async def oauth_consent_form(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Show the consent screen for a pending OAuth authorization request."""
+    if not is_authenticated(request):
+        target = quote(f"/admin/oauth/consent?req={request.query_params.get('req', '')}", safe="")
+        return Redirect(path=f"/admin/login?next={target}", status_code=HTTP_303_SEE_OTHER)
+
+    from polar_flow_server.mcp_server.oauth import PolarOAuthProvider, unpack_consent_request
+
+    data = unpack_consent_request(str(request.query_params.get("req", "")))
+    if data is None:
+        return _consent_error(
+            request, "This authorization request is invalid or has expired. Retry from the app."
+        )
+
+    client = await PolarOAuthProvider().get_client(data["client_id"])
+    if client is None:
+        return _consent_error(request, "Unknown application. Retry the connection from the app.")
+
+    user_id = await _connected_user_id(session)
+    if user_id is None:
+        return _consent_error(
+            request, "No Polar account is connected yet - complete setup before authorizing apps."
+        )
+
+    return Template(
+        template_name="admin/oauth_consent.html",
+        context={
+            "client_name": client.client_name or client.client_id,
+            "user_id": user_id,
+            "req": request.query_params.get("req", ""),
+            "csrf_token": _get_csrf_token(request),
+        },
+    )
+
+
+@post("/oauth/consent", sync_to_thread=False)
+async def oauth_consent_submit(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Complete a consent decision: mint a code (approve) or bounce (deny)."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+    from mcp.server.auth.provider import construct_redirect_uri
+
+    from polar_flow_server.mcp_server.oauth import (
+        PolarOAuthProvider,
+        build_consent_redirect,
+        unpack_consent_request,
+    )
+
+    form_data = await request.form()
+    data = unpack_consent_request(str(form_data.get("req", "")))
+    if data is None:
+        return _consent_error(
+            request, "This authorization request is invalid or has expired. Retry from the app."
+        )
+
+    if form_data.get("action") != "approve":
+        return Redirect(
+            path=construct_redirect_uri(
+                data["redirect_uri"], error="access_denied", state=data["state"]
+            ),
+            status_code=HTTP_303_SEE_OTHER,
+        )
+
+    user_id = await _connected_user_id(session)
+    if user_id is None:
+        return _consent_error(
+            request, "No Polar account is connected yet - complete setup before authorizing apps."
+        )
+
+    code = await PolarOAuthProvider().create_authorization_code(data, user_id)
+    return Redirect(path=build_consent_redirect(data, code), status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/setup/oauth", sync_to_thread=False, status_code=HTTP_200_OK)
@@ -1255,9 +1362,42 @@ async def admin_settings(
         "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
     }
 
+    # MCP connector apps (OAuth clients) with their live token counts
+    from polar_flow_server.models.oauth import OAuthClient, OAuthIssuedToken
+
+    oauth_clients = (
+        (await session.execute(select(OAuthClient).order_by(OAuthClient.created_at.desc())))
+        .scalars()
+        .all()
+    )
+    now_ts = datetime.now(UTC).timestamp()
+    token_count_rows = (
+        await session.execute(
+            select(OAuthIssuedToken.client_id, func.count())
+            .where(
+                OAuthIssuedToken.revoked == False,  # noqa: E712
+                OAuthIssuedToken.token_type == "access",
+                OAuthIssuedToken.expires_at > now_ts,
+            )
+            .group_by(OAuthIssuedToken.client_id)
+        )
+    ).all()
+    token_counts: dict[str, int] = {str(cid): int(n) for cid, n in token_count_rows}
+    oauth_apps = [
+        {
+            "client_id": c.client_id,
+            "name": c.client_metadata.get("client_name") or c.client_id,
+            "created_at": c.created_at,
+            "active_tokens": token_counts.get(c.client_id, 0),
+        }
+        for c in oauth_clients
+    ]
+
     return Template(
         template_name="admin/settings.html",
         context={
+            "csrf_token": _get_csrf_token(request),
+            "oauth_apps": oauth_apps,
             "has_credentials": bool(app_settings and app_settings.polar_client_id),
             "client_id": app_settings.polar_client_id if app_settings else None,
             "connected_user": connected_user,
@@ -1288,6 +1428,28 @@ async def admin_settings(
             "sync_stats": sync_stats,
         },
     )
+
+
+@post("/oauth-apps/revoke", sync_to_thread=False)
+async def revoke_oauth_app(request: Request[Any, Any, Any], session: AsyncSession) -> Redirect:
+    """Revoke every token an MCP connector app holds (from Settings)."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+    from sqlalchemy import update as sa_update
+
+    from polar_flow_server.models.oauth import OAuthIssuedToken
+
+    form_data = await request.form()
+    client_id = str(form_data.get("client_id", ""))
+    if client_id:
+        await session.execute(
+            sa_update(OAuthIssuedToken)
+            .where(OAuthIssuedToken.client_id == client_id)
+            .values(revoked=True)
+        )
+        await session.commit()
+    return Redirect(path="/admin/settings", status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/settings/reset-oauth", sync_to_thread=False, status_code=HTTP_200_OK)
@@ -1924,6 +2086,10 @@ admin_routes = [
     oauth_authorize,
     admin_settings,
     reset_oauth_credentials,
+    # MCP connector OAuth consent (auth required via session check)
+    oauth_consent_form,
+    oauth_consent_submit,
+    revoke_oauth_app,
     # API Key management
     admin_regenerate_api_key,
     admin_revoke_api_key,

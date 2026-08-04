@@ -18,12 +18,29 @@ https://your-server.example.com/mcp
 
 ## Authentication
 
-The MCP endpoint uses the same API keys as the REST API, sent as an
-`X-API-Key` header or `Authorization: Bearer` token. Create a key in the
-admin dashboard (Settings → API Keys).
+Two ways in, and the right one depends on the client:
 
-Scoping is identical to the REST API and enforced before any MCP protocol
-handling:
+### OAuth sign-in (the "Connect" button)
+
+With `BASE_URL` set (self-hosted mode), the server is a full OAuth 2.1
+authorization server: MCP clients discover it via the standard metadata
+documents, register themselves dynamically, and send you through a real
+sign-in — your admin login plus a consent screen — instead of pasting keys.
+Issued tokens are scoped to the connected user, expire after an hour
+(refresh tokens rotate), and every connected app is listed in
+Settings → Connected Applications with a one-click revoke.
+
+```bash
+# .env - the public URL becomes the OAuth issuer
+BASE_URL=https://your-server.example.com
+```
+
+### API keys (headless / scripting)
+
+The same API keys as the REST API always work, sent as an `X-API-Key`
+header or as a bearer token. Create one in the admin dashboard
+(Settings → API Keys). Scoping is identical to the REST API and enforced
+before any MCP protocol handling:
 
 - **User-scoped keys** can only ever read their own user's data. Tools need
   no `user_id` argument — the key decides.
@@ -34,20 +51,29 @@ Rate limits are shared with the REST API (per key, per hour).
 
 ## Connecting a client
 
+### Claude Desktop / claude.ai (OAuth)
+
+Add a custom connector with URL `https://your-server.example.com/mcp` and
+click **Connect** — your browser opens the server's login, you approve the
+consent screen, done. No keys to copy.
+
 ### Claude Code
 
 ```bash
+# OAuth (with BASE_URL configured): authenticate interactively
+claude mcp add polar-health https://your-server.example.com/mcp --transport http
+
+# Or with an API key
 claude mcp add polar-health https://your-server.example.com/mcp \
   --transport http \
   --header "X-API-Key: pfk_your_key_here"
 ```
 
-### Claude Desktop / other clients
+### Other clients
 
-Add a custom connector / remote MCP server with URL
-`https://your-server.example.com/mcp`. If the client supports custom
-headers, set `X-API-Key`; if it only supports bearer auth, use your API key
-as the bearer token.
+Any MCP client speaking streamable HTTP works: OAuth via the standard
+discovery chain, or an API key as a bearer/header if the client supports
+fixed credentials.
 
 ### Verify
 

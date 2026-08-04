@@ -106,8 +106,13 @@ managed from the settings page, with rate limit tracking.
 A built-in [Model Context Protocol](https://modelcontextprotocol.io) server
 (protocol revision 2026-07-28, streamable HTTP) lets AI assistants query your
 health data directly - "how has my sleep trended vs my baseline?", "should I
-train hard today?". It runs inside the main server at `/mcp`, authenticated
-with the same API keys as the REST API:
+train hard today?". It runs inside the main server at `/mcp`.
+
+With `BASE_URL` set, the server is its own OAuth 2.1 authorization server:
+add it as a custom connector in Claude Desktop / claude.ai, click
+**Connect**, sign in on your server, approve — no keys to paste. Connected
+apps are listed (and revocable) in Settings. API keys also work for
+headless clients:
 
 ```bash
 claude mcp add polar-health https://your-server.example.com/mcp \

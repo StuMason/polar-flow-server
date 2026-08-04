@@ -7,6 +7,8 @@ Speaks MCP protocol revision 2026-07-28 (and earlier revisions for older
 clients) via the official ``mcp`` SDK v2.
 """
 
+from mcp.server.auth.provider import TokenVerifier
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.caching import CacheHint
 from mcp.server.mcpserver import MCPServer
 
@@ -43,14 +45,24 @@ _TOOLS = (
 )
 
 
-def build_mcp_server() -> MCPServer:
-    """Create the MCP server with all tools registered."""
+def build_mcp_server(
+    token_verifier: TokenVerifier | None = None,
+    auth: AuthSettings | None = None,
+) -> MCPServer:
+    """Create the MCP server with all tools registered.
+
+    With ``token_verifier`` + ``auth`` (OAuth mode) the SDK guards the MCP
+    route with bearer auth and serves protected-resource metadata; without
+    them the mount in ``asgi.py`` does API-key auth itself.
+    """
     server = MCPServer(
         name="polar-flow-server",
         title="Polar Health Data",
         version=__version__,
         instructions=INSTRUCTIONS,
         website_url="https://github.com/StuMason/polar-flow-server",
+        token_verifier=token_verifier,
+        auth=auth,
         # The tool list only changes on deploy; let clients cache it. Health
         # data responses themselves are never cacheable by intermediaries.
         cache_hints={"tools/list": CacheHint(ttl_ms=3_600_000, scope="private")},
