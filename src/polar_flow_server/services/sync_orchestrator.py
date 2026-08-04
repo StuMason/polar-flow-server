@@ -61,6 +61,7 @@ from polar_flow_server.services.baseline import BaselineService
 from polar_flow_server.services.pattern import PatternService
 from polar_flow_server.services.sync import SyncService
 from polar_flow_server.services.sync_error_handler import SyncErrorHandler
+from polar_flow_server.services.sync_guard import SyncInProgressError, sync_slot
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -219,7 +220,9 @@ class SyncOrchestrator:
         """Sync a single user with full audit logging.
 
         Creates a SyncLog entry, performs the sync, handles errors,
-        and marks analytics completion.
+        and marks analytics completion. At most one sync runs per user at
+        a time — a concurrent call (double-clicked Sync Now, scheduler
+        overlapping a manual sync) raises before any SyncLog is created.
 
         Args:
             user_id: User identifier
@@ -230,7 +233,27 @@ class SyncOrchestrator:
 
         Returns:
             Completed SyncLog with results
+
+        Raises:
+            SyncInProgressError: a sync for this user is already running.
         """
+        with sync_slot(user_id):
+            return await self._sync_user_locked(
+                user_id=user_id,
+                polar_token=polar_token,
+                trigger=trigger,
+                priority=priority,
+                recalculate_analytics=recalculate_analytics,
+            )
+
+    async def _sync_user_locked(
+        self,
+        user_id: str,
+        polar_token: str,
+        trigger: SyncTrigger,
+        priority: SyncPriority | None,
+        recalculate_analytics: bool,
+    ) -> SyncLog:
         job_id = str(uuid.uuid4())
         log = self.logger.bind(user_id=user_id, job_id=job_id, trigger=trigger.value)
 
@@ -453,6 +476,12 @@ class SyncOrchestrator:
                 # Update rate limiter from results
                 self.rate_limiter.update_from_sync_log(sync_log)
 
+            except SyncInProgressError:
+                log.info(
+                    "Sync already in flight for user, skipping",
+                    user_id=user.polar_user_id,
+                )
+                continue
             except Exception as e:
                 log.error(
                     "Failed to sync user",
