@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Self-hosted health analytics server for Polar devices. Syncs data from Polar AccessLink API (9+ endpoints) to PostgreSQL and provides an HTMX-powered admin dashboard plus REST API.
+Self-hosted health analytics server for Polar devices. Syncs data from Polar AccessLink API (13 endpoints incl. biosensing) to PostgreSQL and provides an HTMX-powered admin dashboard plus REST API.
 
 ## Development Commands
 
@@ -92,7 +92,7 @@ class SleepTransformer:
 
 **Admin Auth**: Session-based authentication for admin panel (separate from API key auth). First-run flow: setup account -> OAuth credentials -> connect Polar.
 
-**API Auth**: Optional API key via `X-API-Key` header. Controlled by `API_KEY` env var. If not set, data endpoints are open.
+**API Auth**: An API key is ALWAYS required on data endpoints via the `X-API-Key` header (health data is never public). Per-user keys are created from the admin dashboard / OAuth flow; the optional `API_KEY` env var adds a master key for backend use. Guard: `per_user_api_key_guard` in `core/auth.py`.
 
 ### Database
 

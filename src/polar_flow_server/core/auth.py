@@ -1,7 +1,7 @@
 """API key authentication for service-to-service requests.
 
 Supports two authentication modes:
-1. Simple mode: Single API key from config (API_KEY env var)
+1. Master key mode: single API key from config (API_KEY env var)
 2. Per-user mode: User-scoped keys from database with rate limiting
 """
 
@@ -79,24 +79,6 @@ async def validate_api_key(key: str, session: AsyncSession) -> APIKey | None:
     return api_key
 
 
-async def validate_simple_api_key(key: str) -> bool:
-    """Validate API key against simple config-based key.
-
-    For self-hosted single-key deployments where database lookup
-    is overkill. Uses constant-time comparison to prevent timing attacks.
-
-    Args:
-        key: The API key to validate
-
-    Returns:
-        True if valid, False otherwise
-    """
-    if not settings.api_key:
-        return False
-
-    return secrets.compare_digest(key, settings.api_key)
-
-
 def _extract_api_key(connection: ASGIConnection[Any, Any, Any, Any]) -> str | None:
     """Extract API key from request headers.
 
@@ -157,45 +139,6 @@ async def _check_rate_limit(api_key: APIKey, session: AsyncSession) -> tuple[boo
     await session.commit()
 
     return True, rate_limit_info
-
-
-async def api_key_guard(
-    connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler
-) -> None:
-    """Litestar guard that validates API key from request header.
-
-    Validates against config-based master key or database keys.
-
-    Args:
-        connection: The ASGI connection
-        _: The route handler (unused)
-
-    Raises:
-        NotAuthorizedException: If API key is missing or invalid
-    """
-    # Extract API key from headers
-    api_key = _extract_api_key(connection)
-
-    if not api_key:
-        logger.warning("API request without authentication")
-        raise NotAuthorizedException("Missing API key. Use X-API-Key header.")
-
-    # Validate the key
-    is_valid = await validate_simple_api_key(api_key)
-
-    # If config key didn't match, try database
-    if not is_valid:
-        from polar_flow_server.core.database import async_session_maker
-
-        async with async_session_maker() as session:
-            api_key_model = await validate_api_key(api_key, session)
-            is_valid = api_key_model is not None
-
-    if not is_valid:
-        logger.warning("Invalid API key attempted")
-        raise NotAuthorizedException("Invalid API key")
-
-    logger.debug("API key validated successfully")
 
 
 async def per_user_api_key_guard(
