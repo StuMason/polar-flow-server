@@ -10,6 +10,7 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.oauth import OAuthAuthCode, OAuthClient, OAuthIssuedToken
 from polar_flow_server.models.pattern import (
     PatternAnalysis,
     PatternName,
@@ -48,6 +49,9 @@ __all__ = [
     "Exercise",
     "MetricName",
     "NightlyRecharge",
+    "OAuthAuthCode",
+    "OAuthClient",
+    "OAuthIssuedToken",
     "PatternAnalysis",
     "PatternName",
     "PatternType",

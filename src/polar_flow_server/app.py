@@ -4,6 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 from advanced_alchemy.config.asyncio import AsyncSessionConfig
@@ -16,12 +17,13 @@ from litestar.openapi import OpenAPIConfig
 from litestar.static_files import create_static_files_router
 from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 
 from polar_flow_server import __version__
 from polar_flow_server.admin import admin_router
 from polar_flow_server.admin.auth import admin_user_exists
 from polar_flow_server.api import api_routers
-from polar_flow_server.core.config import settings
+from polar_flow_server.core.config import DeploymentMode, settings
 from polar_flow_server.core.database import (
     async_session_maker,
     close_database,
@@ -156,8 +158,38 @@ def create_app() -> Litestar:
     # session_manager.run() is single-use, and tests call create_app()
     # repeatedly. The transport requires the manager running for the app's
     # lifetime — without this lifespan the first /mcp request 500s.
-    mcp_server = build_mcp_server()
-    mcp_mount = create_mcp_mount(mcp_server)
+    #
+    # OAuth mode (the Claude "Connect" sign-in flow) needs the server to
+    # know its public URL (it becomes the OAuth issuer) and only makes sense
+    # self-hosted, where the admin who approves consent IS the data's user.
+    oauth_enabled = (
+        bool(settings.base_url) and settings.deployment_mode == DeploymentMode.SELF_HOSTED
+    )
+    oauth_handlers: list[Any] = []
+    if oauth_enabled:
+        from pydantic import AnyHttpUrl
+
+        from polar_flow_server.mcp_server.asgi import create_oauth_root_mounts
+        from polar_flow_server.mcp_server.oauth import (
+            OAUTH_SCOPE,
+            PolarOAuthProvider,
+            PolarTokenVerifier,
+        )
+
+        base = str(settings.base_url).rstrip("/")
+        auth_settings = AuthSettings(
+            issuer_url=AnyHttpUrl(base),
+            resource_server_url=AnyHttpUrl(f"{base}/mcp"),
+            client_registration_options=ClientRegistrationOptions(
+                enabled=True, valid_scopes=[OAUTH_SCOPE], default_scopes=[OAUTH_SCOPE]
+            ),
+            revocation_options=RevocationOptions(enabled=True),
+        )
+        mcp_server = build_mcp_server(token_verifier=PolarTokenVerifier(), auth=auth_settings)
+        oauth_handlers = list(create_oauth_root_mounts(PolarOAuthProvider(), auth_settings))
+    else:
+        mcp_server = build_mcp_server()
+    mcp_mount = create_mcp_mount(mcp_server, oauth_enabled=oauth_enabled)
 
     @asynccontextmanager
     async def mcp_lifespan(app: Litestar) -> AsyncIterator[None]:
@@ -208,6 +240,13 @@ def create_app() -> Litestar:
             "/api/v1/users/",
             # MCP endpoint: JSON-RPC POSTs authenticated by API key, no CSRF
             "/mcp",
+            # OAuth AS endpoints: external clients POST here (token exchange,
+            # DCR, revocation) with their own auth, never browser forms
+            "/authorize",
+            "/token",
+            "/register",
+            "/revoke",
+            "/.well-known",
             # Health check (no auth needed)
             "/health",
         ],
@@ -222,6 +261,7 @@ def create_app() -> Litestar:
             # the admin UI must work offline / on a LAN with no CDNs (#71).
             create_static_files_router(path="/static", directories=[static_dir]),
             mcp_mount,
+            *oauth_handlers,
         ],
         lifespan=[lifespan, mcp_lifespan],
         openapi_config=OpenAPIConfig(

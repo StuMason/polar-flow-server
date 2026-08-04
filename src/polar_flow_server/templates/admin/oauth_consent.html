@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Authorize Access - polar-flow-server{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-8">
+    <div class="bg-white shadow rounded-lg p-8">
+        {% if error %}
+        <div class="text-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Authorization Request</h1>
+        </div>
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <p class="text-sm text-red-700">{{ error }}</p>
+        </div>
+        <a href="/admin" class="w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50">
+            Back to dashboard
+        </a>
+        {% else %}
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Authorize Access</h1>
+            <p class="text-gray-600">An application wants to connect to your health data</p>
+        </div>
+
+        <div class="mb-6 bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
+            <p class="text-sm text-gray-700"><span class="font-medium">Application:</span> {{ client_name }}</p>
+            <p class="text-sm text-gray-700"><span class="font-medium">Data user:</span> {{ user_id }}</p>
+            <p class="text-sm text-gray-700"><span class="font-medium">Access:</span> read health data, trigger syncs</p>
+        </div>
+
+        <p class="text-sm text-gray-600 mb-6">
+            If you approve, this application receives its own revocable token
+            scoped to this user's data. You can revoke it any time from
+            Settings.
+        </p>
+
+        <form method="POST" action="/admin/oauth/consent" class="flex gap-3">
+            {% if csrf_token %}<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">{% endif %}
+            <input type="hidden" name="req" value="{{ req }}">
+            <button
+                type="submit" name="action" value="deny"
+                class="w-1/2 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+            >
+                Deny
+            </button>
+            <button
+                type="submit" name="action" value="approve"
+                class="w-1/2 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+                Approve
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
