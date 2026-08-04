@@ -73,6 +73,11 @@ api/
 admin/
   routes.py         # Admin dashboard, OAuth flow, settings
   auth.py           # Admin user authentication (session-based)
+mcp_server/
+  server.py         # MCP server factory (tool registration = wire order)
+  tools.py          # MCP tool implementations
+  asgi.py           # /mcp Litestar mount with API-key auth
+  context.py        # Request-scoped key scope for tools
 templates/          # Jinja2 templates for admin UI
 ```
 

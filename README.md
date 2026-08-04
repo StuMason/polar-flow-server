@@ -101,6 +101,24 @@ managed from the settings page, with rate limit tracking.
 | **Body Temperature** | Continuous body temperature |
 | **Skin Temperature** | Nightly skin temperature with baseline deviation |
 
+## MCP Server (AI Assistants)
+
+A built-in [Model Context Protocol](https://modelcontextprotocol.io) server
+(protocol revision 2026-07-28, streamable HTTP) lets AI assistants query your
+health data directly - "how has my sleep trended vs my baseline?", "should I
+train hard today?". It runs inside the main server at `/mcp`, authenticated
+with the same API keys as the REST API:
+
+```bash
+claude mcp add polar-health https://your-server.example.com/mcp \
+  --transport http \
+  --header "X-API-Key: pfk_your_key_here"
+```
+
+Ten tools cover insights, sleep, recovery, activity, workouts, biosensing
+streams, personal baselines, patterns/anomalies, and sync control. See
+[docs/mcp-server.md](docs/mcp-server.md).
+
 ## Configuration
 
 ### Required Environment Variables

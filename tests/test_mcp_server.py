@@ -144,6 +144,8 @@ async def test_tools_list_names_and_order(app_client) -> None:
         "get_biosensing",
         "get_baselines",
         "get_patterns",
+        "trigger_sync",
+        "get_sync_status",
     ]
     sleep_tool = tools.tools[1]
     assert "sleep" in (sleep_tool.description or "").lower()
@@ -398,6 +400,125 @@ async def test_get_baselines_and_patterns_after_analysis(app_client) -> None:
     pattern_names = {p["pattern_name"] for p in payload["patterns"]}
     assert "hrv_trend" in pattern_names
     assert "anomaly_count" in payload
+
+
+# =============================================================================
+# Sync tools: trigger (background) + status (poll)
+# =============================================================================
+
+
+async def _seed_syncable_user(polar_user_id: str = "mcp-user") -> str:
+    """User whose stored token actually decrypts (trigger_sync needs it)."""
+    from polar_flow_server.core.security import token_encryption
+    from polar_flow_server.models.user import User
+
+    async with async_session_maker() as session:
+        session.add(
+            User(
+                polar_user_id=polar_user_id,
+                access_token_encrypted=token_encryption.encrypt("fake-polar-token"),
+                is_active=True,
+            )
+        )
+        await session.commit()
+    return polar_user_id
+
+
+async def test_trigger_sync_starts_and_status_shows_result(app_client, monkeypatch) -> None:
+    import asyncio
+
+    from polar_flow_server.models.sync_log import SyncLog, SyncTrigger
+    from polar_flow_server.services.sync_orchestrator import SyncOrchestrator
+
+    async def fake_sync_user(self, user_id, polar_token, trigger=SyncTrigger.MANUAL, **kwargs):
+        from datetime import UTC, datetime
+
+        assert polar_token == "fake-polar-token"  # decrypted from the stored token
+        async with async_session_maker() as session:
+            # started_at is a server default - set it explicitly so
+            # complete_success can compute duration before the flush
+            log = SyncLog(
+                user_id=user_id,
+                job_id="test-job",
+                trigger=trigger.value,
+                started_at=datetime.now(UTC),
+            )
+            log.complete_success(records={"sleep": 3}, api_calls=13)
+            session.add(log)
+            await session.commit()
+        return log
+
+    monkeypatch.setattr(SyncOrchestrator, "sync_user", fake_sync_user)
+
+    user_id = await _seed_syncable_user()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        started = await client.call_tool("trigger_sync", {})
+        assert not started.is_error
+        assert started.structured_content["status"] == "started"
+
+        # Poll get_sync_status until the background sync lands (fake = fast)
+        last_sync = None
+        for _ in range(50):
+            status = await client.call_tool("get_sync_status", {})
+            assert not status.is_error
+            last_sync = status.structured_content["last_sync"]
+            if last_sync is not None:
+                break
+            await asyncio.sleep(0.1)
+
+    assert last_sync is not None, "background sync never recorded a SyncLog"
+    assert last_sync["status"] == "success"
+    assert last_sync["trigger"] == "manual"
+    assert last_sync["records_synced"] == {"sleep": 3}
+
+
+async def test_trigger_sync_reports_already_running(app_client) -> None:
+    from polar_flow_server.services.sync_guard import sync_slot
+
+    user_id = await _seed_syncable_user()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        with sync_slot(user_id):
+            result = await client.call_tool("trigger_sync", {})
+
+    assert not result.is_error
+    assert result.structured_content["status"] == "already_running"
+
+
+async def test_trigger_sync_honours_rate_limit_cooldown(app_client) -> None:
+    from polar_flow_server.services.sync_orchestrator import shared_rate_limit_tracker
+
+    user_id = await _seed_syncable_user()
+    raw_key = await _user_key(user_id)
+
+    shared_rate_limit_tracker.note_rate_limited(retry_after_seconds=600)
+    try:
+        async with _mcp_client(app_client.app, raw_key) as client:
+            result = await client.call_tool("trigger_sync", {})
+            status = await client.call_tool("get_sync_status", {})
+    finally:
+        shared_rate_limit_tracker.rate_limited_until = None  # module singleton
+
+    assert not result.is_error
+    assert result.structured_content["status"] == "rate_limited"
+    assert result.structured_content["retry_after_seconds"] > 0
+    assert status.structured_content["polar_rate_limit"]["rate_limited_until"] is not None
+
+
+async def test_get_sync_status_before_any_sync(app_client) -> None:
+    user_id = await _seed_user()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_sync_status", {})
+
+    assert not result.is_error
+    payload = result.structured_content
+    assert payload["currently_syncing"] is False
+    assert payload["last_sync"] is None
 
 
 async def test_rest_api_still_works_after_refactor(app_client) -> None:

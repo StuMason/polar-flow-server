@@ -10,6 +10,7 @@ Tool registration order (see ``server.py``) is the order clients see in
 prompt caches warm.
 """
 
+import asyncio
 from datetime import date, timedelta
 from typing import Annotated, Any, Literal
 
@@ -435,6 +436,138 @@ async def get_patterns(user_id: UserIdParam = None) -> dict[str, Any]:
         "anomaly_count": len(anomalies),
         "anomalies": anomalies,
     }
+
+
+# Strong references to in-flight background syncs so they aren't GC'd
+# mid-run (asyncio only holds weak references to tasks).
+_background_syncs: set[asyncio.Task[None]] = set()
+
+
+async def trigger_sync(user_id: UserIdParam = None) -> dict[str, Any]:
+    """Start a data sync from the Polar cloud for the user.
+
+    Kicks off a full sync (all 13 endpoint types) in the background using
+    the server's stored Polar credentials, then returns immediately - poll
+    get_sync_status to watch it finish (typically well under a minute).
+    Only one sync runs per user at a time, and the server honours Polar's
+    rate-limit cooldowns: the response status is "started",
+    "already_running", or "rate_limited" (with retry_after_seconds). Data
+    also syncs automatically on a schedule, so only trigger a sync when the
+    user asks for fresh data or get_sync_status shows stale data.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.core.security import token_encryption
+    from polar_flow_server.models.user import User
+    from polar_flow_server.services.sync_guard import is_syncing
+    from polar_flow_server.services.sync_orchestrator import shared_rate_limit_tracker
+
+    if is_syncing(uid):
+        return {"status": "already_running", "user_id": uid}
+
+    if not shared_rate_limit_tracker.can_sync_now():
+        return {
+            "status": "rate_limited",
+            "user_id": uid,
+            "retry_after_seconds": shared_rate_limit_tracker.get_wait_time_seconds(),
+        }
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(User).where(User.polar_user_id == uid, User.is_active == True)  # noqa: E712
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise ValueError(f"No connected Polar user '{uid}' to sync")
+        polar_token = token_encryption.decrypt(user.access_token_encrypted)
+
+    task = asyncio.create_task(_run_background_sync(uid, polar_token))
+    _background_syncs.add(task)
+    task.add_done_callback(_background_syncs.discard)
+
+    return {
+        "status": "started",
+        "user_id": uid,
+        "message": "Sync running in the background; poll get_sync_status for the result.",
+    }
+
+
+async def get_sync_status(user_id: UserIdParam = None) -> dict[str, Any]:
+    """Get the user's sync state: is one running, the last result, freshness.
+
+    `currently_syncing` is live; `last_sync` is the most recent sync's audit
+    record (status success/partial/failed/skipped, what triggered it, start
+    and end times, per-endpoint record counts, and error details if any);
+    `polar_rate_limit` reports the shared Polar API budget including any
+    active cooldown (rate_limited_until). Check this after trigger_sync, or
+    first whenever other tools return surprisingly old data.
+    """
+    uid = await resolve_scoped_user_id(user_id)
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.models.sync_log import SyncLog
+    from polar_flow_server.services.sync_guard import is_syncing
+    from polar_flow_server.services.sync_orchestrator import shared_rate_limit_tracker
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(SyncLog)
+            .where(SyncLog.user_id == uid)
+            .order_by(SyncLog.started_at.desc())
+            .limit(1)
+        )
+        log = result.scalar_one_or_none()
+
+    last_sync = None
+    if log is not None:
+        last_sync = {
+            "status": log.status,
+            "trigger": log.trigger,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "completed_at": log.completed_at.isoformat() if log.completed_at else None,
+            "duration_ms": log.duration_ms,
+            "records_synced": log.records_synced,
+            "api_calls_made": log.api_calls_made,
+            "error_type": log.error_type,
+            "error_message": log.error_message,
+        }
+
+    return {
+        "user_id": uid,
+        "currently_syncing": is_syncing(uid),
+        "last_sync": last_sync,
+        "polar_rate_limit": shared_rate_limit_tracker.to_dict(),
+    }
+
+
+async def _run_background_sync(uid: str, polar_token: str) -> None:
+    """Run one orchestrated sync in the background.
+
+    The orchestrator writes its own SyncLog audit trail (including
+    failures), so this only needs to absorb pre-log races and log the
+    truly unexpected.
+    """
+    import structlog
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.models.sync_log import SyncTrigger
+    from polar_flow_server.services.sync_guard import SyncInProgressError
+    from polar_flow_server.services.sync_orchestrator import SyncOrchestrator
+
+    try:
+        async with async_session_maker() as session:
+            await SyncOrchestrator(session).sync_user(
+                user_id=uid,
+                polar_token=polar_token,
+                trigger=SyncTrigger.MANUAL,
+            )
+    except SyncInProgressError:
+        # Lost a race with the scheduler between our check and the slot
+        # grab - the other sync is doing the same work, nothing to do.
+        pass
+    except Exception:
+        structlog.get_logger().exception("MCP-triggered sync failed before logging", user_id=uid)
 
 
 async def _query_biosensing(
