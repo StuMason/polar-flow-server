@@ -581,17 +581,69 @@ let currentKeyId = null;
 let currentKeyPrefix = null;
 let currentKeyName = null;
 
+// Modal focus management (#72): remember the opener, move focus into the
+// dialog, keep Tab inside it, and restore focus on close.
+const MODAL_IDS = ['regenerate-modal', 'revoke-modal', 'create-key-modal'];
+let modalReturnFocus = null;
+
+function showModal(id) {
+    modalReturnFocus = document.activeElement;
+    const modal = document.getElementById(id);
+    modal.classList.remove('hidden');
+    const target = modal.querySelector('button, [href], input, select, textarea');
+    if (target) target.focus();
+}
+
+function hideModal(id) {
+    document.getElementById(id).classList.add('hidden');
+    if (modalReturnFocus && document.contains(modalReturnFocus)) {
+        modalReturnFocus.focus();
+    }
+    modalReturnFocus = null;
+}
+
+function openModalElement() {
+    for (const id of MODAL_IDS) {
+        const m = document.getElementById(id);
+        if (m && !m.classList.contains('hidden')) return m;
+    }
+    return null;
+}
+
+document.addEventListener('keydown', function(e) {
+    const modal = openModalElement();
+    if (!modal) return;
+    if (e.key === 'Escape') {
+        hideModal(modal.id);
+        return;
+    }
+    if (e.key === 'Tab') {
+        const focusables = [...modal.querySelectorAll('button, [href], input, select, textarea')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+});
+
 function openRegenerateModal(keyId, keyPrefix, keyName) {
     currentKeyId = keyId;
     currentKeyPrefix = keyPrefix;
     currentKeyName = keyName;
     document.getElementById('regenerate-key-prefix').textContent = keyPrefix + '...';
     document.getElementById('regenerate-key-name').textContent = keyName;
-    document.getElementById('regenerate-modal').classList.remove('hidden');
+    showModal('regenerate-modal');
 }
 
 function closeRegenerateModal() {
-    document.getElementById('regenerate-modal').classList.add('hidden');
+    hideModal('regenerate-modal');
     currentKeyId = null;
 }
 
@@ -601,11 +653,11 @@ function openRevokeModal(keyId, keyPrefix, keyName) {
     currentKeyName = keyName;
     document.getElementById('revoke-key-prefix').textContent = keyPrefix + '...';
     document.getElementById('revoke-key-name').textContent = keyName;
-    document.getElementById('revoke-modal').classList.remove('hidden');
+    showModal('revoke-modal');
 }
 
 function closeRevokeModal() {
-    document.getElementById('revoke-modal').classList.add('hidden');
+    hideModal('revoke-modal');
     currentKeyId = null;
 }
 
@@ -731,11 +783,11 @@ document.addEventListener('keydown', function(e) {
 });
 
 function openCreateKeyModal() {
-    document.getElementById('create-key-modal').classList.remove('hidden');
+    showModal('create-key-modal');
 }
 
 function closeCreateKeyModal() {
-    document.getElementById('create-key-modal').classList.add('hidden');
+    hideModal('create-key-modal');
 }
 
 async function confirmCreateKey() {
@@ -786,7 +838,7 @@ function toggleSyncDetails(id) {
 </script>
 
 <!-- Regenerate API Key Modal -->
-<div id="regenerate-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="regenerate-modal" role="dialog" aria-modal="true" aria-labelledby="regenerate-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 rounded-full">
@@ -794,7 +846,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Regenerate API Key</h3>
+            <h3 id="regenerate-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Regenerate API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     You are about to regenerate the API key:
@@ -844,7 +896,7 @@ function toggleSyncDetails(id) {
 </div>
 
 <!-- Revoke API Key Modal -->
-<div id="revoke-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="revoke-modal" role="dialog" aria-modal="true" aria-labelledby="revoke-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
@@ -852,7 +904,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Revoke API Key</h3>
+            <h3 id="revoke-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Revoke API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     You are about to revoke the API key:
@@ -902,7 +954,7 @@ function toggleSyncDetails(id) {
 </div>
 
 <!-- Create API Key Modal -->
-<div id="create-key-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="create-key-modal" role="dialog" aria-modal="true" aria-labelledby="create-key-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
@@ -910,7 +962,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
+            <h3 id="create-key-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     Create a new API key for the connected Polar user. This key will allow access to the REST API.
