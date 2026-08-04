@@ -4,7 +4,6 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import structlog
 from advanced_alchemy.config.asyncio import AsyncSessionConfig
@@ -35,7 +34,7 @@ from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
 
 
-def format_utc(value: Any, fmt: str = "%Y-%m-%d %H:%M") -> str:
+def format_utc(value: datetime | str | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
     """Jinja filter: render a stored-UTC timestamp consistently, labelled UTC.
 
     All persisted datetimes are UTC; templates used to strftime them with no
@@ -46,9 +45,10 @@ def format_utc(value: Any, fmt: str = "%Y-%m-%d %H:%M") -> str:
         return "--"
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value)
+            parsed = datetime.fromisoformat(value)
         except ValueError:
             return value
+        value = parsed
     return value.strftime(fmt) + " UTC"
 
 
