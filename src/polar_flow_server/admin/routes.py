@@ -746,12 +746,21 @@ async def oauth_consent_submit(
             request, "This authorization request is invalid or has expired. Retry from the app."
         )
 
+    # The hop back to the client CANNOT be a redirect response to this form
+    # POST: browsers enforce the page's form-action CSP ('self') against the
+    # whole redirect chain, so a 303 to the client's origin gets blocked.
+    # Render a self-navigating page instead - plain navigation is not
+    # subject to form-action, and it works for any client origin without
+    # loosening the CSP.
     if form_data.get("action") != "approve":
-        return Redirect(
-            path=construct_redirect_uri(
-                data["redirect_uri"], error="access_denied", state=data["state"]
-            ),
-            status_code=HTTP_303_SEE_OTHER,
+        return Template(
+            template_name="admin/oauth_redirect.html",
+            context={
+                "target": construct_redirect_uri(
+                    data["redirect_uri"], error="access_denied", state=data["state"]
+                ),
+                "denied": True,
+            },
         )
 
     user_id = await _connected_user_id(session)
@@ -761,7 +770,10 @@ async def oauth_consent_submit(
         )
 
     code = await PolarOAuthProvider().create_authorization_code(data, user_id)
-    return Redirect(path=build_consent_redirect(data, code), status_code=HTTP_303_SEE_OTHER)
+    return Template(
+        template_name="admin/oauth_redirect.html",
+        context={"target": build_consent_redirect(data, code), "denied": False},
+    )
 
 
 @post("/setup/oauth", sync_to_thread=False, status_code=HTTP_200_OK)
