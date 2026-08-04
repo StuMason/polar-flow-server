@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import structlog
@@ -52,7 +52,7 @@ def format_utc(value: datetime | str | None, fmt: str = "%Y-%m-%d %H:%M") -> str
     return value.strftime(fmt) + " UTC"
 
 
-def days_old(value: Any) -> int:
+def days_old(value: date | datetime) -> int:
     """Jinja filter: whole days between a stored date/datetime and today (UTC).
 
     Feeds the dashboard tiles' "Nd ago" staleness badges (issue #70).
