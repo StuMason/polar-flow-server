@@ -261,7 +261,7 @@
             <div class="p-4">
                 <div class="text-fuchsia-700 text-xs font-medium uppercase">SpO2</div>
                 <div class="text-fuchsia-900 text-2xl font-bold mt-1">
-                    {% if latest_spo2 and latest_spo2.spo2_avg %}{{ latest_spo2.spo2_avg|round(0) }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
+                    {% if latest_spo2 %}{{ latest_spo2.blood_oxygen_percent }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
                 </div>
             </div>
         </div>
@@ -649,10 +649,10 @@
         <div>
             <div class="text-gray-500 text-xs uppercase">SpO2 ({{ latest_spo2.test_time.strftime('%m/%d') }})</div>
             <div class="text-xl font-bold text-purple-700">
-                {{ latest_spo2.spo2_avg|round(1) if latest_spo2.spo2_avg else '--' }}<span class="text-sm font-normal ml-1">%</span>
+                {{ latest_spo2.blood_oxygen_percent }}<span class="text-sm font-normal ml-1">%</span>
             </div>
-            {% if latest_spo2.spo2_min %}
-            <div class="text-xs text-gray-500">Min: {{ latest_spo2.spo2_min }}%</div>
+            {% if latest_spo2.spo2_class %}
+            <div class="text-xs {% if latest_spo2.spo2_class != 'NORMAL' %}text-red-600{% else %}text-gray-500{% endif %}">{{ latest_spo2.spo2_class|title }}</div>
             {% endif %}
         </div>
         {% endif %}
