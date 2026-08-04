@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from typing import Annotated, Any
 
 from litestar import Router, get
+from litestar.exceptions import NotFoundException
 from litestar.openapi.spec import Example
 from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
@@ -79,7 +80,7 @@ async def get_activity_by_date(
         ),
     ],
     session: AsyncSession,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Get activity data for a specific date."""
     stmt = select(Activity).where(
         Activity.user_id == user_id,
@@ -89,7 +90,7 @@ async def get_activity_by_date(
     r = result.scalar_one_or_none()
 
     if not r:
-        return None
+        raise NotFoundException(detail=f"No activity data for {target_date}")
 
     return {
         "date": str(r.date),
@@ -246,21 +247,23 @@ async def get_exercises_list(
     ]
 
 
-@get("/users/{user_id:str}/exercises/{exercise_id:int}", status_code=HTTP_200_OK)
+@get("/users/{user_id:str}/exercises/{exercise_id:str}", status_code=HTTP_200_OK)
 async def get_exercise_detail(
     user_id: str,
     exercise_id: Annotated[
-        int,
+        str,
         Parameter(
             description="Exercise ID (from the exercises list endpoint)",
             examples=[
-                Example(value=1, summary="First exercise"),
-                Example(value=42, summary="Example exercise ID"),
+                Example(
+                    value="9f2b8e4a-1c3d-4e5f-8a6b-7c8d9e0f1a2b",
+                    summary="Exercise ID from the list endpoint",
+                ),
             ],
         ),
     ],
     session: AsyncSession,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Get detailed exercise data."""
     stmt = select(Exercise).where(
         Exercise.user_id == user_id,
@@ -270,7 +273,7 @@ async def get_exercise_detail(
     r = result.scalar_one_or_none()
 
     if not r:
-        return None
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
 
     return {
         "id": r.id,
