@@ -26,6 +26,7 @@ nav:
   - Integration Guide: integration.md
   - Architecture: architecture.md
   - API Reference: api/overview.md
+  - MCP Server: mcp-server.md
   - ADRs:
     - Per-User API Keys: adr/001-per-user-api-keys.md
 

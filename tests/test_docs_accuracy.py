@@ -25,9 +25,16 @@ def test_dead_api_key_guard_is_gone():
     assert hasattr(auth, "per_user_api_key_guard")
 
 
-def test_docs_do_not_claim_duckdb_or_shipped_mcp():
+def test_docs_do_not_claim_duckdb():
     for doc in ("docs/index.md", "README.md"):
         text = (ROOT / doc).read_text()
         assert "DuckDB" not in text, doc
+
+
+def test_mcp_claims_match_reality():
+    """The MCP server ships now (#80) - docs must say so, not 'planned'."""
     index = (ROOT / "docs" / "index.md").read_text()
-    assert "planned" in index.split("MCP")[1][:80].lower()
+    assert "planned" not in index.split("MCP")[1][:80].lower()
+    assert (ROOT / "docs" / "mcp-server.md").exists()
+    readme = (ROOT / "README.md").read_text()
+    assert "/mcp" in readme

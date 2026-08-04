@@ -38,6 +38,8 @@ _TOOLS = (
     tools.get_biosensing,
     tools.get_baselines,
     tools.get_patterns,
+    tools.trigger_sync,
+    tools.get_sync_status,
 )
 
 

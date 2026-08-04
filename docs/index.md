@@ -12,7 +12,7 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 2. Stores everything in a local PostgreSQL database
 3. Runs analytics (HRV baselines, recovery scores, sleep debt)
 4. Exposes REST API for dashboards and integrations
-5. Exposes the data for integrations (an MCP server for AI assistants is planned - issue #80)
+5. Ships a built-in [MCP server](mcp-server.md) so AI assistants can query and reason over the data
 
 ## Features
 
