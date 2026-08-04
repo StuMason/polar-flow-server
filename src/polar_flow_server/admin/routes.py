@@ -1269,6 +1269,7 @@ async def admin_settings(
             "pattern_count": pattern_count,
             # Sync scheduler
             "sync_interval_minutes": settings.sync_interval_minutes,
+            "sync_days_lookback": settings.sync_days_lookback,
             "scheduler_status": scheduler_status,
             "recent_sync_logs": recent_sync_logs,
             "sync_stats": sync_stats,

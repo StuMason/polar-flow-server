@@ -95,7 +95,7 @@
                         <p class="text-sm font-medium text-blue-900">Connected to Polar Flow</p>
                         <p class="text-sm text-blue-700 mt-1">User ID: {{ connected_user.polar_user_id }}</p>
                         {% if connected_user.last_sync_at %}
-                        <p class="text-xs text-blue-600 mt-1">Last sync: {{ connected_user.last_sync_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p class="text-xs text-blue-600 mt-1">Last sync: {{ connected_user.last_sync_at | utc_dt }}</p>
                         {% endif %}
                     </div>
                 </div>
@@ -155,12 +155,12 @@
         <div class="grid grid-cols-2 gap-4 text-sm">
             <div class="p-4 border border-gray-200 rounded-lg">
                 <p class="text-gray-600 mb-1">Sync Interval</p>
-                <p class="text-2xl font-bold text-gray-900">1 hour</p>
+                <p class="text-2xl font-bold text-gray-900">{% if sync_interval_minutes % 60 == 0 %}{{ sync_interval_minutes // 60 }} hour{% if sync_interval_minutes // 60 != 1 %}s{% endif %}{% else %}{{ sync_interval_minutes }} minutes{% endif %}</p>
                 <p class="text-xs text-gray-500 mt-1">Automatic sync frequency</p>
             </div>
             <div class="p-4 border border-gray-200 rounded-lg">
                 <p class="text-gray-600 mb-1">Days Lookback</p>
-                <p class="text-2xl font-bold text-gray-900">30 days</p>
+                <p class="text-2xl font-bold text-gray-900">{{ sync_days_lookback }} days</p>
                 <p class="text-xs text-gray-500 mt-1">Default data history to fetch</p>
             </div>
         </div>
@@ -291,21 +291,13 @@
             <div>
                 <div class="text-xs text-gray-500 uppercase">Next Run</div>
                 <div class="text-sm font-medium text-gray-900 whitespace-nowrap">
-                    {% if scheduler.next_run_at %}
-                        {% if scheduler.next_run_at is string %}
-                            {{ scheduler.next_run_at|replace('T', ' ')|replace('+00:00', ' UTC') }}
-                        {% else %}
-                            {{ scheduler.next_run_at.strftime('%Y-%m-%d %H:%M UTC') }}
-                        {% endif %}
-                    {% else %}
-                        --
-                    {% endif %}
+                    {{ scheduler.next_run_at | utc_dt }}
                 </div>
             </div>
             <div>
                 <div class="text-xs text-gray-500 uppercase">Last Run</div>
                 <div class="text-sm font-medium text-gray-900">
-                    {% if scheduler.last_run_at %}{{ scheduler.last_run_at }}{% else %}Never{% endif %}
+                    {% if scheduler.last_run_at %}{{ scheduler.last_run_at | utc_dt }}{% else %}Never{% endif %}
                 </div>
             </div>
             <div>
@@ -341,7 +333,7 @@
                         <tr class="cursor-pointer hover:bg-gray-50" onclick="toggleSyncDetails('sync-details-{{ loop.index }}')">
                             <td class="px-3 py-2 whitespace-nowrap text-gray-500">
                                 <span class="inline-block w-4 text-gray-400 mr-1" id="sync-chevron-{{ loop.index }}">▶</span>
-                                {{ log.started_at.strftime('%m/%d %H:%M') }}
+                                {{ log.started_at | utc_dt('%m/%d %H:%M') }}
                             </td>
                             <td class="px-3 py-2 whitespace-nowrap">
                                 <code class="text-xs bg-gray-100 px-1 rounded">{{ log.user_id[:12] }}{% if log.user_id|length > 12 %}...{% endif %}</code>
@@ -514,7 +506,7 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-500">
                             {% if key.last_used_at %}
-                            {{ key.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ key.last_used_at | utc_dt }}
                             {% else %}
                             <span class="text-gray-400">Never</span>
                             {% endif %}
@@ -863,7 +855,7 @@ function toggleSyncDetails(id) {
                 </div>
                 <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
                     <p class="text-sm text-red-800">
-                        <strong>Warning:</strong> This action cannot be undone. The key will be permanently deactivated. To restore access, you will need to reconnect via OAuth.
+                        <strong>Warning:</strong> This action cannot be undone. The key will be permanently deactivated. To restore API access, create a new API key afterwards.
                     </p>
                 </div>
             </div>
