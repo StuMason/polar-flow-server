@@ -914,11 +914,6 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             trigger=SyncTrigger.MANUAL,
         )
 
-        # Get updated counts
-        sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
-        exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-        activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
-
         # Check sync status
         if sync_log.status == "partial":
             # Partial success - some endpoints worked, some failed
@@ -928,9 +923,6 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
                 context={
                     "results": sync_log.records_synced or {},
                     "errors": errors,
-                    "sleep_count": sleep_count,
-                    "exercise_count": exercise_count,
-                    "activity_count": activity_count,
                 },
             )
         elif sync_log.status == "failed":
@@ -954,9 +946,6 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             template_name="admin/partials/sync_success.html",
             context={
                 "results": sync_log.records_synced or {},
-                "sleep_count": sleep_count,
-                "exercise_count": exercise_count,
-                "activity_count": activity_count,
             },
         )
     except Exception as e:
