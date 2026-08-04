@@ -6,7 +6,7 @@ from typing import Any
 
 import structlog
 from polar_flow import PolarFlow
-from polar_flow.exceptions import PolarFlowError
+from polar_flow.exceptions import NotFoundError, PolarFlowError
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -654,10 +654,10 @@ class SyncService:
 
                 await self.session.execute(stmt)
                 count += 1
-            except Exception as e:
-                # Skip days with errors
+            except NotFoundError as e:
+                # No data recorded for this day - normal, keep going.
                 self.logger.debug(
-                    "Error fetching continuous HR for date",
+                    "No continuous HR for date",
                     date=str(fetch_date),
                     error=str(e),
                 )
@@ -683,7 +683,8 @@ class SyncService:
 
         try:
             spo2_data = await client.biosensing.get_spo2()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("SpO2 sync skipped", error=str(e))
             return 0
 
@@ -716,7 +717,8 @@ class SyncService:
 
         try:
             ecg_data = await client.biosensing.get_ecg()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("ECG sync skipped", error=str(e))
             return 0
 
@@ -749,7 +751,8 @@ class SyncService:
 
         try:
             temp_data = await client.biosensing.get_body_temperature()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("Body temperature sync skipped", error=str(e))
             return 0
 
@@ -782,7 +785,8 @@ class SyncService:
 
         try:
             temp_data = await client.biosensing.get_skin_temperature()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("Skin temperature sync skipped", error=str(e))
             return 0
 
