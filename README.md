@@ -69,17 +69,21 @@ The server syncs data every hour automatically.
 
 ## Dashboard
 
-The admin panel at `/admin/dashboard` shows:
+The admin panel at `/admin/dashboard` is organised into tabs (with a
+floating tab bar on mobile):
 
-- **Key Metrics** - HRV, Heart Rate, Training Strain, Alertness, Sleep Score
-- **API Keys** - Manage per-user API keys with rate limit tracking
-- **Record Counts** - All 9 data types with totals
-- **Recent Sleep** - Last 7 days with scores
-- **Nightly Recharge** - HRV, ANS charge, recovery status
-- **Training Load** - Strain, tolerance, load ratio
-- **Continuous HR** - Daily min/avg/max heart rate
+- **Overview** - stat tiles (HRV, resting HR, SpO2, skin temp, steps, strain,
+  sleep score, alertness...), Today's Readiness recommendations, and
+  "Today at a Glance" mini-charts (sleep stages, heart rate, steps)
+- **Trends & Baselines** - personal baselines and detected patterns
+- **Sleep** - sleep score and stage-duration charts
+- **Heart Rate** - daily HR, HRV and ANS charge charts, biosensing panel
+- **Training Load** - activity and cardio load charts
 
-## Data Synced (9 Endpoints)
+Charts have a selectable 7/14/30-day range and CSV export. API keys are
+managed from the settings page, with rate limit tracking.
+
+## Data Synced (13 Endpoints)
 
 | Endpoint | Data |
 |----------|------|
@@ -92,6 +96,10 @@ The admin panel at `/admin/dashboard` shows:
 | **SleepWise Bedtime** | Optimal sleep timing recommendations |
 | **Activity Samples** | Minute-by-minute step data |
 | **Continuous HR** | All-day heart rate (5-min intervals) |
+| **SpO2** | Blood oxygen tests (compatible devices) |
+| **ECG** | Electrocardiogram tests (compatible devices) |
+| **Body Temperature** | Continuous body temperature |
+| **Skin Temperature** | Nightly skin temperature with baseline deviation |
 
 ## Configuration
 
