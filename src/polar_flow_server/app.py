@@ -13,6 +13,7 @@ from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
+from litestar.static_files import create_static_files_router
 from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
 
@@ -148,6 +149,7 @@ def create_app() -> Litestar:
     """
     # Get templates directory path
     templates_dir = Path(__file__).parent / "templates"
+    static_dir = Path(__file__).parent / "static"
 
     # Session store for admin authentication
     # In production with multiple instances, use Redis instead
@@ -197,7 +199,14 @@ def create_app() -> Litestar:
     )
 
     return Litestar(
-        route_handlers=[root_redirect, *api_routers, admin_router],
+        route_handlers=[
+            root_redirect,
+            *api_routers,
+            admin_router,
+            # Vendored frontend assets (htmx, Chart.js, built Tailwind CSS) -
+            # the admin UI must work offline / on a LAN with no CDNs (#71).
+            create_static_files_router(path="/static", directories=[static_dir]),
+        ],
         lifespan=[lifespan],
         openapi_config=OpenAPIConfig(
             title="polar-flow-server API",

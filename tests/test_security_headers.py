@@ -32,7 +32,9 @@ class TestSecurityHeaders:
     async def test_csp_allows_the_cdns_the_ui_uses(self, app_client):
         response = await app_client.get("/health")
         csp = response.headers["content-security-policy"]
-        for host in ("unpkg.com", "cdn.tailwindcss.com", "cdn.jsdelivr.net"):
+        # tailwindcss.com is gone on purpose - assets are vendored (#71);
+        # unpkg/jsdelivr remain only for the /schema doc UIs.
+        for host in ("unpkg.com", "cdn.jsdelivr.net"):
             assert host in csp
 
     async def test_csp_covers_every_host_the_pages_actually_load(self, app_client):
