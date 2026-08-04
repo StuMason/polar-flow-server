@@ -8,6 +8,7 @@ Supports two authentication modes:
 import hashlib
 import logging
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -33,11 +34,32 @@ class RateLimitExceeded(NotAuthorizedException):
 
     status_code = HTTP_429_TOO_MANY_REQUESTS
 
-    def __init__(self, retry_after: int) -> None:
+    def __init__(self, retry_after: int, rate_limit_info: dict[str, int] | None = None) -> None:
         """Initialize with retry-after seconds."""
         super().__init__(f"Rate limit exceeded. Retry after {retry_after} seconds.")
         self.retry_after = retry_after
+        self.rate_limit_info = rate_limit_info
         self.extra = {"Retry-After": str(retry_after)}
+
+
+@dataclass(frozen=True)
+class KeyScope:
+    """Resolved authorization scope of a validated API key.
+
+    ``user_id is None`` means full access (config master key or a
+    service-level database key); otherwise access is limited to that user.
+    ``api_key_id is None`` only for the config master key, which also has no
+    rate limit (``rate_limit_info is None``).
+    """
+
+    user_id: str | None
+    api_key_id: int | None
+    rate_limit_info: dict[str, int] | None
+
+    @property
+    def is_service_level(self) -> bool:
+        """Return True if this scope may access any user's data."""
+        return self.user_id is None
 
 
 def hash_api_key(key: str) -> str:
@@ -141,6 +163,63 @@ async def _check_rate_limit(api_key: APIKey, session: AsyncSession) -> tuple[boo
     return True, rate_limit_info
 
 
+async def resolve_key_scope(raw_key: str) -> KeyScope:
+    """Validate a raw API key and consume one rate-limit slot.
+
+    Shared by the REST guard and the MCP endpoint so both surfaces enforce
+    identical key validation, rate limiting, and scoping.
+
+    Args:
+        raw_key: The raw API key from the request
+
+    Returns:
+        The resolved KeyScope
+
+    Raises:
+        NotAuthorizedException: If the key is invalid or inactive
+        RateLimitExceeded: If the key's rate limit is exhausted
+    """
+    # First check if it matches the config-based master key (if configured)
+    if settings.api_key and secrets.compare_digest(raw_key, settings.api_key):
+        logger.debug("Config-based master API key validated")
+        return KeyScope(user_id=None, api_key_id=None, rate_limit_info=None)
+
+    # Validate against database
+    from polar_flow_server.core.database import async_session_maker
+
+    async with async_session_maker() as session:
+        key_hash = hash_api_key(raw_key)
+
+        result = await session.execute(select(APIKey).where(APIKey.key_hash == key_hash))
+        api_key = result.scalar_one_or_none()
+
+        if api_key is None or not api_key.is_active:
+            logger.warning("Invalid or inactive API key attempted")
+            raise NotAuthorizedException("Invalid API key")
+
+        # Check rate limit BEFORE any data access
+        is_allowed, rate_limit_info = await _check_rate_limit(api_key, session)
+
+        if not is_allowed:
+            retry_after = rate_limit_info["reset"] - int(datetime.now(UTC).timestamp())
+            raise RateLimitExceeded(
+                retry_after=max(1, retry_after), rate_limit_info=rate_limit_info
+            )
+
+        # Update last_used_at
+        api_key.last_used_at = datetime.now(UTC)
+        await session.commit()
+
+        logger.debug(
+            f"API key validated: id={api_key.id}, user_scoped={'yes' if api_key.user_id else 'no'}"
+        )
+        return KeyScope(
+            user_id=api_key.user_id,
+            api_key_id=api_key.id,
+            rate_limit_info=rate_limit_info,
+        )
+
+
 async def per_user_api_key_guard(
     connection: ASGIConnection[Any, Any, Any, Any], _: BaseRouteHandler
 ) -> None:
@@ -174,59 +253,38 @@ async def per_user_api_key_guard(
         # API key is ALWAYS required - health data should never be public
         raise NotAuthorizedException("Missing API key. Use X-API-Key header.")
 
-    # First check if it matches the config-based master key (if configured)
-    if settings.api_key and secrets.compare_digest(raw_key, settings.api_key):
-        logger.debug("Config-based master API key validated")
+    try:
+        scope = await resolve_key_scope(raw_key)
+    except RateLimitExceeded as exc:
+        # Store rate limit info so the response middleware can emit headers
+        if exc.rate_limit_info is not None:
+            connection.state[RATE_LIMIT_STATE_KEY] = exc.rate_limit_info
+        raise
+
+    if scope.rate_limit_info is not None:
+        connection.state[RATE_LIMIT_STATE_KEY] = scope.rate_limit_info
+
+    # Master key: full access, no per-key state to record
+    if scope.api_key_id is None:
         return
 
-    # Validate against database
-    from polar_flow_server.core.database import async_session_maker
+    # Authorization check: user-scoped keys can only access their own data.
+    # Service-level keys (user_id=None) intentionally skip this check -
+    # they can access any user's data for admin/backend operations.
+    path_user_id = connection.path_params.get("user_id")
+    if scope.user_id is not None and path_user_id:
+        if scope.user_id != path_user_id:
+            logger.warning(
+                f"API key for user {scope.user_id} attempted to access user {path_user_id}"
+            )
+            raise NotAuthorizedException("API key not authorized for this user")
 
-    async with async_session_maker() as session:
-        key_hash = hash_api_key(raw_key)
-
-        result = await session.execute(select(APIKey).where(APIKey.key_hash == key_hash))
-        api_key = result.scalar_one_or_none()
-
-        if api_key is None or not api_key.is_active:
-            logger.warning("Invalid or inactive API key attempted")
-            raise NotAuthorizedException("Invalid API key")
-
-        # Check rate limit BEFORE any data access
-        is_allowed, rate_limit_info = await _check_rate_limit(api_key, session)
-
-        # Store rate limit info in connection state for response headers
-        connection.state[RATE_LIMIT_STATE_KEY] = rate_limit_info
-
-        if not is_allowed:
-            retry_after = rate_limit_info["reset"] - int(datetime.now(UTC).timestamp())
-            raise RateLimitExceeded(retry_after=max(1, retry_after))
-
-        # Authorization check: user-scoped keys can only access their own data.
-        # Service-level keys (user_id=None) intentionally skip this check -
-        # they can access any user's data for admin/backend operations.
-        path_user_id = connection.path_params.get("user_id")
-        if api_key.user_id is not None and path_user_id:
-            if api_key.user_id != path_user_id:
-                logger.warning(
-                    f"API key for user {api_key.user_id} attempted to access user {path_user_id}"
-                )
-                raise NotAuthorizedException("API key not authorized for this user")
-
-        # Update last_used_at
-        api_key.last_used_at = datetime.now(UTC)
-        await session.commit()
-
-        # Store API key info in connection state
-        connection.state[API_KEY_STATE_KEY] = {
-            "id": api_key.id,
-            "user_id": api_key.user_id,
-            "is_service_level": api_key.user_id is None,
-        }
-
-        logger.debug(
-            f"API key validated: id={api_key.id}, user_scoped={'yes' if api_key.user_id else 'no'}"
-        )
+    # Store API key info in connection state
+    connection.state[API_KEY_STATE_KEY] = {
+        "id": scope.api_key_id,
+        "user_id": scope.user_id,
+        "is_service_level": scope.user_id is None,
+    }
 
 
 def get_rate_limit_headers(connection: ASGIConnection[Any, Any, Any, Any]) -> dict[str, str]:
