@@ -1,6 +1,7 @@
 """Polar data sync service."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -147,7 +148,7 @@ class SyncService:
         self,
         result: SyncResult,
         endpoint: str,
-        fn: Any,
+        fn: Callable[..., Awaitable[int]],
         *args: Any,
         **kwargs: Any,
     ) -> int:
