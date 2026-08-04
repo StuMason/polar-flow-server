@@ -38,9 +38,7 @@ def create_mcp_mount(server: MCPServer) -> ASGIRouteHandler:
     async def mcp_mount(scope: Scope, receive: Receive, send: Send) -> None:
         raw_key = _extract_api_key(scope)
         if not raw_key:
-            await _send_json(
-                send, 401, {"error": "Missing API key. Use X-API-Key header."}
-            )
+            await _send_json(send, 401, {"error": "Missing API key. Use X-API-Key header."})
             return
 
         try:
@@ -103,7 +101,5 @@ async def _send_json(
         (b"content-length", str(len(payload)).encode()),
         *(extra_headers or []),
     ]
-    await send(
-        cast(Any, {"type": "http.response.start", "status": status, "headers": headers})
-    )
+    await send(cast(Any, {"type": "http.response.start", "status": status, "headers": headers}))
     await send(cast(Any, {"type": "http.response.body", "body": payload}))
