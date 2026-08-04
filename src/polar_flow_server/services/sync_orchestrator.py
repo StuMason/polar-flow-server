@@ -97,7 +97,25 @@ class RateLimitTracker:
         self.limit_15m: int | None = None
         self.limit_24h: int | None = None
         self.last_updated: datetime | None = None
+        self.rate_limited_until: datetime | None = None
         self.logger = logger.bind(component="rate_limit_tracker")
+
+    def note_rate_limited(self, retry_after_seconds: int) -> None:
+        """Record a real 429 from Polar: hold syncs until Retry-After passes.
+
+        This is the tracker's live data source. Per-window quota capture
+        from X-RateLimit-* headers needs SDK support (the SDK reads them
+        but only logs); until then the 429s themselves drive the backoff.
+        """
+        until = datetime.now(UTC) + timedelta(seconds=retry_after_seconds)
+        if self.rate_limited_until is None or until > self.rate_limited_until:
+            self.rate_limited_until = until
+        self.last_updated = datetime.now(UTC)
+        self.logger.warning(
+            "Rate limited by Polar API, backing off",
+            retry_after_seconds=retry_after_seconds,
+            rate_limited_until=self.rate_limited_until.isoformat(),
+        )
 
     def update_from_sync_log(self, sync_log: SyncLog) -> None:
         """Update limits from a completed sync log.
@@ -121,6 +139,12 @@ class RateLimitTracker:
         Returns:
             True if we can safely attempt a sync
         """
+        # A recorded 429 holds everything until its Retry-After passes
+        if self.rate_limited_until is not None:
+            if datetime.now(UTC) < self.rate_limited_until:
+                return False
+            self.rate_limited_until = None
+
         # If we don't have limit info yet, allow sync to get headers
         if self.remaining_15m is None or self.remaining_24h is None:
             return True
@@ -139,6 +163,12 @@ class RateLimitTracker:
         """
         if self.can_sync_now():
             return 0
+
+        # Honour an active Retry-After window exactly
+        if self.rate_limited_until is not None:
+            remaining = (self.rate_limited_until - datetime.now(UTC)).total_seconds()
+            if remaining > 0:
+                return int(remaining) + 1
 
         # If 15-min limit is exhausted, wait up to 15 minutes
         if self.remaining_15m is not None and self.remaining_15m < self.CALLS_PER_SYNC_ESTIMATE:
@@ -173,7 +203,15 @@ class RateLimitTracker:
             "can_sync": self.can_sync_now(),
             "safe_batch_size": self.get_safe_batch_size(),
             "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "rate_limited_until": (
+                self.rate_limited_until.isoformat() if self.rate_limited_until else None
+            ),
         }
+
+
+# The scheduler constructs a fresh SyncOrchestrator every cycle, so backoff
+# state must live at module level to survive between cycles.
+shared_rate_limit_tracker = RateLimitTracker()
 
 
 class SyncOrchestrator:
@@ -206,7 +244,7 @@ class SyncOrchestrator:
         self.session = session
         self.sync_service = SyncService(session)
         self.error_handler = SyncErrorHandler()
-        self.rate_limiter = RateLimitTracker()
+        self.rate_limiter = shared_rate_limit_tracker
         self.logger = logger.bind(component="sync_orchestrator")
 
     async def sync_user(
@@ -276,6 +314,10 @@ class SyncOrchestrator:
                 polar_token=polar_token,
                 recalculate_baselines=False,  # We'll do it ourselves
             )
+
+            # A 429 anywhere in the sync drives the tracker's backoff window
+            if sync_result.rate_limited_for:
+                self.rate_limiter.note_rate_limited(sync_result.rate_limited_for)
 
             # API calls = number of data types with records (each requires 1+ API call)
             api_calls = len([v for v in sync_result.records.values() if v > 0])
@@ -353,9 +395,6 @@ class SyncOrchestrator:
                 error=sync_error.message,
                 is_transient=sync_error.is_transient,
             )
-
-        # Note: Rate limit tracking from Polar API headers would require
-        # SDK-level changes. Current implementation uses conservative estimates.
 
         # Commit the sync log
         await self.session.commit()
