@@ -30,6 +30,7 @@ from polar_flow_server.core.database import (
 )
 from polar_flow_server.core.security import verify_stored_tokens_decryptable
 from polar_flow_server.core.setup_token import announce_setup_token
+from polar_flow_server.mcp_server import build_mcp_server, create_mcp_mount
 from polar_flow_server.middleware import RateLimitHeadersMiddleware, SecurityHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
@@ -151,6 +152,18 @@ def create_app() -> Litestar:
     templates_dir = Path(__file__).parent / "templates"
     static_dir = Path(__file__).parent / "static"
 
+    # MCP server (issue #80). Built per app instance: the SDK's
+    # session_manager.run() is single-use, and tests call create_app()
+    # repeatedly. The transport requires the manager running for the app's
+    # lifetime — without this lifespan the first /mcp request 500s.
+    mcp_server = build_mcp_server()
+    mcp_mount = create_mcp_mount(mcp_server)
+
+    @asynccontextmanager
+    async def mcp_lifespan(app: Litestar) -> AsyncIterator[None]:
+        async with mcp_server.session_manager.run():
+            yield
+
     # Session store for admin authentication
     # In production with multiple instances, use Redis instead
     session_store = MemoryStore()
@@ -193,6 +206,8 @@ def create_app() -> Litestar:
             "/admin/logout",
             # API routes use API key auth, not CSRF
             "/api/v1/users/",
+            # MCP endpoint: JSON-RPC POSTs authenticated by API key, no CSRF
+            "/mcp",
             # Health check (no auth needed)
             "/health",
         ],
@@ -206,8 +221,9 @@ def create_app() -> Litestar:
             # Vendored frontend assets (htmx, Chart.js, built Tailwind CSS) -
             # the admin UI must work offline / on a LAN with no CDNs (#71).
             create_static_files_router(path="/static", directories=[static_dir]),
+            mcp_mount,
         ],
-        lifespan=[lifespan],
+        lifespan=[lifespan, mcp_lifespan],
         openapi_config=OpenAPIConfig(
             title="polar-flow-server API",
             version=__version__,

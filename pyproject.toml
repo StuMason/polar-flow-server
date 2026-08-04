@@ -36,6 +36,7 @@ dependencies = [
     "structlog>=25.5.0",
     "httpx>=0.28.1",
     "scipy>=1.14.0,<2.0.0",
+    "mcp==2.0.0",
 ]
 
 [project.optional-dependencies]
