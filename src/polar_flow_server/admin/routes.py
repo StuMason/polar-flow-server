@@ -1182,7 +1182,7 @@ async def admin_settings(
     # All 15 data counts in ONE round trip (issue #87): scalar subqueries in
     # a single SELECT instead of 15 sequential queries (~15x RTT on a remote
     # Postgres).
-    count_models = {
+    count_models: dict[str, Any] = {
         "sleep_count": Sleep,
         "exercise_count": Exercise,
         "activity_count": Activity,
