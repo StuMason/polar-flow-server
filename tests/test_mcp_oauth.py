@@ -137,13 +137,24 @@ async def _authorize_and_consent(client, client_id: str, challenge: str) -> str:
     form = {"req": req.group(1), "action": "approve"}
     if match:
         form["_csrf_token"] = match.group(1)
+    # Approval renders a self-navigating page, NOT a redirect: a 303 to the
+    # client's origin would be blocked by the form-action 'self' CSP.
     approved = await client.post("/admin/oauth/consent", data=form, follow_redirects=False)
-    assert approved.status_code == 303, approved.text
-    location = approved.headers["location"]
+    assert approved.status_code == 200, approved.text
+    location = _interstitial_target(approved.text)
     assert location.startswith(REDIRECT_URI)
     query = parse_qs(urlparse(location).query)
     assert query["state"] == ["state-123"]
     return query["code"][0]
+
+
+def _interstitial_target(html_text: str) -> str:
+    """Pull the client redirect target out of the consent interstitial."""
+    import html as html_mod
+
+    match = re.search(r'<a href="([^"]+)"', html_text)
+    assert match, "interstitial has no continue link"
+    return html_mod.unescape(match.group(1))
 
 
 async def _exchange_code(client, client_id: str, code: str, verifier: str) -> dict:
@@ -323,8 +334,8 @@ async def test_consent_deny_bounces_with_error(oauth_app_client) -> None:
         form["_csrf_token"] = match.group(1)
 
     denied = await oauth_app_client.post("/admin/oauth/consent", data=form, follow_redirects=False)
-    assert denied.status_code == 303
-    location = denied.headers["location"]
+    assert denied.status_code == 200
+    location = _interstitial_target(denied.text)
     assert location.startswith(REDIRECT_URI)
     assert "error=access_denied" in location
     assert "state=state-deny" in location
