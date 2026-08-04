@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 import structlog
@@ -31,6 +32,29 @@ from polar_flow_server.core.setup_token import announce_setup_token
 from polar_flow_server.middleware import RateLimitHeadersMiddleware, SecurityHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
+
+
+def format_utc(value: datetime | str | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Jinja filter: render a stored-UTC timestamp consistently, labelled UTC.
+
+    All persisted datetimes are UTC; templates used to strftime them with no
+    label (read as local) and one spot printed raw isoformat (issue #68/#73).
+    Accepts datetime, isoformat string, or None.
+    """
+    if not value:
+        return "--"
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+        value = parsed
+    return value.strftime(fmt) + " UTC"
+
+
+def _register_template_filters(engine: JinjaTemplateEngine) -> None:
+    engine.engine.filters["utc_dt"] = format_utc
+
 
 # Configure structured logging
 structlog.configure(
@@ -172,6 +196,7 @@ def create_app() -> Litestar:
         template_config=TemplateConfig(
             directory=templates_dir,
             engine=JinjaTemplateEngine,
+            engine_callback=_register_template_filters,
         ),
         plugins=[
             SQLAlchemyPlugin(
