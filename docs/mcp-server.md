@@ -105,7 +105,9 @@ In clients that support the [MCP Apps extension](https://modelcontextprotocol.io
 (claude.ai, Claude Desktop, VS Code, and others), `get_health_insights`
 renders a **Today at a glance** card right in the conversation: current
 metrics vs your personal baselines, observations, and suggestions, following
-the client's light/dark theme. The first time, the client asks permission to
+the client's light/dark theme.
+
+![MCP Apps card](assets/mcp-apps-card.png) The first time, the client asks permission to
 display the app. Clients without Apps support (e.g. Claude Code) simply get
 the tool's normal structured result — the card is progressive enhancement,
 never the data channel.
