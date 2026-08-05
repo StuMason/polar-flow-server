@@ -46,9 +46,7 @@ def upgrade() -> None:
     )
     op.add_column("nightly_recharge", sa.Column("beat_to_beat_avg", sa.Integer(), nullable=True))
     op.add_column("nightly_recharge", sa.Column("hrv_samples_json", sa.Text(), nullable=True))
-    op.add_column(
-        "nightly_recharge", sa.Column("breathing_samples_json", sa.Text(), nullable=True)
-    )
+    op.add_column("nightly_recharge", sa.Column("breathing_samples_json", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
