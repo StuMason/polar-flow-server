@@ -540,6 +540,48 @@
     </div>
 </div>
 
+<!-- SleepWise: alertness curve + circadian bedtime window (issue #78) -->
+{% if (latest_alertness and latest_alertness.hourly_data_json) or latest_bedtime %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden" data-tab-panel="sleep">
+    {% if latest_alertness and latest_alertness.hourly_data_json %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Alertness Through the Day</h2>
+            <span class="text-xs text-gray-500">{{ latest_alertness.period_start_time.strftime('%d %b') }} · grade {{ latest_alertness.grade|round(1) }} ({{ latest_alertness.grade_classification|replace('_', ' ')|title }})</span>
+        </div>
+        <div class="h-56">
+            <canvas id="alertnessHourlyChart" role="img" aria-label="Bar chart of predicted alertness level per hour"></canvas>
+        </div>
+    </div>
+    <script id="alertness-hourly" type="application/json">{{ latest_alertness.hourly_data_json | replace('</', '<\/') | safe }}</script>
+    {% endif %}
+    {% if latest_bedtime %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Circadian Bedtime</h2>
+            <span class="text-xs text-gray-500">{{ latest_bedtime.period_end_time.strftime('%d %b') }} · {{ latest_bedtime.quality|replace('_', ' ')|title }}</span>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Preferred Sleep Window</div>
+                <div class="text-2xl font-bold text-indigo-700">
+                    {{ latest_bedtime.preferred_sleep_start.strftime('%H:%M') }} &ndash; {{ latest_bedtime.preferred_sleep_end.strftime('%H:%M') }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">The window your circadian rhythm favours for sleep</div>
+            </div>
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Sleep Gate</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ latest_bedtime.sleep_gate_start.strftime('%H:%M') }} &ndash; {{ latest_bedtime.sleep_gate_end.strftime('%H:%M') }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">Best moment to actually fall asleep tonight</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Heart Charts -->
 <div class="mb-6 hidden" data-tab-panel="heart">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -764,6 +806,58 @@
         </div>
     </div>
 </div>
+{% endif %}
+
+<!-- ECG Waveform (issue #78: stored since sync day one, rendered at last) -->
+{% if latest_ecg %}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Latest ECG</h2>
+        <span class="text-xs text-gray-500">{{ latest_ecg.test_time.strftime('%d %b %Y %H:%M') }}{% if latest_ecg.duration_seconds %} · {{ latest_ecg.duration_seconds|round(0)|int }}s test{% endif %}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Avg HR</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.avg_heart_rate }}<span class="text-sm font-normal ml-1">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">HRV</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.hrv_ms|round(0)|int }}<span class="text-sm font-normal ml-1">ms</span></div>
+            <div class="text-xs text-gray-500">{{ latest_ecg.hrv_level|title }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">R-R Interval</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.rri_ms|round(0)|int }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% if latest_ecg.ptt_systolic_ms %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">PTT Systolic</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.ptt_systolic_ms|round(1) }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% endif %}
+        {% if latest_ecg.ptt_diastolic_ms %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">PTT Diastolic</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.ptt_diastolic_ms|round(1) }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="h-48">
+        <canvas id="ecgWaveformChart" role="img" aria-label="ECG waveform trace of the latest test"></canvas>
+    </div>
+</div>
+<script id="ecg-waveform-samples" type="application/json">{{ latest_ecg.samples_json | replace('</', '<\/') | safe }}</script>
+{% endif %}
+
+<!-- Body Temperature Trend (issue #78) -->
+{% if has_body_temp_trend %}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Body Temperature</h2>
+    <div class="h-56">
+        <canvas id="bodyTempTrendChart" role="img" aria-label="Line chart of body temperature per measurement period with min-max band"></canvas>
+    </div>
+</div>
+<script id="body-temp-trend" type="application/json">{{ body_temp_trend_json | replace('</', '<\/') | safe }}</script>
 {% endif %}
 
 <!-- Personal Baselines (Analytics) -->
@@ -2122,10 +2216,159 @@ function renderTodayStepsChart() {
 }
 
 // Initialize dashboard tabs (charts are lazy-loaded per tab, on first visit)
+function readJsonScript(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    try {
+        return JSON.parse(el.textContent || 'null');
+    } catch (e) {
+        return null;
+    }
+}
+
+function renderEcgWaveformChart() {
+    const canvas = document.getElementById('ecgWaveformChart');
+    const samples = readJsonScript('ecg-waveform-samples');
+    if (!canvas || !samples || !samples.length) return;
+
+    // ECG traces run at ~130Hz; decimate to keep the chart responsive
+    const MAX_POINTS = 2000;
+    const step = Math.max(1, Math.ceil(samples.length / MAX_POINTS));
+    const points = [];
+    for (let i = 0; i < samples.length; i += step) points.push(samples[i]);
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: points.map(p => (p.time_ms / 1000).toFixed(1)),
+            datasets: [{
+                label: 'ECG',
+                data: points.map(p => p.amplitude_mv),
+                borderColor: '#dc2626',
+                borderWidth: 1,
+                pointRadius: 0,
+                tension: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: {
+                    ticks: { maxTicksLimit: 10 },
+                    grid: { display: false },
+                    title: { display: true, text: 'Seconds' }
+                },
+                y: { grid: { color: '#fef2f2' }, title: { display: true, text: 'mV' } }
+            }
+        }
+    });
+}
+
+function renderBodyTempTrendChart() {
+    const canvas = document.getElementById('bodyTempTrendChart');
+    const trend = readJsonScript('body-temp-trend');
+    if (!canvas || !trend || !trend.length) return;
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: trend.map(p => p.date),
+            datasets: [
+                {
+                    label: 'Max',
+                    data: trend.map(p => p.max),
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                    pointRadius: 0,
+                    fill: '+2'
+                },
+                {
+                    label: 'Average',
+                    data: trend.map(p => p.avg),
+                    borderColor: '#9333ea',
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2
+                },
+                {
+                    label: 'Min',
+                    data: trend.map(p => p.min),
+                    borderColor: 'transparent',
+                    pointRadius: 0,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    filter: (ctx) => ctx.dataset.label === 'Average',
+                    callbacks: { label: (ctx) => `${ctx.raw?.toFixed(2)} °C avg` }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+                y: { grid: { color: '#f3f4f6' }, title: { display: true, text: '°C' } }
+            }
+        }
+    });
+}
+
+function renderAlertnessHourlyChart() {
+    const canvas = document.getElementById('alertnessHourlyChart');
+    const hours = readJsonScript('alertness-hourly');
+    if (!canvas || !hours || !hours.length) return;
+
+    const valid = hours.filter(h => h.alertness_level !== null && h.alertness_level !== undefined);
+    if (!valid.length) return;
+
+    const hourLabel = (h) => {
+        const m = /T(\d{2}):/.exec(h.start_time || '');
+        return m ? `${m[1]}:00` : '';
+    };
+    // Polar alertness levels: higher = more alert
+    const color = (level) => level >= 3 ? '#4ade80' : level >= 2 ? '#facc15' : '#f87171';
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: valid.map(hourLabel),
+            datasets: [{
+                label: 'Alertness',
+                data: valid.map(h => h.alertness_level),
+                backgroundColor: valid.map(h => color(h.alertness_level)),
+                borderRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => `Level ${ctx.raw}` } }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 12 }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' }, title: { display: true, text: 'Alertness level' } }
+            }
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initDashboardTabs();
     renderTodaySleepStagesChart();
     renderTodayHrChart();
+    renderEcgWaveformChart();
+    renderBodyTempTrendChart();
+    renderAlertnessHourlyChart();
     renderTodayStepsChart();
 });
 

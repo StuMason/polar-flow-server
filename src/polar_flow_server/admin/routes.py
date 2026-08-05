@@ -985,6 +985,18 @@ async def admin_dashboard(
         "recent_exercises": scoped(
             select(Exercise).order_by(Exercise.start_time.desc()).limit(20), Exercise
         ),
+        "latest_ecg": scoped(
+            select(ECG).where(ECG.samples_json.isnot(None)).order_by(ECG.test_time.desc()).limit(1),
+            ECG,
+        ),
+        "recent_body_temps": scoped(
+            select(BodyTemperature).order_by(BodyTemperature.start_time.desc()).limit(21),
+            BodyTemperature,
+        ),
+        "latest_bedtime": scoped(
+            select(SleepWiseBedtime).order_by(SleepWiseBedtime.period_end_time.desc()).limit(1),
+            SleepWiseBedtime,
+        ),
         "sync_logs": select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10),
     }
     if uid:
@@ -1025,6 +1037,22 @@ async def admin_dashboard(
     latest_breathing_rate = breathing_record.breathing_rate_avg if breathing_record else None
     recent_recharge = results["recent_recharge"].scalars().all()
     recent_workouts = _format_workouts(results["recent_exercises"].scalars().all())
+    latest_ecg = results["latest_ecg"].scalar_one_or_none()
+    body_temp_records = results["recent_body_temps"].scalars().all()
+    # Oldest-first trend of period aggregates for the body temperature chart
+    body_temp_trend_json = json.dumps(
+        [
+            {
+                "date": r.end_time.strftime("%b %d"),
+                "min": r.temp_min,
+                "avg": r.temp_avg,
+                "max": r.temp_max,
+            }
+            for r in reversed(body_temp_records)
+            if r.temp_avg is not None and r.temp_min is not None and r.temp_max is not None
+        ]
+    )
+    latest_bedtime = results["latest_bedtime"].scalar_one_or_none()
     recent_sync_logs = results["sync_logs"].scalars().all()
     user_baselines: list[UserBaseline] = list(results["baselines"].scalars().all()) if uid else []
     user_patterns: list[PatternAnalysis] = list(results["patterns"].scalars().all()) if uid else []
@@ -1074,6 +1102,11 @@ async def admin_dashboard(
             "recovery_status": recovery_status,
             # Workouts (training tab)
             "recent_workouts": recent_workouts,
+            # Biosensing detail (issue #78)
+            "latest_ecg": latest_ecg,
+            "body_temp_trend_json": body_temp_trend_json,
+            "has_body_temp_trend": body_temp_trend_json != "[]",
+            "latest_bedtime": latest_bedtime,
             # Sync history (for top badge)
             "recent_sync_logs": recent_sync_logs,
             # Analytics
