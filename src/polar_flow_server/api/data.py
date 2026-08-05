@@ -274,8 +274,8 @@ async def get_heart_rate_samples(
 ) -> dict[str, Any]:
     """Get a day's continuous heart rate samples (~5-minute intervals).
 
-    Each sample has a timestamp and a bpm value; zero/no-signal samples
-    were excluded at sync time.
+    Each sample carries a `sample_time` and a `heart_rate` in bpm;
+    zero/no-signal samples were excluded at sync time.
     """
     stmt = select(ContinuousHeartRate).where(
         ContinuousHeartRate.user_id == user_id,
