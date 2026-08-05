@@ -11,6 +11,7 @@ prompt caches warm.
 """
 
 import asyncio
+import json
 from datetime import date, timedelta
 from typing import Annotated, Any, Literal
 
@@ -259,8 +260,12 @@ async def get_exercises(
     start time, duration (minutes), distance (km), calories, average/max
     heart rate (bpm), and training load. With `exercise_id`: every recorded
     metric for that single workout, including speed (m/s), cadence, power
-    (watts), and elevation. Training load is Polar's cardio strain estimate
-    for the session - compare against get_recovery's tolerance. Calories are
+    (watts), elevation, the time-in-zone heart rate breakdown (compare zone
+    limits against get_baselines physical_info thresholds), running index,
+    and Training Load Pro. `has_samples`/`route_point_count` say whether
+    raw per-second series and a GPS route exist (served by the REST API,
+    not this tool). Training load is Polar's cardio strain estimate for
+    the session - compare against get_recovery's tolerance. Calories are
     null when the device reported an implausibly low value for the duration
     (sensor noise, e.g. no HR strap) - null means unmeasured, not zero burn.
     """
@@ -296,6 +301,15 @@ async def get_exercises(
             "ascent_meters": r.ascent_meters,
             "descent_meters": r.descent_meters,
             "notes": r.notes,
+            "running_index": r.running_index,
+            "training_load_pro": (
+                json.loads(r.training_load_pro_json) if r.training_load_pro_json else None
+            ),
+            "heart_rate_zones": (
+                json.loads(r.heart_rate_zones_json) if r.heart_rate_zones_json else None
+            ),
+            "has_samples": r.samples_json is not None,
+            "route_point_count": (len(json.loads(r.route_json)) if r.route_json else 0),
         }
 
     since = date.today() - timedelta(days=days)

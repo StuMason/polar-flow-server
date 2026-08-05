@@ -1,5 +1,6 @@
 """Comprehensive data API endpoints for all Polar data types."""
 
+import json
 from datetime import date, timedelta
 from typing import Annotated, Any
 
@@ -346,6 +347,79 @@ async def get_exercise_detail(
         "ascent_meters": r.ascent_meters,
         "descent_meters": r.descent_meters,
         "notes": r.notes,
+        "running_index": r.running_index,
+        "training_load_pro": (
+            json.loads(r.training_load_pro_json) if r.training_load_pro_json else None
+        ),
+        "heart_rate_zones": (
+            json.loads(r.heart_rate_zones_json) if r.heart_rate_zones_json else None
+        ),
+        "has_samples": r.samples_json is not None,
+        "has_route_data": r.route_json is not None,
+    }
+
+
+@get("/users/{user_id:str}/exercises/{exercise_id:str}/samples", status_code=HTTP_200_OK)
+async def get_exercise_samples(
+    user_id: str,
+    exercise_id: str,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get an exercise's raw sample series (HR, speed, cadence, altitude, ...).
+
+    Each series has a sample_type, recording_rate (seconds between samples),
+    and the values list.
+    """
+    stmt = select(Exercise).where(
+        Exercise.user_id == user_id,
+        Exercise.id == exercise_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Exercise {exercise_id} has no sample data")
+
+    return {
+        "exercise_id": r.id,
+        "sport": r.sport,
+        "start_time": str(r.start_time),
+        "samples": json.loads(r.samples_json),
+    }
+
+
+@get("/users/{user_id:str}/exercises/{exercise_id:str}/route", status_code=HTTP_200_OK)
+async def get_exercise_route(
+    user_id: str,
+    exercise_id: str,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get an exercise's GPS route as structured points.
+
+    Each point has latitude, longitude, time offset from exercise start
+    (ISO 8601 duration), satellites, and fix quality.
+    """
+    stmt = select(Exercise).where(
+        Exercise.user_id == user_id,
+        Exercise.id == exercise_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
+    if not r.route_json:
+        raise NotFoundException(detail=f"Exercise {exercise_id} has no route data")
+
+    points = json.loads(r.route_json)
+    return {
+        "exercise_id": r.id,
+        "sport": r.sport,
+        "start_time": str(r.start_time),
+        "point_count": len(points),
+        "route": points,
     }
 
 
@@ -660,6 +734,8 @@ data_router = Router(
         # Exercises
         get_exercises_list,
         get_exercise_detail,
+        get_exercise_samples,
+        get_exercise_route,
         # SleepWise
         get_alertness_list,
         get_bedtime_list,
