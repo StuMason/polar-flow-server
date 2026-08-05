@@ -103,3 +103,30 @@ class TestRecentWorkoutsCard:
         response = await app_client.get("/admin/dashboard")
 
         assert "No workouts synced yet" in response.text
+
+    @pytest.mark.asyncio
+    async def test_malformed_zone_json_never_breaks_the_dashboard(self, app_client, admin_account):
+        """Stored JSON has no schema enforcement; a bad row costs its zone
+        bar, not the whole page (review finding on #128)."""
+        from polar_flow_server.core.database import async_session_maker
+        from polar_flow_server.models.exercise import Exercise
+
+        await _login(app_client, admin_account)
+        async with async_session_maker() as session:
+            session.add(
+                Exercise(
+                    user_id="test-user",
+                    polar_exercise_id="ex-bad-json",
+                    start_time=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+                    sport="RUNNING",
+                    duration_seconds=1800,
+                    heart_rate_zones_json='{"not": "a list"',
+                )
+            )
+            await session.commit()
+
+        response = await app_client.get("/admin/dashboard")
+
+        assert response.status_code == 200
+        assert "Running" in response.text
+        assert "Time in heart rate zones" not in response.text

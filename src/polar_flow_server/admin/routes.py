@@ -273,21 +273,26 @@ def _format_workouts(exercises: Sequence[Exercise]) -> list[dict[str, Any]]:
             minutes = rem // 60
             duration = f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
 
+        # Stored JSON with no schema enforcement must never take down the
+        # whole dashboard - bad zone data just means no bar for that workout
         zones = None
         if ex.heart_rate_zones_json:
-            raw = json.loads(ex.heart_rate_zones_json)
-            total = sum(z.get("in_zone_seconds") or 0 for z in raw)
-            if total > 0:
-                zones = [
-                    {
-                        "index": z["index"],
-                        "percent": round((z.get("in_zone_seconds") or 0) * 100 / total, 1),
-                        "minutes": round((z.get("in_zone_seconds") or 0) / 60),
-                        "color": _ZONE_COLORS[min(z["index"], 5) - 1],
-                        "limits": f"{z.get('lower_limit_bpm', '?')}-{z.get('upper_limit_bpm', '?')} bpm",
-                    }
-                    for z in raw
-                ]
+            try:
+                raw = sorted(json.loads(ex.heart_rate_zones_json), key=lambda z: z["index"])
+                total = sum(z.get("in_zone_seconds") or 0 for z in raw)
+                if total > 0:
+                    zones = [
+                        {
+                            "index": z["index"],
+                            "percent": round((z.get("in_zone_seconds") or 0) * 100 / total, 1),
+                            "minutes": round((z.get("in_zone_seconds") or 0) / 60),
+                            "color": _ZONE_COLORS[min(max(z["index"], 1), 5) - 1],
+                            "limits": f"{z.get('lower_limit_bpm', '?')}-{z.get('upper_limit_bpm', '?')} bpm",
+                        }
+                        for z in raw
+                    ]
+            except (ValueError, TypeError, KeyError):
+                logger.warning("Skipping malformed heart_rate_zones_json for exercise %s", ex.id)
 
         workouts.append(
             {
