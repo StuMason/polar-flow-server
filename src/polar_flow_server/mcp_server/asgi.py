@@ -46,6 +46,13 @@ def create_mcp_mount(server: MCPServer, *, oauth_enabled: bool = False) -> ASGIR
     """Build the ``/mcp`` mount for a Litestar app."""
     mcp_asgi = server.streamable_http_app(
         streamable_http_path="/",
+        # Legacy (2025-protocol) clients like Claude Desktop otherwise mint a
+        # server-side session per request cycle that is never cleaned up -
+        # unbounded memory growth between deploys. Stateless mode strips that
+        # for legacy clients only (2026-07-28 clients are sessionless by
+        # construction), and none of our tools use the server-to-client
+        # back-channel that sessions would enable.
+        stateless_http=True,
         # Host-header (DNS-rebinding) checks default to localhost-only and
         # would 421 behind the reverse proxy. Rebinding attacks are moot
         # here anyway: every request must carry a credential a rebound
