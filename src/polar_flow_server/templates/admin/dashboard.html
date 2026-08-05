@@ -602,6 +602,73 @@
     </div>
 </div>
 
+<!-- Recent Workouts (issue #74: synced since day one, invisible until now) -->
+{# Zone bar colors are injected from routes.py; Tailwind's scanner needs the
+   literal class names in a template: bg-sky-300 bg-teal-400 bg-lime-400 bg-amber-400 bg-red-400 #}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="training">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Workouts</h2>
+    {% if recent_workouts %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+                <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <th class="py-2 pr-4">Date</th>
+                    <th class="py-2 pr-4">Sport</th>
+                    <th class="py-2 pr-4">Duration</th>
+                    <th class="py-2 pr-4">Distance</th>
+                    <th class="py-2 pr-4">Heart Rate</th>
+                    <th class="py-2 pr-4">Calories</th>
+                    <th class="py-2 pr-4">Load</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-sm text-gray-900">
+                {% for w in recent_workouts %}
+                <tr>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        <span class="font-medium">{{ w.date }}</span>
+                        <span class="text-gray-400 text-xs ml-1">{{ w.time }}</span>
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {{ w.sport }}
+                        {% if w.has_route %}
+                        <span class="ml-1 inline-flex items-center text-xs text-indigo-500" title="GPS route recorded">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <span class="sr-only">GPS route recorded</span>
+                        </span>
+                        {% endif %}
+                        {% if w.zones %}
+                        <div class="flex h-1.5 mt-1.5 rounded-full overflow-hidden w-36" role="img"
+                             aria-label="Time in heart rate zones: {% for z in w.zones %}zone {{ z.index }} {{ z.minutes }} minutes{% if not loop.last %}, {% endif %}{% endfor %}">
+                            {% for z in w.zones %}
+                            <div class="{{ z.color }}" style="width: {{ z.percent }}%"
+                                 title="Zone {{ z.index }} ({{ z.limits }}): {{ z.minutes }} min"></div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.duration or '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.distance_km ~ ' km' if w.distance_km else '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {% if w.avg_hr %}{{ w.avg_hr }}<span class="text-gray-400 text-xs"> avg</span>{% if w.max_hr %} · {{ w.max_hr }}<span class="text-gray-400 text-xs"> max</span>{% endif %}{% else %}--{% endif %}
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.calories or '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {{ w.training_load or '--' }}
+                        {% if w.running_index %}<span class="text-gray-400 text-xs ml-1" title="Running index">RI {{ w.running_index }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">No workouts synced yet. Sessions recorded on the watch appear here after the next sync.</p>
+    {% endif %}
+</div>
+
 <!-- Training Charts -->
 <div class="mb-6 hidden" data-tab-panel="training">
     <div class="grid grid-cols-1 gap-6">
