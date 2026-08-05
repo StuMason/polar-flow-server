@@ -1049,7 +1049,7 @@ async def admin_dashboard(
                 "max": r.temp_max,
             }
             for r in reversed(body_temp_records)
-            if r.temp_avg is not None
+            if r.temp_avg is not None and r.temp_min is not None and r.temp_max is not None
         ]
     )
     latest_bedtime = results["latest_bedtime"].scalar_one_or_none()
