@@ -61,10 +61,12 @@ class TestDashboardPageQueries:
     async def test_no_query_explosion(self, app_client, admin_account):
         """The dashboard's lookups run concurrently, so RTT stacking is gone;
         this guards the query COUNT against a regression/N+1 creep.
-        Was 20 sequential; now 17 concurrent (counts folded into one)."""
+        Was 20 sequential; still concurrent - the budget covers the fixed
+        per-section lookups (workouts #74 + ECG/body-temp/bedtime #78), not
+        per-row queries."""
         await _login(app_client, admin_account)
         n = await _count_selects_during(app_client, "/admin/dashboard")
-        assert n <= 18, f"dashboard ran {n} SELECTs - something added per-row queries"
+        assert n <= 22, f"dashboard ran {n} SELECTs - something added per-row queries"
 
     @pytest.mark.asyncio
     async def test_dashboard_still_renders_all_sections(self, app_client, admin_account):
