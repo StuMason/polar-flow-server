@@ -260,6 +260,45 @@ async def get_heart_rate_list(
     ]
 
 
+@get("/users/{user_id:str}/heart-rate/{target_date:str}/samples", status_code=HTTP_200_OK)
+async def get_heart_rate_samples(
+    user_id: str,
+    target_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve heart rate samples for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+        ),
+    ],
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get a day's continuous heart rate samples (~5-minute intervals).
+
+    Each sample has a timestamp and a bpm value; zero/no-signal samples
+    were excluded at sync time.
+    """
+    stmt = select(ContinuousHeartRate).where(
+        ContinuousHeartRate.user_id == user_id,
+        ContinuousHeartRate.date == date.fromisoformat(target_date),
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"No heart rate data for {target_date}")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Heart rate data for {target_date} has no samples")
+
+    return {
+        "date": str(r.date),
+        "hr_min": r.hr_min,
+        "hr_avg": r.hr_avg,
+        "hr_max": r.hr_max,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json),
+    }
+
+
 # ==============================================================================
 # Exercise Endpoints
 # ==============================================================================
@@ -520,6 +559,44 @@ async def get_activity_samples_list(
     ]
 
 
+@get("/users/{user_id:str}/activity-samples/{target_date:str}", status_code=HTTP_200_OK)
+async def get_activity_samples_by_date(
+    user_id: str,
+    target_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve activity samples for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+        ),
+    ],
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get a day's minute-by-minute step samples.
+
+    `interval_ms` is the spacing between samples (60000 = 1 minute); each
+    sample carries a timestamp and the steps recorded in that interval.
+    """
+    stmt = select(ActivitySamples).where(
+        ActivitySamples.user_id == user_id,
+        ActivitySamples.date == date.fromisoformat(target_date),
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"No activity samples for {target_date}")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Activity data for {target_date} has no samples")
+
+    return {
+        "date": str(r.date),
+        "total_steps": r.total_steps,
+        "interval_ms": r.interval_ms,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json),
+    }
+
+
 # ==============================================================================
 # Biosensing Endpoints (SpO2, ECG, Temperature)
 # ==============================================================================
@@ -574,6 +651,7 @@ async def get_ecg_list(
 
     return [
         {
+            "id": r.id,
             "test_time": str(r.test_time),
             "avg_heart_rate": r.avg_heart_rate,
             "hrv_ms": r.hrv_ms,
@@ -581,9 +659,49 @@ async def get_ecg_list(
             "rri_ms": r.rri_ms,
             "duration_seconds": r.duration_seconds,
             "sample_count": r.sample_count,
+            "has_samples": r.samples_json is not None,
         }
         for r in records
     ]
+
+
+@get("/users/{user_id:str}/ecg/{ecg_id:int}", status_code=HTTP_200_OK)
+async def get_ecg_detail(
+    user_id: str,
+    ecg_id: int,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get one ECG test's full detail including the waveform samples.
+
+    `samples` is the raw ECG waveform; `quality` carries the per-segment
+    quality measurements when the device recorded them.
+    """
+    stmt = select(ECG).where(
+        ECG.user_id == user_id,
+        ECG.id == ecg_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"ECG test {ecg_id} not found")
+
+    return {
+        "id": r.id,
+        "test_time": str(r.test_time),
+        "device_id": r.device_id,
+        "avg_heart_rate": r.avg_heart_rate,
+        "hrv_ms": r.hrv_ms,
+        "hrv_level": r.hrv_level,
+        "rri_ms": r.rri_ms,
+        "ptt_systolic_ms": r.ptt_systolic_ms,
+        "ptt_diastolic_ms": r.ptt_diastolic_ms,
+        "ptt_quality_index": r.ptt_quality_index,
+        "duration_seconds": r.duration_seconds,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json) if r.samples_json else None,
+        "quality": json.loads(r.quality_json) if r.quality_json else None,
+    }
 
 
 @get("/users/{user_id:str}/temperature/body", status_code=HTTP_200_OK)
@@ -731,6 +849,7 @@ data_router = Router(
         get_cardio_load_list,
         # Heart Rate
         get_heart_rate_list,
+        get_heart_rate_samples,
         # Exercises
         get_exercises_list,
         get_exercise_detail,
@@ -741,9 +860,11 @@ data_router = Router(
         get_bedtime_list,
         # Activity Samples
         get_activity_samples_list,
+        get_activity_samples_by_date,
         # Biosensing
         get_spo2_list,
         get_ecg_list,
+        get_ecg_detail,
         get_body_temperature_list,
         get_skin_temperature_list,
         # Export
