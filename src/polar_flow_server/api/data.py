@@ -18,6 +18,7 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
@@ -139,6 +140,54 @@ async def get_recharge_list(
         }
         for r in records
     ]
+
+
+# ==============================================================================
+# Physical Info Endpoints
+# ==============================================================================
+
+
+@get("/users/{user_id:str}/physical-info", status_code=HTTP_200_OK)
+async def get_physical_info(
+    user_id: str,
+    session: AsyncSession,
+) -> dict[str, Any] | None:
+    """Get the user's current physical information (VO2 max, HR thresholds, weight).
+
+    Returns the most recent snapshot, plus a short history of older
+    snapshots so weight / VO2 max changes over time are visible.
+    """
+    stmt = (
+        select(PhysicalInfo)
+        .where(PhysicalInfo.user_id == user_id)
+        .order_by(PhysicalInfo.recorded_at.desc())
+    )
+    result = await session.execute(stmt)
+    records = result.scalars().all()
+
+    if not records:
+        return None
+
+    def _serialize(r: PhysicalInfo) -> dict[str, Any]:
+        return {
+            "recorded_at": r.recorded_at.isoformat(),
+            "weight_kg": r.weight_kg,
+            "height_cm": r.height_cm,
+            "maximum_heart_rate": r.maximum_heart_rate,
+            "resting_heart_rate": r.resting_heart_rate,
+            "aerobic_threshold": r.aerobic_threshold,
+            "anaerobic_threshold": r.anaerobic_threshold,
+            "vo2_max": r.vo2_max,
+            "weight_source": r.weight_source,
+            "training_background": r.training_background,
+            "typical_day": r.typical_day,
+            "sleep_goal_hours": (r.sleep_goal_seconds / 3600 if r.sleep_goal_seconds else None),
+        }
+
+    return {
+        **_serialize(records[0]),
+        "history": [_serialize(r) for r in records[1:11]],
+    }
 
 
 # ==============================================================================
@@ -602,6 +651,8 @@ data_router = Router(
         get_activity_by_date,
         # Recharge
         get_recharge_list,
+        # Physical Info
+        get_physical_info,
         # Cardio Load
         get_cardio_load_list,
         # Heart Rate

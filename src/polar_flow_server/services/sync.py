@@ -19,6 +19,7 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
@@ -36,6 +37,7 @@ from polar_flow_server.transformers import (
     ContinuousHRTransformer,
     ECGTransformer,
     ExerciseTransformer,
+    PhysicalInfoTransformer,
     RechargeTransformer,
     SkinTemperatureTransformer,
     SleepTransformer,
@@ -245,6 +247,7 @@ class SyncService:
                 "ecg": 0,
                 "body_temperature": 0,
                 "skin_temperature": 0,
+                "physical_info": 0,
             },
             errors={},
         )
@@ -400,6 +403,19 @@ class SyncService:
                     result.errors["skin_temperature"] = error_msg
                     self.logger.warning(
                         "Skin temperature sync failed", user_id=user_id, error=error_msg
+                    )
+
+            # Sync physical info (requires SDK >= 1.5.0 non-transactional endpoint)
+            if hasattr(client.physical_info, "get"):
+                try:
+                    result.records["physical_info"] = await self._call_with_retry(
+                        result, "physical_info", self._sync_physical_info, client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "physical_info")
+                    result.errors["physical_info"] = error_msg
+                    self.logger.warning(
+                        "Physical info sync failed", user_id=user_id, error=error_msg
                     )
 
         # Commit all changes to database
@@ -598,6 +614,43 @@ class SyncService:
             count += 1
 
         return count
+
+    async def _sync_physical_info(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync physical information (VO2 max, HR thresholds, weight).
+
+        Uses the non-transactional GET /v3/users/physical-info endpoint
+        (SDK >= 1.5.0). Snapshots are keyed by Polar's modified timestamp,
+        so unchanged profiles upsert the same row.
+
+        Args:
+            client: Polar Flow client
+            user_id: User identifier
+
+        Returns:
+            Number of physical info records synced (0 or 1)
+        """
+        self.logger.debug("Syncing physical info", user_id=user_id)
+
+        try:
+            info = await client.physical_info.get()
+        except NotFoundError:
+            # User has never filled in physical info - absence is not an error
+            return 0
+
+        info_dict = PhysicalInfoTransformer.transform(info, user_id)
+
+        stmt = insert(PhysicalInfo).values(user_id=user_id, **info_dict)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id", "recorded_at"],
+            set_=info_dict,
+        )
+
+        await self.session.execute(stmt)
+        return 1
 
     async def _sync_cardio_load(
         self,

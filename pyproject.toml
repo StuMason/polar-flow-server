@@ -18,7 +18,7 @@ dependencies = [
     "asyncpg>=0.31.0",  # PostgreSQL async driver
     "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
     # Polar Flow SDK
-    "polar-flow-api>=1.4.0",
+    "polar-flow-api>=1.5.0",
     # Data processing
     "polars>=1.17.1",
     "pyarrow>=23.0.1",

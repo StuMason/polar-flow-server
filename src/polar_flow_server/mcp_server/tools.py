@@ -23,6 +23,7 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
@@ -381,7 +382,7 @@ async def get_biosensing(
 
 
 async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
-    """Get the user's personal baselines for key health metrics.
+    """Get the user's personal baselines and physical reference values.
 
     Baselines exist for hrv_rmssd, sleep_score, resting_hr, training_load,
     and training_load_ratio. Each has rolling averages (7d/30d/90d), median
@@ -390,6 +391,11 @@ async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
     says how much history backs it (ready/partial/insufficient). Use these
     to judge whether a current reading from other tools is meaningfully
     high or low rather than comparing to population norms.
+
+    `physical_info` (when synced) carries the user's profile reference
+    values: VO2 max (ml/kg/min), max/resting heart rate, aerobic and
+    anaerobic thresholds (bpm - useful for interpreting exercise heart
+    rates and zones), weight, height, and sleep goal.
     """
     uid = await resolve_scoped_user_id(user_id)
 
@@ -398,9 +404,35 @@ async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
 
     async with async_session_maker() as session:
         baselines = await BaselineService(session).get_user_baselines(uid)
+        info_result = await session.execute(
+            select(PhysicalInfo)
+            .where(PhysicalInfo.user_id == uid)
+            .order_by(PhysicalInfo.recorded_at.desc())
+            .limit(1)
+        )
+        info = info_result.scalar_one_or_none()
+
+    physical_info = (
+        {
+            "recorded_at": info.recorded_at.isoformat(),
+            "vo2_max": info.vo2_max,
+            "maximum_heart_rate_bpm": info.maximum_heart_rate,
+            "resting_heart_rate_bpm": info.resting_heart_rate,
+            "aerobic_threshold_bpm": info.aerobic_threshold,
+            "anaerobic_threshold_bpm": info.anaerobic_threshold,
+            "weight_kg": info.weight_kg,
+            "height_cm": info.height_cm,
+            "sleep_goal_hours": (
+                round(info.sleep_goal_seconds / 3600, 2) if info.sleep_goal_seconds else None
+            ),
+        }
+        if info
+        else None
+    )
 
     return {
         "count": len(baselines),
+        "physical_info": physical_info,
         "baselines": [
             {
                 "metric_name": b.metric_name,

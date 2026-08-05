@@ -6,6 +6,7 @@ from polar_flow_server.transformers.cardio_load import CardioLoadTransformer
 from polar_flow_server.transformers.continuous_hr import ContinuousHRTransformer
 from polar_flow_server.transformers.ecg import ECGTransformer
 from polar_flow_server.transformers.exercise import ExerciseTransformer
+from polar_flow_server.transformers.physical_info import PhysicalInfoTransformer
 from polar_flow_server.transformers.recharge import RechargeTransformer
 from polar_flow_server.transformers.sleep import SleepTransformer
 from polar_flow_server.transformers.sleepwise_alertness import SleepWiseAlertnessTransformer
@@ -24,6 +25,7 @@ __all__ = [
     "ContinuousHRTransformer",
     "ECGTransformer",
     "ExerciseTransformer",
+    "PhysicalInfoTransformer",
     "RechargeTransformer",
     "SkinTemperatureTransformer",
     "SleepTransformer",
