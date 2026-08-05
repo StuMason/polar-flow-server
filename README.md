@@ -1,25 +1,44 @@
 # polar-flow-server
 
-Self-hosted health analytics server for Polar devices. Own your data, analyze it yourself.
+Self-hosted health analytics for Polar devices — own your data, analyze it against your own baselines, and let your AI assistant read it.
 
+[![Tests](https://github.com/StuMason/polar-flow-server/actions/workflows/tests.yml/badge.svg)](https://github.com/StuMason/polar-flow-server/actions/workflows/tests.yml)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://stumason.github.io/polar-flow-server/)
 [![Docker](https://img.shields.io/docker/v/stumason/polar-flow-server?label=docker)](https://hub.docker.com/r/stumason/polar-flow-server)
+[![MCP](https://img.shields.io/badge/MCP-2026--07--28-6549d5)](https://stumason.github.io/polar-flow-server/mcp-server/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![Dashboard](docs/assets/dashboard.png)
+![Dashboard](docs/assets/dashboard-today.png)
 
-**[Full Documentation](https://stumason.github.io/polar-flow-server/)** · [Integration Guide](https://stumason.github.io/polar-flow-server/integration/) · [API Reference](https://stumason.github.io/polar-flow-server/api/overview/)
+**[Full Documentation](https://stumason.github.io/polar-flow-server/)** · [MCP Server](https://stumason.github.io/polar-flow-server/mcp-server/) · [Integration Guide](https://stumason.github.io/polar-flow-server/integration/) · [API Reference](https://stumason.github.io/polar-flow-server/api/overview/)
 
 ## What This Does
 
-Polar devices collect health data: sleep, HRV, activity, exercises. The Polar API provides access to this data, but only for the last 28-30 days.
+Your watch knows more about you than you do — and Polar's API only lets you see the last 28-30 days of it. This server syncs everything, keeps it forever, and turns it into answers:
 
-This server:
+1. Syncs all **13 Polar API endpoints** automatically — sleep, HRV, activity, workouts, SpO2, ECG, skin temperature, the lot
+2. Stores everything in PostgreSQL. Your data, your server, no cloud between you and it
+3. Computes **personal baselines** (rolling averages, IQR anomaly bounds) so "is this normal?" means normal *for you*
+4. Ships a **built-in MCP server with OAuth sign-in** — ask Claude "should I train hard today?" and it answers from your overnight HRV vs your baseline
+5. Admin dashboard (HTMX), REST API, per-user API keys, multi-user ready
 
-1. Syncs all 9 Polar API endpoints automatically
-2. Stores everything in PostgreSQL (your data, your server)
-3. Provides an HTMX-powered admin dashboard
-4. Exposes REST API for custom integrations
-5. Multi-user ready with per-user API keys
+## Ask Your AI About Your Body (MCP)
+
+A built-in [Model Context Protocol](https://modelcontextprotocol.io) server — protocol revision **2026-07-28**, streamable HTTP — runs inside the main server at `/mcp`. Ten curated tools cover the one-shot health assessment, sleep, recovery, activity, workouts, seven biosensing streams, personal baselines, patterns/anomalies, and sync control.
+
+In clients that render [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) (claude.ai, Claude Desktop, VS Code), asking "how am I doing?" draws an actual card in the conversation:
+
+![MCP Apps card](docs/assets/mcp-apps-card.png)
+
+**Connecting is a sign-in, not a paste.** With `BASE_URL` set, the server is its own OAuth 2.1 authorization server: add `https://your-server/mcp` as a custom connector in Claude Desktop or claude.ai, click **Connect**, log in on *your* server, approve the consent screen. Tokens are user-scoped, expire hourly, refresh automatically, and every connected app is revocable from Settings. API keys still work for headless clients:
+
+```bash
+claude mcp add polar-health https://your-server.example.com/mcp \
+  --transport http \
+  --header "X-API-Key: pfk_your_key_here"
+```
+
+Full setup in the [MCP docs](https://stumason.github.io/polar-flow-server/mcp-server/).
 
 ## Architecture
 
@@ -80,8 +99,12 @@ floating tab bar on mobile):
 - **Heart Rate** - daily HR, HRV and ANS charge charts, biosensing panel
 - **Training Load** - activity and cardio load charts
 
+![Trends and baselines](docs/assets/dashboard-trends.png)
+
 Charts have a selectable 7/14/30-day range and CSV export. API keys are
-managed from the settings page, with rate limit tracking.
+managed from the settings page, with rate limit tracking. All frontend
+assets are vendored - the dashboard works offline and on a LAN with no
+CDNs.
 
 ## Data Synced (13 Endpoints)
 
@@ -100,29 +123,6 @@ managed from the settings page, with rate limit tracking.
 | **ECG** | Electrocardiogram tests (compatible devices) |
 | **Body Temperature** | Continuous body temperature |
 | **Skin Temperature** | Nightly skin temperature with baseline deviation |
-
-## MCP Server (AI Assistants)
-
-A built-in [Model Context Protocol](https://modelcontextprotocol.io) server
-(protocol revision 2026-07-28, streamable HTTP) lets AI assistants query your
-health data directly - "how has my sleep trended vs my baseline?", "should I
-train hard today?". It runs inside the main server at `/mcp`.
-
-With `BASE_URL` set, the server is its own OAuth 2.1 authorization server:
-add it as a custom connector in Claude Desktop / claude.ai, click
-**Connect**, sign in on your server, approve — no keys to paste. Connected
-apps are listed (and revocable) in Settings. API keys also work for
-headless clients:
-
-```bash
-claude mcp add polar-health https://your-server.example.com/mcp \
-  --transport http \
-  --header "X-API-Key: pfk_your_key_here"
-```
-
-Ten tools cover insights, sleep, recovery, activity, workouts, biosensing
-streams, personal baselines, patterns/anomalies, and sync control. See
-[docs/mcp-server.md](docs/mcp-server.md).
 
 ## Configuration
 

@@ -27,6 +27,7 @@ nav:
   - Architecture: architecture.md
   - API Reference: api/overview.md
   - MCP Server: mcp-server.md
+  - Frontend Assets: frontend-assets.md
   - ADRs:
     - Per-User API Keys: adr/001-per-user-api-keys.md
 
