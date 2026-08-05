@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Any
 
-from sqlalchemy import Date, Float, Integer, String, UniqueConstraint
+from sqlalchemy import Date, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin, generate_uuid
@@ -61,6 +61,36 @@ class Sleep(Base, UserScopedMixin, TimestampMixin):
 
     # Temperature
     skin_temperature_avg: Mapped[float | None] = mapped_column(Float)
+
+    # Device & sleep structure
+    device_id: Mapped[str | None] = mapped_column(String(50), comment="Recording device ID")
+    continuity: Mapped[float | None] = mapped_column(
+        Float, comment="Sleep continuity score 1.0-5.0 (Polar sends 0 for no data -> NULL)"
+    )
+    continuity_class: Mapped[int | None] = mapped_column(
+        Integer, comment="Continuity classification 1-5"
+    )
+    sleep_cycles: Mapped[int | None] = mapped_column(Integer, comment="Number of sleep cycles")
+    unrecognized_sleep_seconds: Mapped[int | None] = mapped_column(
+        Integer, comment="Unrecognized sleep stage duration"
+    )
+    short_interruption_seconds: Mapped[int | None] = mapped_column(Integer)
+    long_interruption_seconds: Mapped[int | None] = mapped_column(Integer)
+    sleep_charge: Mapped[int | None] = mapped_column(
+        Integer, comment="Sleep charge score 1-100 (Polar sends -1 for unavailable -> NULL)"
+    )
+    sleep_goal_seconds: Mapped[int | None] = mapped_column(Integer, comment="User's sleep goal")
+    group_duration_score: Mapped[float | None] = mapped_column(Float, comment="0-100")
+    group_solidity_score: Mapped[float | None] = mapped_column(Float, comment="0-100")
+    group_regeneration_score: Mapped[float | None] = mapped_column(Float, comment="0-100")
+
+    # Raw overnight series stored as JSON for detailed analysis
+    hypnogram_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON time->stage mapping (0=awake, 1=light, 3=deep, 4=REM)"
+    )
+    heart_rate_samples_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON time->bpm mapping, ~5 minute intervals"
+    )
 
     def __repr__(self) -> str:
         """String representation."""

@@ -134,6 +134,8 @@ async def get_recharge_list(
             "ans_charge_status": r.ans_charge_status,
             "breathing_rate_avg": r.breathing_rate_avg,
             "heart_rate_avg": r.heart_rate_avg,
+            "nightly_recharge_status": r.nightly_recharge_status,
+            "beat_to_beat_avg": r.beat_to_beat_avg,
         }
         for r in records
     ]

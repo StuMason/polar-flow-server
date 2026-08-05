@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Any
 
-from sqlalchemy import Date, Float, Integer, String, UniqueConstraint
+from sqlalchemy import Date, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin, generate_uuid
@@ -55,6 +55,22 @@ class NightlyRecharge(Base, UserScopedMixin, TimestampMixin):
     sleep_score: Mapped[int | None] = mapped_column(Integer)
     sleep_charge: Mapped[float | None] = mapped_column(Float)
     sleep_charge_status: Mapped[int | None] = mapped_column(Integer)
+
+    # Overall recovery + beat-to-beat detail
+    nightly_recharge_status: Mapped[int | None] = mapped_column(
+        Integer, comment="Overall recovery status 1-6 (1=compromised, 6=excellent)"
+    )
+    beat_to_beat_avg: Mapped[int | None] = mapped_column(
+        Integer, comment="Average milliseconds between heartbeats (0 = no signal -> NULL)"
+    )
+
+    # Raw overnight 5-minute series stored as JSON for detailed analysis
+    hrv_samples_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON time->HRV ms mapping, 5 minute averages"
+    )
+    breathing_samples_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON time->breaths/min mapping, 5 minute averages"
+    )
 
     def __repr__(self) -> str:
         """String representation."""
