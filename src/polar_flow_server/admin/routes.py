@@ -3,11 +3,13 @@
 import asyncio
 import csv
 import io
+import json
 import logging
 import os
 import re
 import secrets
 from collections import OrderedDict
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from typing import Annotated, Any
@@ -251,6 +253,68 @@ async def _connected_user_id(session: AsyncSession) -> str | None:
     result = await session.execute(select(User).where(User.is_active == True).limit(1))  # noqa: E712
     user = result.scalar_one_or_none()
     return user.polar_user_id if user else None
+
+
+_ZONE_COLORS = ["bg-sky-300", "bg-teal-400", "bg-lime-400", "bg-amber-400", "bg-red-400"]
+
+
+def _format_workouts(exercises: Sequence[Exercise]) -> list[dict[str, Any]]:
+    """Prepare Exercise rows for the dashboard's Recent Workouts card.
+
+    Formats duration/distance for display and parses the stored HR-zone
+    JSON (present only on exercises synced with detail flags) into
+    percentage-width segments for the zone bar.
+    """
+    workouts: list[dict[str, Any]] = []
+    for ex in exercises:
+        duration = None
+        if ex.duration_seconds:
+            hours, rem = divmod(ex.duration_seconds, 3600)
+            minutes = rem // 60
+            duration = f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
+
+        # Stored JSON with no schema enforcement must never take down the
+        # whole dashboard - bad zone data just means no bar for that workout
+        zones = None
+        if ex.heart_rate_zones_json:
+            try:
+                raw = sorted(json.loads(ex.heart_rate_zones_json), key=lambda z: z["index"])
+                total = sum(z.get("in_zone_seconds") or 0 for z in raw)
+                if total > 0:
+                    zones = [
+                        {
+                            "index": z["index"],
+                            "percent": round((z.get("in_zone_seconds") or 0) * 100 / total, 1),
+                            "minutes": round((z.get("in_zone_seconds") or 0) / 60),
+                            "color": _ZONE_COLORS[min(max(z["index"], 1), 5) - 1],
+                            "limits": f"{z.get('lower_limit_bpm', '?')}-{z.get('upper_limit_bpm', '?')} bpm",
+                        }
+                        for z in raw
+                    ]
+            except (ValueError, TypeError, KeyError):
+                logger.warning("Skipping malformed heart_rate_zones_json for exercise %s", ex.id)
+
+        workouts.append(
+            {
+                "date": ex.start_time.strftime("%a %d %b"),
+                "time": ex.start_time.strftime("%H:%M"),
+                "sport": (ex.detailed_sport_info or ex.sport or "Workout")
+                .replace("_", " ")
+                .title(),
+                "duration": duration,
+                "distance_km": (
+                    round(ex.distance_meters / 1000, 2) if ex.distance_meters else None
+                ),
+                "avg_hr": ex.average_heart_rate,
+                "max_hr": ex.max_heart_rate,
+                "calories": ex.calories,
+                "training_load": round(ex.training_load, 1) if ex.training_load else None,
+                "running_index": ex.running_index,
+                "has_route": bool(ex.route_json),
+                "zones": zones,
+            }
+        )
+    return workouts
 
 
 def _calculate_recovery_status(
@@ -918,6 +982,9 @@ async def admin_dashboard(
             .limit(7),
             NightlyRecharge,
         ),
+        "recent_exercises": scoped(
+            select(Exercise).order_by(Exercise.start_time.desc()).limit(20), Exercise
+        ),
         "sync_logs": select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10),
     }
     if uid:
@@ -957,6 +1024,7 @@ async def admin_dashboard(
     breathing_record = results["breathing"].scalar_one_or_none()
     latest_breathing_rate = breathing_record.breathing_rate_avg if breathing_record else None
     recent_recharge = results["recent_recharge"].scalars().all()
+    recent_workouts = _format_workouts(results["recent_exercises"].scalars().all())
     recent_sync_logs = results["sync_logs"].scalars().all()
     user_baselines: list[UserBaseline] = list(results["baselines"].scalars().all()) if uid else []
     user_patterns: list[PatternAnalysis] = list(results["patterns"].scalars().all()) if uid else []
@@ -1004,6 +1072,8 @@ async def admin_dashboard(
             "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,
+            # Workouts (training tab)
+            "recent_workouts": recent_workouts,
             # Sync history (for top badge)
             "recent_sync_logs": recent_sync_logs,
             # Analytics
