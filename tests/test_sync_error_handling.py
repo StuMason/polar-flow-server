@@ -9,7 +9,7 @@ Tests that:
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from polar_flow.exceptions import PolarFlowError
+from polar_flow.exceptions import NotFoundError, PolarFlowError
 
 from polar_flow_server.services.sync import SyncResult, SyncService
 
@@ -33,6 +33,9 @@ async def test_sync_sleep_403_captured_as_error(async_session):
     mock_client.recharge.list = AsyncMock(return_value=[])
     mock_client.activity.list = AsyncMock(return_value=[])
     mock_client.exercises.list = AsyncMock(return_value=[])
+    mock_client.physical_info.get = AsyncMock(
+        side_effect=NotFoundError("API error 404: Not Found", status_code=404)
+    )
 
     # Mock hasattr checks for optional features
     original_hasattr = hasattr
@@ -89,6 +92,9 @@ async def test_sync_continues_after_endpoint_failure(async_session):
     mock_client.recharge.list = AsyncMock(return_value=[])
     mock_client.activity.list = AsyncMock(return_value=[])
     mock_client.exercises.list = AsyncMock(return_value=[])
+    mock_client.physical_info.get = AsyncMock(
+        side_effect=NotFoundError("API error 404: Not Found", status_code=404)
+    )
 
     # Mock hasattr checks for optional features
     original_hasattr = hasattr
@@ -140,6 +146,9 @@ async def test_sync_success_returns_counts(async_session):
     mock_client.recharge.list = AsyncMock(return_value=[])
     mock_client.activity.list = AsyncMock(return_value=[])
     mock_client.exercises.list = AsyncMock(return_value=[])
+    mock_client.physical_info.get = AsyncMock(
+        side_effect=NotFoundError("API error 404: Not Found", status_code=404)
+    )
 
     # Mock hasattr checks - these need to return False for optional features
     original_hasattr = hasattr

@@ -38,6 +38,9 @@ def _mock_client() -> AsyncMock:
     client.biosensing.get_ecg = AsyncMock(return_value=[])
     client.biosensing.get_body_temperature = AsyncMock(return_value=[])
     client.biosensing.get_skin_temperature = AsyncMock(return_value=[])
+    client.physical_info.get = AsyncMock(
+        side_effect=NotFoundError("API error 404: Not Found", status_code=404)
+    )
     return client
 
 

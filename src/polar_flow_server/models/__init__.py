@@ -17,6 +17,7 @@ from polar_flow_server.models.pattern import (
     PatternType,
     Significance,
 )
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.settings import AppSettings
 from polar_flow_server.models.sleep import Sleep
@@ -55,6 +56,7 @@ __all__ = [
     "PatternAnalysis",
     "PatternName",
     "PatternType",
+    "PhysicalInfo",
     "Significance",
     "SkinTemperature",
     "Sleep",
