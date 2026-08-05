@@ -93,10 +93,12 @@ async def get_sleep(days: DaysParam = 30, user_id: UserIdParam = None) -> dict[s
             .order_by(Sleep.date.desc())
         )
         records = result.scalars().all()
+        staleness = await _most_recent_hint(session, Sleep, Sleep.date, uid) if not records else {}
 
     return {
         "days": days,
         "count": len(records),
+        **staleness,
         "records": [
             {
                 "date": str(r.date),
@@ -147,9 +149,15 @@ async def get_recovery(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
             .order_by(CardioLoad.date.desc())
         )
         cardio = cardio_result.scalars().all()
+        staleness = (
+            await _most_recent_hint(session, NightlyRecharge, NightlyRecharge.date, uid)
+            if not recharge and not cardio
+            else {}
+        )
 
     return {
         "days": days,
+        **staleness,
         "nightly_recharge": [
             {
                 "date": str(r.date),
@@ -197,10 +205,14 @@ async def get_activity(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
             .order_by(Activity.date.desc())
         )
         records = result.scalars().all()
+        staleness = (
+            await _most_recent_hint(session, Activity, Activity.date, uid) if not records else {}
+        )
 
     return {
         "days": days,
         "count": len(records),
+        **staleness,
         "records": [
             {
                 "date": str(r.date),
@@ -239,7 +251,9 @@ async def get_exercises(
     heart rate (bpm), and training load. With `exercise_id`: every recorded
     metric for that single workout, including speed (m/s), cadence, power
     (watts), and elevation. Training load is Polar's cardio strain estimate
-    for the session - compare against get_recovery's tolerance.
+    for the session - compare against get_recovery's tolerance. Calories are
+    null when the device reported an implausibly low value for the duration
+    (sensor noise, e.g. no HR strap) - null means unmeasured, not zero burn.
     """
     uid = await resolve_scoped_user_id(user_id)
 
@@ -260,7 +274,7 @@ async def get_exercises(
             "sport": r.sport,
             "duration_seconds": r.duration_seconds,
             "distance_meters": r.distance_meters,
-            "calories": r.calories,
+            "calories": _plausible_calories(r.calories, r.duration_seconds),
             "average_heart_rate_bpm": r.average_heart_rate,
             "max_heart_rate_bpm": r.max_heart_rate,
             "average_speed_mps": r.average_speed_mps,
@@ -283,10 +297,16 @@ async def get_exercises(
             .order_by(Exercise.start_time.desc())
         )
         records = result.scalars().all()
+        staleness = (
+            await _most_recent_hint(session, Exercise, Exercise.start_time, uid)
+            if not records
+            else {}
+        )
 
     return {
         "days": days,
         "count": len(records),
+        **staleness,
         "records": [
             {
                 "id": r.id,
@@ -296,7 +316,7 @@ async def get_exercises(
                     round(r.duration_seconds / 60, 1) if r.duration_seconds else None
                 ),
                 "distance_km": round(r.distance_meters / 1000, 2) if r.distance_meters else None,
-                "calories": r.calories,
+                "calories": _plausible_calories(r.calories, r.duration_seconds),
                 "average_heart_rate_bpm": r.average_heart_rate,
                 "max_heart_rate_bpm": r.max_heart_rate,
                 "training_load": r.training_load,
@@ -344,8 +364,12 @@ async def get_biosensing(
     since = date.today() - timedelta(days=days)
     async with async_session_maker() as session:
         records = await _query_biosensing(session, metric, uid, since)
+        staleness: dict[str, Any] = {}
+        if not records:
+            model, time_column = _BIOSENSING_TIME_COLUMNS[metric]
+            staleness = await _most_recent_hint(session, model, time_column, uid)
 
-    return {"metric": metric, "days": days, "count": len(records), "records": records}
+    return {"metric": metric, "days": days, "count": len(records), **staleness, "records": records}
 
 
 async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
@@ -570,6 +594,18 @@ async def _run_background_sync(uid: str, polar_token: str) -> None:
         structlog.get_logger().exception("MCP-triggered sync failed before logging", user_id=uid)
 
 
+# (model, time column) per biosensing metric - used for staleness hints
+_BIOSENSING_TIME_COLUMNS: dict[str, tuple[Any, Any]] = {
+    "spo2": (SpO2, SpO2.test_time),
+    "ecg": (ECG, ECG.test_time),
+    "body_temperature": (BodyTemperature, BodyTemperature.start_time),
+    "skin_temperature": (SkinTemperature, SkinTemperature.sleep_date),
+    "heart_rate": (ContinuousHeartRate, ContinuousHeartRate.date),
+    "alertness": (SleepWiseAlertness, SleepWiseAlertness.period_start_time),
+    "bedtime": (SleepWiseBedtime, SleepWiseBedtime.period_start_time),
+}
+
+
 async def _query_biosensing(
     session: Any, metric: str, uid: str, since: date
 ) -> list[dict[str, Any]]:
@@ -652,9 +688,10 @@ async def _query_biosensing(
         return [
             {
                 "date": str(r.date),
-                "hr_min_bpm": r.hr_min,
-                "hr_avg_bpm": r.hr_avg,
-                "hr_max_bpm": r.hr_max,
+                # zero = no valid samples that day, never a real heart rate
+                "hr_min_bpm": r.hr_min or None,
+                "hr_avg_bpm": r.hr_avg or None,
+                "hr_max_bpm": r.hr_max or None,
                 "sample_count": r.sample_count,
             }
             for r in rows.scalars().all()
@@ -703,3 +740,40 @@ async def _query_biosensing(
 def _hours(seconds: int | None) -> float | None:
     """Convert a seconds count to hours rounded to 2 decimals."""
     return round(seconds / 3600, 2) if seconds else None
+
+
+def _plausible_calories(calories: int | None, duration_seconds: int | None) -> int | None:
+    """Null out implausibly low calorie readings.
+
+    Polar occasionally reports 0/2/8 kcal for long sessions (sensor noise or
+    missing HR). Below ~1 kcal per 10 minutes of recorded duration the value
+    is noise, not measurement - surface None so agents don't report it.
+    """
+    if calories is None or not duration_seconds:
+        return calories
+    if calories < duration_seconds / 600:
+        return None
+    return calories
+
+
+async def _most_recent_hint(session: Any, model: Any, time_column: Any, uid: str) -> dict[str, Any]:
+    """Staleness hint for an empty windowed result (data can be months old).
+
+    Without this, an agent calling with the default window against a stale
+    dataset sees an empty list and concludes there is no data at all.
+    """
+    latest = (
+        await session.execute(
+            select(time_column).where(model.user_id == uid).order_by(time_column.desc()).limit(1)
+        )
+    ).scalar()
+    if latest is None:
+        return {"hint": "No records exist for this user yet."}
+    return {
+        "most_recent_record": str(latest),
+        "hint": (
+            f"No records in the requested window, but data exists up to {latest}. "
+            "Increase `days` to reach it, and consider checking get_sync_status "
+            "for staleness."
+        ),
+    }
