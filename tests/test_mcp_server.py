@@ -281,6 +281,11 @@ async def test_insights_tool_carries_apps_card(app_client) -> None:
     assert "<link" not in html_text
     # Theme via host variables so light/dark follows the client
     assert "--color-text-primary" in html_text
+    # The bridge handshake: hosts WAIT for ui/initialize before delivering
+    # tool results - a listen-only card renders forever-blank (field-tested)
+    assert "ui/initialize" in html_text
+    assert "ui/notifications/initialized" in html_text
+    assert "ui/notifications/tool-result" in html_text
 
 
 def test_claude_ui_domain_derivation(monkeypatch) -> None:
@@ -447,6 +452,124 @@ async def test_get_baselines_and_patterns_after_analysis(app_client) -> None:
     pattern_names = {p["pattern_name"] for p in payload["patterns"]}
     assert "hrv_trend" in pattern_names
     assert "anomaly_count" in payload
+
+
+# =============================================================================
+# Data-quality guards (from the 2026-08-05 field test report)
+# =============================================================================
+
+
+async def test_zero_hr_aggregates_serialized_as_null(app_client) -> None:
+    """hr_min 0 is a no-signal artifact, never a heart rate (BUG-1)."""
+    from polar_flow_server.models.continuous_hr import ContinuousHeartRate
+
+    user_id = await _seed_user()
+    async with async_session_maker() as session:
+        session.add(
+            ContinuousHeartRate(
+                user_id=user_id,
+                date=date.today() - timedelta(days=1),
+                hr_min=0,
+                hr_avg=0,
+                hr_max=0,
+                sample_count=12,
+            )
+        )
+        await session.commit()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_biosensing", {"metric": "heart_rate", "days": 7})
+
+    record = result.structured_content["records"][0]
+    assert record["hr_min_bpm"] is None
+    assert record["hr_avg_bpm"] is None
+    assert record["hr_max_bpm"] is None
+
+
+async def test_implausible_calories_nulled(app_client) -> None:
+    """0/2/8 kcal on a long session is sensor noise, not measurement (BUG-2)."""
+    from datetime import UTC, datetime
+
+    from polar_flow_server.models.exercise import Exercise
+
+    user_id = await _seed_user()
+    async with async_session_maker() as session:
+        session.add(
+            Exercise(
+                user_id=user_id,
+                polar_exercise_id="ex-noise",
+                start_time=datetime.now(UTC) - timedelta(days=1),
+                sport="STRENGTH_TRAINING",
+                duration_seconds=166 * 60,
+                calories=0,
+            )
+        )
+        session.add(
+            Exercise(
+                user_id=user_id,
+                polar_exercise_id="ex-short",
+                start_time=datetime.now(UTC) - timedelta(days=2),
+                sport="RUNNING",
+                duration_seconds=5 * 60,
+                calories=30,
+            )
+        )
+        await session.commit()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_exercises", {"days": 7})
+
+    by_sport = {r["sport"]: r for r in result.structured_content["records"]}
+    assert by_sport["STRENGTH_TRAINING"]["calories"] is None  # 0 kcal over 166 min
+    assert by_sport["RUNNING"]["calories"] == 30  # plausible short session kept
+
+
+async def test_empty_window_carries_staleness_hint(app_client) -> None:
+    """Stale data + default window must not read as 'no data at all' (BUG-5)."""
+    user_id = await _seed_user()
+    async with async_session_maker() as session:
+        from polar_flow_server.models.sleep import Sleep
+
+        session.add(Sleep(user_id=user_id, date=date.today() - timedelta(days=100), sleep_score=75))
+        await session.commit()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_sleep", {"days": 7})
+
+    payload = result.structured_content
+    assert payload["count"] == 0
+    assert str(date.today() - timedelta(days=100)) in payload["most_recent_record"]
+    assert "Increase `days`" in payload["hint"]
+
+
+async def test_sentinel_load_ratio_excluded_from_insights(app_client) -> None:
+    """Polar's -1.0 'not available' ratio must never reach percent math (BUG-4)."""
+    from polar_flow_server.models.cardio_load import CardioLoad
+
+    user_id = await _seed_user()
+    async with async_session_maker() as session:
+        session.add(
+            CardioLoad(user_id=user_id, date=date.today(), cardio_load=0.0, cardio_load_ratio=-1.0)
+        )
+        session.add(
+            CardioLoad(
+                user_id=user_id,
+                date=date.today() - timedelta(days=1),
+                cardio_load=45.0,
+                cardio_load_ratio=1.1,
+            )
+        )
+        await session.commit()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_health_insights", {})
+
+    ratio = result.structured_content["current_metrics"]["training_load_ratio"]
+    assert ratio == 1.1  # the latest REAL value, not the -1.0 sentinel
 
 
 # =============================================================================

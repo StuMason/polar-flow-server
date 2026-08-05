@@ -176,20 +176,51 @@ INSIGHTS_CARD_HTML = """<!doctype html>
     } catch (e) { /* host may not support sizing - fine */ }
   }
 
-  function extractPayload(message) {
-    var result = message && (message.result || (message.params && message.params.result));
-    if (!result) return null;
-    if (result.structuredContent) return result.structuredContent;
-    if (result.structured_content) return result.structured_content;
-    var text = result.content && result.content[0] && result.content[0].text;
+  function extractPayload(container) {
+    if (!container) return null;
+    if (container.structuredContent) return container.structuredContent;
+    if (container.structured_content) return container.structured_content;
+    var text = container.content && container.content[0] && container.content[0].text;
     if (text) { try { return JSON.parse(text); } catch (e) { return null; } }
     return null;
   }
 
+  // The MCP Apps bridge (spec 2026-01-26): the HOST WAITS for the view to
+  // complete the ui/initialize handshake before it delivers any tool data.
+  // A view that only listens renders forever-blank.
+  var INIT_ID = 1;
   window.addEventListener("message", function (event) {
-    var payload = extractPayload(event.data);
-    if (payload) render(payload);
+    var msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+
+    if (msg.id === INIT_ID && msg.result) {
+      // Handshake step 3: confirm readiness; host then sends tool-result
+      window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized" }, "*");
+      return;
+    }
+
+    if (msg.method === "ui/notifications/tool-result" && msg.params) {
+      var payload = extractPayload(msg.params);
+      if (payload) render(payload);
+      return;
+    }
+
+    // Lenient fallback for hosts that push a bare CallToolResult
+    var legacy = extractPayload(msg.result || (msg.params && msg.params.result));
+    if (legacy) render(legacy);
   });
+
+  // Handshake step 1: announce ourselves
+  window.parent.postMessage({
+    jsonrpc: "2.0",
+    id: INIT_ID,
+    method: "ui/initialize",
+    params: {
+      appCapabilities: { availableDisplayModes: ["inline"] },
+      clientInfo: { name: "polar-today-at-a-glance", version: "1.0.0" },
+      protocolVersion: "2026-01-26"
+    }
+  }, "*");
 })();
 </script>
 </body>
