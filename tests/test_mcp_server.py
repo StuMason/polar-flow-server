@@ -253,6 +253,53 @@ async def test_days_out_of_range_rejected_by_schema(app_client) -> None:
 
 
 # =============================================================================
+# MCP Apps: the "Today at a glance" card on get_health_insights
+# =============================================================================
+
+
+async def test_insights_tool_carries_apps_card(app_client) -> None:
+    """get_health_insights is bound to a ui:// resource that Apps-capable
+    hosts render; the card must be fully self-contained (sandbox CSP allows
+    inline only) and the tool must stay a normal tool everywhere else."""
+    user_id = await _seed_user()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        tools = await client.list_tools()
+        insights = next(t for t in tools.tools if t.name == "get_health_insights")
+        assert insights.meta == {"ui": {"resourceUri": "ui://polar-flow/insights-card.html"}}
+
+        content = await client.read_resource("ui://polar-flow/insights-card.html")
+        card = content.contents[0]
+
+    assert card.mime_type == "text/html;profile=mcp-app"
+    html_text = card.text
+    assert "Today at a glance" in html_text
+    assert "<script>" in html_text and "<style>" in html_text
+    # Self-contained: no external fetches - the Apps sandbox would block them
+    assert 'src="http' not in html_text
+    assert "<link" not in html_text
+    # Theme via host variables so light/dark follows the client
+    assert "--color-text-primary" in html_text
+
+
+def test_claude_ui_domain_derivation(monkeypatch) -> None:
+    import hashlib
+
+    from polar_flow_server.core.config import settings
+    from polar_flow_server.mcp_server.apps_ui import claude_ui_domain
+
+    monkeypatch.setattr(settings, "base_url", None)
+    assert claude_ui_domain() is None
+
+    monkeypatch.setattr(settings, "base_url", "https://polar.example.com")
+    expected = (
+        hashlib.sha256(b"https://polar.example.com/mcp").hexdigest()[:32] + ".claudemcpcontent.com"
+    )
+    assert claude_ui_domain() == expected
+
+
+# =============================================================================
 # Slice 2 tools: activity, exercises, biosensing, baselines, patterns
 # =============================================================================
 
