@@ -112,8 +112,14 @@ async def get_sleep(days: DaysParam = 30, user_id: UserIdParam = None) -> dict[s
                 "interruptions_hours": _hours(r.interruptions_seconds),
                 "hrv_avg_ms": r.hrv_avg,
                 "heart_rate_avg_bpm": r.heart_rate_avg,
+                "heart_rate_min_bpm": r.heart_rate_min,
+                "heart_rate_max_bpm": r.heart_rate_max,
                 "breathing_rate_avg": r.breathing_rate_avg,
                 "skin_temperature_avg": r.skin_temperature_avg,
+                "continuity_score": r.continuity,
+                "sleep_cycles": r.sleep_cycles,
+                "sleep_charge": r.sleep_charge,
+                "regeneration_score": r.group_regeneration_score,
             }
             for r in records
         ],
@@ -163,7 +169,9 @@ async def get_recovery(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
                 "date": str(r.date),
                 "ans_charge": r.ans_charge,
                 "ans_charge_status": r.ans_charge_status,
+                "nightly_recharge_status": r.nightly_recharge_status,
                 "hrv_avg_ms": r.hrv_avg,
+                "beat_to_beat_avg_ms": r.beat_to_beat_avg,
                 "breathing_rate_avg": r.breathing_rate_avg,
                 "heart_rate_avg_bpm": r.heart_rate_avg,
             }
