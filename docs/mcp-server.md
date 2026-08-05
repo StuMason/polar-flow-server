@@ -99,6 +99,17 @@ numbers.
 Tool descriptions are written for the model — units, semantics, and when to
 use which tool — so assistants generally pick sensibly without prompting.
 
+### Rendered cards (MCP Apps)
+
+In clients that support the [MCP Apps extension](https://modelcontextprotocol.io/extensions/apps/overview)
+(claude.ai, Claude Desktop, VS Code, and others), `get_health_insights`
+renders a **Today at a glance** card right in the conversation: current
+metrics vs your personal baselines, observations, and suggestions, following
+the client's light/dark theme. The first time, the client asks permission to
+display the app. Clients without Apps support (e.g. Claude Code) simply get
+the tool's normal structured result — the card is progressive enhancement,
+never the data channel.
+
 The tool list order is stable and `tools/list` carries a one-hour cache
 hint (`ttlMs`), so client-side prompt caches stay warm across calls.
 

@@ -30,9 +30,10 @@ the watch recorded - missing dates mean the device wasn't worn.
 """
 
 # Registration order == tools/list order (the SDK preserves insertion order).
-# Keep stable; append new tools rather than reordering.
+# Keep stable; append new tools rather than reordering. get_health_insights
+# is registered separately via the Apps extension (it carries the rendered
+# "Today at a glance" card) - see build_mcp_server.
 _TOOLS = (
-    tools.get_health_insights,
     tools.get_sleep,
     tools.get_recovery,
     tools.get_activity,
@@ -55,6 +56,13 @@ def build_mcp_server(
     route with bearer auth and serves protected-resource metadata; without
     them the mount in ``asgi.py`` does API-key auth itself.
     """
+    from polar_flow_server.mcp_server.apps_ui import INSIGHTS_RESOURCE_URI, build_apps_extension
+
+    apps = build_apps_extension()
+    # get_health_insights carries the rendered card in Apps-capable hosts;
+    # everywhere else it behaves exactly like a plain tool.
+    apps.tool(resource_uri=INSIGHTS_RESOURCE_URI)(tools.get_health_insights)
+
     server = MCPServer(
         name="polar-flow-server",
         title="Polar Health Data",
@@ -63,6 +71,7 @@ def build_mcp_server(
         website_url="https://github.com/StuMason/polar-flow-server",
         token_verifier=token_verifier,
         auth=auth,
+        extensions=[apps],
         # The tool list only changes on deploy; let clients cache it. Health
         # data responses themselves are never cacheable by intermediaries.
         cache_hints={"tools/list": CacheHint(ttl_ms=3_600_000, scope="private")},
