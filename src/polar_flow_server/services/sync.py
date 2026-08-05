@@ -595,10 +595,19 @@ class SyncService:
         # Fetch from Polar API (last 30 days)
         exercises = await client.exercises.list()
 
+        # SDK >= 1.5.0 returns samples, HR zones and the GPS route inline
+        # via query flags on the detail call (get_route is new in 1.5.0)
+        supports_detail_flags = hasattr(client.exercises, "get_route")
+
         count = 0
         for exercise in exercises:
             # Get detailed exercise data
-            detailed = await client.exercises.get(exercise_id=exercise.id)
+            if supports_detail_flags:
+                detailed = await client.exercises.get(
+                    exercise_id=exercise.id, samples=True, zones=True, route=True
+                )
+            else:
+                detailed = await client.exercises.get(exercise_id=exercise.id)
 
             # Use transformer for type-safe SDK -> DB mapping
             exercise_dict = ExerciseTransformer.transform(detailed, user_id)
