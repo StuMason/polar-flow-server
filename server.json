@@ -1,0 +1,52 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.StuMason/polar-flow-server",
+  "title": "Polar Health Data (self-hosted)",
+  "description": "Self-hosted health analytics for Polar devices with a built-in MCP server: sleep, HRV, workouts, biosensing, and personal baselines your AI can read.",
+  "repository": {
+    "url": "https://github.com/StuMason/polar-flow-server",
+    "source": "github"
+  },
+  "version": "0.0.0",
+  "websiteUrl": "https://stumason.github.io/polar-flow-server/",
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "docker.io/stumason/polar-flow-server:0.0.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:8000/mcp"
+      },
+      "environmentVariables": [
+        {
+          "name": "DATABASE_URL",
+          "description": "PostgreSQL connection string, e.g. postgresql+asyncpg://user:pass@host:5432/polar",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "POLAR_CLIENT_ID",
+          "description": "Polar AccessLink OAuth client id (register at admin.polaraccesslink.com)",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "POLAR_CLIENT_SECRET",
+          "description": "Polar AccessLink OAuth client secret",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "BASE_URL",
+          "description": "Public HTTPS base URL of this deployment; enables OAuth sign-in for MCP connectors",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

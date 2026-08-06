@@ -35,6 +35,9 @@ ENV KEY_DIR=/data/keys
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# MCP Registry ownership verification (must match server.json name)
+LABEL io.modelcontextprotocol.server.name="io.github.StuMason/polar-flow-server"
+
 # Expose port
 EXPOSE 8000
 

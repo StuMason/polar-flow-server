@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-06
+
+### Added
+
+**Built-in MCP Server** (#80, #114, #116, #117)
+- Model Context Protocol server (protocol revision 2026-07-28, streamable HTTP) mounted at `/mcp`
+- Ten curated tools: health assessment, sleep, recovery, activity, exercises, seven biosensing streams, baselines, patterns/anomalies, and sync control
+- Per-user API-key auth for headless clients
+
+**OAuth 2.1 Sign-In for MCP Connectors** (#118, #119)
+- With `BASE_URL` set, the server is its own OAuth 2.1 authorization server: add `/mcp` as a custom connector in claude.ai / Claude Desktop and sign in — no key pasting
+- User-scoped, hourly-expiring, auto-refreshing tokens; connected apps revocable from Settings
+
+**MCP Apps Card** (#120, #121)
+- "Today at a glance" renders as an interactive card in clients that support MCP Apps
+
+**Deeper Polar Data Capture** (#75, #76, #77)
+- Physical info sync: VO2 max, aerobic/anaerobic thresholds, resting/max HR, weight, height, sleep goal (new `GET /v3/users/physical-info` endpoint, SDK 1.5.0)
+- Exercise detail: heart-rate zones, per-second samples, and GPS routes stored per workout
+- Previously dropped sleep/recharge fields captured: hypnogram, sleep HR samples, HRV and breathing samples, nightly recharge status
+
+**Minute-Level Samples API** (#67, #127)
+- `GET /users/{id}/activity-samples/{date}`, `GET /users/{id}/heart-rate/{date}/samples`, `GET /users/{id}/ecg/{id}` (full waveform + quality)
+
+**Dashboard: Stored Detail Rendered** (#74, #78)
+- Recent Workouts table with per-zone time bars on the Training tab
+- ECG waveform chart, body-temperature trend with min/max band, SleepWise alertness curve, circadian bedtime card
+
+**MCP Registry**
+- `server.json` + CI publishing to the official MCP Registry as `io.github.StuMason/polar-flow-server`
+
+### Fixed
+
+- Security sprint (#50–#57): persistent encryption/session keys across redeploys, CSRF on destructive admin POSTs, proxy-aware login rate limiting, gated first-run setup, hardened headers/cookies/session rotation, registered SaaS OAuth callback origins, non-root container
+- Bug sprint (#58–#66): SpO2 tiles, real 401s and user-scoped queries in admin charts, propagated biosensing sync errors, concurrent-sync guard, reachable exercise detail (404s on missing data), live rate-limit tracking with transient-error retry
+- Chart-label day shift west of UTC; UTC-labelled timestamps throughout (#108, #109)
+- ANS load scale alignment (#49)
+
+### Changed
+
+- Frontend assets vendored — no CDN calls from production pages (#110)
+- Dashboard/settings page loads batched (~20 sequential queries collapsed) (#112)
+- Accessibility: tab ARIA + arrow keys, dropdown/modal semantics, chart alt text (#111)
+- Docs and README refreshed with current screenshots and MCP-first positioning (#113, #122)
+- polar-flow SDK dependency raised to 1.5.0
+
 ## [1.4.0] - 2026-07-19
 
 ### Added
