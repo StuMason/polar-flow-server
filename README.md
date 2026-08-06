@@ -55,7 +55,7 @@ Polar API → polar-flow SDK → Sync Service → PostgreSQL
 - SQLAlchemy 2.0 (async ORM)
 - PostgreSQL
 - HTMX + Tailwind (admin UI)
-- polar-flow SDK v1.3.0
+- polar-flow SDK v1.5.0
 
 ## Quick Start
 
