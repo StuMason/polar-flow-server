@@ -57,6 +57,8 @@ Polar API → polar-flow SDK → Sync Service → PostgreSQL
 - HTMX + Tailwind (admin UI)
 - polar-flow SDK v1.5.0
 
+> **Don't fancy running a server?** A hosted version is in the works — [join the waitlist](https://pulse.stumason.dev). Self-hosting stays free forever.
+
 ## Quick Start
 
 ### Option 1: Docker (Recommended)

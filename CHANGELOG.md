@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ECG waveform chart, body-temperature trend with min/max band, SleepWise alertness curve, circadian bedtime card
 
 **MCP Registry**
-- `server.json` + CI publishing to the official MCP Registry as `io.github.stumason/polar-flow-server`
+- `server.json` + CI publishing to the official MCP Registry as `io.github.StuMason/polar-flow-server`
 
 ### Fixed
 
