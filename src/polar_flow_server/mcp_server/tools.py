@@ -15,6 +15,7 @@ import json
 from datetime import date, timedelta
 from typing import Annotated, Any, Literal
 
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 from sqlalchemy import select
 
@@ -280,7 +281,7 @@ async def get_exercises(
             )
             r = result.scalar_one_or_none()
         if r is None:
-            raise ValueError(f"Exercise {exercise_id} not found")
+            raise ToolError(f"Exercise {exercise_id} not found")
         return {
             "id": r.id,
             "polar_exercise_id": r.polar_exercise_id,
@@ -557,7 +558,7 @@ async def trigger_sync(user_id: UserIdParam = None) -> dict[str, Any]:
         )
         user = result.scalar_one_or_none()
         if user is None:
-            raise ValueError(f"No connected Polar user '{uid}' to sync")
+            raise ToolError(f"No connected Polar user '{uid}' to sync")
         polar_token = token_encryption.decrypt(user.access_token_encrypted)
 
     task = asyncio.create_task(_run_background_sync(uid, polar_token))
