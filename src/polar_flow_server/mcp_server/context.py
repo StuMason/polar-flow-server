@@ -9,6 +9,7 @@ model as the REST API's ``per_user_api_key_guard``.
 
 from contextvars import ContextVar
 
+from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy import select
 
 from polar_flow_server.core.auth import KeyScope
@@ -26,15 +27,15 @@ async def resolve_scoped_user_id(user_id: str | None) -> str:
       otherwise the server's single connected user (the self-hosted case).
 
     Raises:
-        ValueError: If unauthorized for the requested user, or no user exists.
+        ToolError: If unauthorized for the requested user, or no user exists.
     """
     scope = current_key_scope.get()
     if scope is None:
-        raise ValueError("No authenticated API key scope for this MCP request")
+        raise ToolError("No authenticated API key scope for this MCP request")
 
     if scope.user_id is not None:
         if user_id is not None and user_id != scope.user_id:
-            raise ValueError("API key not authorized for this user")
+            raise ToolError("API key not authorized for this user")
         return scope.user_id
 
     if user_id is not None:
@@ -46,7 +47,7 @@ async def resolve_scoped_user_id(user_id: str | None) -> str:
         result = await session.execute(select(User).where(User.is_active == True).limit(1))  # noqa: E712
         user = result.scalar_one_or_none()
     if user is None:
-        raise ValueError(
+        raise ToolError(
             "No connected Polar user on this server yet - complete the OAuth setup first"
         )
     return user.polar_user_id
