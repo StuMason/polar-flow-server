@@ -5,6 +5,7 @@ Converts polar-flow SDK NightlyRecharge model to database-ready dictionary.
 
 from __future__ import annotations
 
+import json
 from datetime import date as date_type
 from typing import TYPE_CHECKING, Any
 
@@ -24,6 +25,9 @@ class RechargeTransformer:
     - heart_rate_variability_avg -> hrv_avg (RENAMED!)
     - breathing_rate_avg -> breathing_rate_avg
     - heart_rate_avg -> heart_rate_avg
+    - nightly_recharge_status -> nightly_recharge_status
+    - beat_to_beat_avg -> beat_to_beat_avg (0 = no signal -> NULL)
+    - hrv_samples / breathing_samples -> *_samples_json
 
     Note: SDK doesn't provide these database fields:
     - hrv_status, breathing_rate_status, heart_rate_status
@@ -55,7 +59,19 @@ class RechargeTransformer:
             "hrv_avg": sdk_recharge.heart_rate_variability_avg,
             "breathing_rate_avg": sdk_recharge.breathing_rate_avg,
             "heart_rate_avg": sdk_recharge.heart_rate_avg,
-            # SDK doesn't provide status fields or sleep metrics
+            "nightly_recharge_status": sdk_recharge.nightly_recharge_status,
+            # Zero milliseconds between beats means "no signal", not data
+            "beat_to_beat_avg": sdk_recharge.beat_to_beat_avg or None,
+            # Overnight 5-minute series
+            "hrv_samples_json": (
+                json.dumps(sdk_recharge.hrv_samples) if sdk_recharge.hrv_samples else None
+            ),
+            "breathing_samples_json": (
+                json.dumps(sdk_recharge.breathing_samples)
+                if sdk_recharge.breathing_samples
+                else None
+            ),
+            # SDK doesn't provide per-metric status fields or sleep metrics
             # Database columns hrv_status, breathing_rate_status, heart_rate_status,
             # sleep_score, sleep_charge, sleep_charge_status remain null
         }

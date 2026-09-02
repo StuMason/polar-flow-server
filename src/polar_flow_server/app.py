@@ -2,7 +2,9 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 from advanced_alchemy.config.asyncio import AsyncSessionConfig
@@ -12,14 +14,16 @@ from litestar.contrib.jinja import JinjaTemplateEngine
 from litestar.contrib.sqlalchemy.plugins import SQLAlchemyAsyncConfig, SQLAlchemyPlugin
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
+from litestar.static_files import create_static_files_router
 from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 
 from polar_flow_server import __version__
 from polar_flow_server.admin import admin_router
 from polar_flow_server.admin.auth import admin_user_exists
 from polar_flow_server.api import api_routers
-from polar_flow_server.core.config import settings
+from polar_flow_server.core.config import DeploymentMode, settings
 from polar_flow_server.core.database import (
     async_session_maker,
     close_database,
@@ -28,9 +32,44 @@ from polar_flow_server.core.database import (
 )
 from polar_flow_server.core.security import verify_stored_tokens_decryptable
 from polar_flow_server.core.setup_token import announce_setup_token
+from polar_flow_server.mcp_server import build_mcp_server, create_mcp_mount
 from polar_flow_server.middleware import RateLimitHeadersMiddleware, SecurityHeadersMiddleware
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
+
+
+def format_utc(value: datetime | str | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Jinja filter: render a stored-UTC timestamp consistently, labelled UTC.
+
+    All persisted datetimes are UTC; templates used to strftime them with no
+    label (read as local) and one spot printed raw isoformat (issue #68/#73).
+    Accepts datetime, isoformat string, or None.
+    """
+    if not value:
+        return "--"
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+        value = parsed
+    return value.strftime(fmt) + " UTC"
+
+
+def days_old(value: date | datetime) -> int:
+    """Jinja filter: whole days between a stored date/datetime and today (UTC).
+
+    Feeds the dashboard tiles' "Nd ago" staleness badges (issue #70).
+    """
+    if isinstance(value, datetime):
+        value = value.date()
+    return (datetime.now(UTC).date() - value).days
+
+
+def _register_template_filters(engine: JinjaTemplateEngine) -> None:
+    engine.engine.filters["utc_dt"] = format_utc
+    engine.engine.filters["days_old"] = days_old
+
 
 # Configure structured logging
 structlog.configure(
@@ -113,6 +152,49 @@ def create_app() -> Litestar:
     """
     # Get templates directory path
     templates_dir = Path(__file__).parent / "templates"
+    static_dir = Path(__file__).parent / "static"
+
+    # MCP server (issue #80). Built per app instance: the SDK's
+    # session_manager.run() is single-use, and tests call create_app()
+    # repeatedly. The transport requires the manager running for the app's
+    # lifetime — without this lifespan the first /mcp request 500s.
+    #
+    # OAuth mode (the Claude "Connect" sign-in flow) needs the server to
+    # know its public URL (it becomes the OAuth issuer) and only makes sense
+    # self-hosted, where the admin who approves consent IS the data's user.
+    oauth_enabled = (
+        bool(settings.base_url) and settings.deployment_mode == DeploymentMode.SELF_HOSTED
+    )
+    oauth_handlers: list[Any] = []
+    if oauth_enabled:
+        from pydantic import AnyHttpUrl
+
+        from polar_flow_server.mcp_server.asgi import create_oauth_root_mounts
+        from polar_flow_server.mcp_server.oauth import (
+            OAUTH_SCOPE,
+            PolarOAuthProvider,
+            PolarTokenVerifier,
+        )
+
+        base = str(settings.base_url).rstrip("/")
+        auth_settings = AuthSettings(
+            issuer_url=AnyHttpUrl(base),
+            resource_server_url=AnyHttpUrl(f"{base}/mcp"),
+            client_registration_options=ClientRegistrationOptions(
+                enabled=True, valid_scopes=[OAUTH_SCOPE], default_scopes=[OAUTH_SCOPE]
+            ),
+            revocation_options=RevocationOptions(enabled=True),
+        )
+        mcp_server = build_mcp_server(token_verifier=PolarTokenVerifier(), auth=auth_settings)
+        oauth_handlers = list(create_oauth_root_mounts(PolarOAuthProvider(), auth_settings))
+    else:
+        mcp_server = build_mcp_server()
+    mcp_mount = create_mcp_mount(mcp_server, oauth_enabled=oauth_enabled)
+
+    @asynccontextmanager
+    async def mcp_lifespan(app: Litestar) -> AsyncIterator[None]:
+        async with mcp_server.session_manager.run():
+            yield
 
     # Session store for admin authentication
     # In production with multiple instances, use Redis instead
@@ -156,14 +238,32 @@ def create_app() -> Litestar:
             "/admin/logout",
             # API routes use API key auth, not CSRF
             "/api/v1/users/",
+            # MCP endpoint: JSON-RPC POSTs authenticated by API key, no CSRF
+            "/mcp",
+            # OAuth AS endpoints: external clients POST here (token exchange,
+            # DCR, revocation) with their own auth, never browser forms
+            "/authorize",
+            "/token",
+            "/register",
+            "/revoke",
+            "/.well-known",
             # Health check (no auth needed)
             "/health",
         ],
     )
 
     return Litestar(
-        route_handlers=[root_redirect, *api_routers, admin_router],
-        lifespan=[lifespan],
+        route_handlers=[
+            root_redirect,
+            *api_routers,
+            admin_router,
+            # Vendored frontend assets (htmx, Chart.js, built Tailwind CSS) -
+            # the admin UI must work offline / on a LAN with no CDNs (#71).
+            create_static_files_router(path="/static", directories=[static_dir]),
+            mcp_mount,
+            *oauth_handlers,
+        ],
+        lifespan=[lifespan, mcp_lifespan],
         openapi_config=OpenAPIConfig(
             title="polar-flow-server API",
             version=__version__,
@@ -172,6 +272,7 @@ def create_app() -> Litestar:
         template_config=TemplateConfig(
             directory=templates_dir,
             engine=JinjaTemplateEngine,
+            engine_callback=_register_template_filters,
         ),
         plugins=[
             SQLAlchemyPlugin(

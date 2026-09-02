@@ -3,12 +3,14 @@
 from typing import Annotated, Any
 
 from litestar import Router, post
+from litestar.exceptions import HTTPException
 from litestar.params import Parameter
-from litestar.status_codes import HTTP_200_OK
+from litestar.status_codes import HTTP_200_OK, HTTP_409_CONFLICT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from polar_flow_server.core.auth import per_user_api_key_guard
 from polar_flow_server.services.sync import SyncService
+from polar_flow_server.services.sync_guard import SyncInProgressError, sync_slot
 
 
 @post(
@@ -38,11 +40,18 @@ async def trigger_sync(
     """
     sync_service = SyncService(session)
 
-    sync_result = await sync_service.sync_user(
-        user_id=user_id,
-        polar_token=polar_token,
-        days=days,
-    )
+    try:
+        with sync_slot(user_id):
+            sync_result = await sync_service.sync_user(
+                user_id=user_id,
+                polar_token=polar_token,
+                days=days,
+            )
+    except SyncInProgressError as e:
+        raise HTTPException(
+            status_code=HTTP_409_CONFLICT,
+            detail="A sync is already running for this user",
+        ) from e
 
     return {
         "status": "partial" if sync_result.has_errors else "success",

@@ -14,14 +14,6 @@
                     {% endfor %}
                 </ul>
             </div>
-            <div class="mt-3 text-xs text-green-600">
-                Total records: {{ sleep_count }} sleep, {{ exercise_count }} exercises, {{ activity_count }} activities
-            </div>
         </div>
     </div>
 </div>
-
-<!-- Update stat cards via out-of-band swap -->
-<dd id="sleep-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ sleep_count }}</dd>
-<dd id="exercise-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ exercise_count }}</dd>
-<dd id="activity-count" hx-swap-oob="true" class="text-2xl font-semibold text-gray-900">{{ activity_count }}</dd>

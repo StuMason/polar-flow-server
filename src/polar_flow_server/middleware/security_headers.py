@@ -20,7 +20,7 @@ _CSP = "; ".join(
         # from unpkg) actually load from — tests/test_security_headers.py
         # asserts every host those pages reference is covered here.
         "script-src 'self' 'unsafe-inline' "
-        "https://unpkg.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net "
+        "https://unpkg.com https://cdn.jsdelivr.net "
         "https://cdn.redoc.ly",
         # Tailwind's CDN build injects styles at runtime; doc-UI css comes
         # from jsdelivr/unpkg, redoc pulls Google Fonts css

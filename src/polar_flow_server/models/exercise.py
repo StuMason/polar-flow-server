@@ -81,6 +81,25 @@ class Exercise(Base, UserScopedMixin, TimestampMixin):
     # Has GPS data flag
     has_route: Mapped[bool] = mapped_column(default=False)
 
+    # Performance metrics
+    running_index: Mapped[int | None] = mapped_column(
+        Integer, comment="Polar running performance index"
+    )
+    training_load_pro_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON Training Load Pro breakdown (cardio/muscle/perceived)"
+    )
+
+    # Per-exercise detail stored as JSON (fetched via samples/zones/route flags)
+    heart_rate_zones_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON list of HR zones: index, lower/upper limit bpm, in-zone seconds"
+    )
+    samples_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON list of sample series: sample_type, recording_rate, values"
+    )
+    route_json: Mapped[str | None] = mapped_column(
+        Text, comment="JSON list of GPS points: latitude, longitude, time, satellites, fix"
+    )
+
     def __repr__(self) -> str:
         """String representation."""
         return (

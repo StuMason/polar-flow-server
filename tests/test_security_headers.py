@@ -32,7 +32,9 @@ class TestSecurityHeaders:
     async def test_csp_allows_the_cdns_the_ui_uses(self, app_client):
         response = await app_client.get("/health")
         csp = response.headers["content-security-policy"]
-        for host in ("unpkg.com", "cdn.tailwindcss.com", "cdn.jsdelivr.net"):
+        # tailwindcss.com is gone on purpose - assets are vendored (#71);
+        # unpkg/jsdelivr remain only for the /schema doc UIs.
+        for host in ("unpkg.com", "cdn.jsdelivr.net"):
             assert host in csp
 
     async def test_csp_covers_every_host_the_pages_actually_load(self, app_client):
@@ -155,13 +157,16 @@ class TestScriptBlockEscaping:
         from jinja2 import Environment
 
         template_source = Path("src/polar_flow_server/templates/admin/dashboard.html").read_text()
-        expressions = re.findall(r"\{\{ [a-z_.]+samples_json[^}]*\}\}", template_source)
-        assert len(expressions) == 2, "expected the two JSON island expressions"
+        expressions = re.findall(
+            r"\{\{ [a-z_.]+(?:samples_json|data_json|trend_json)[^}]*\}\}", template_source
+        )
+        # today-hr, today-steps, ecg waveform, alertness hourly, body-temp trend
+        assert len(expressions) == 5, "expected the five JSON island expressions"
 
         env = Environment()
         malicious = json.dumps({"v": "</script><script>alert(1)</script>"})
         for expression in expressions:
-            normalized = re.sub(r"[a-z_.]+samples_json", "x", expression)
+            normalized = re.sub(r"[a-z_.]+(?:samples_json|data_json|trend_json)", "x", expression)
             rendered = env.from_string(normalized).render(x=malicious)
             assert "</script" not in rendered
             # Still exactly the same data once parsed

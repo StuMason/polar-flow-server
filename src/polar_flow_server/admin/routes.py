@@ -3,18 +3,22 @@
 import asyncio
 import csv
 import io
+import json
 import logging
 import os
 import re
 import secrets
 from collections import OrderedDict
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
-from typing import Any
-from urllib.parse import urlencode
+from typing import Annotated, Any
+from urllib.parse import quote, urlencode
 
 import httpx
 from litestar import Request, get, post
+from litestar.exceptions import NotAuthorizedException
+from litestar.params import Parameter
 from litestar.response import Redirect, Response, Template
 from litestar.status_codes import HTTP_200_OK, HTTP_303_SEE_OTHER
 from polar_flow import PolarFlow
@@ -36,6 +40,7 @@ from polar_flow_server.core.api_keys import (
     revoke_api_key,
 )
 from polar_flow_server.core.config import settings
+from polar_flow_server.core.database import async_session_maker
 from polar_flow_server.core.security import token_encryption
 from polar_flow_server.core.setup_token import announce_setup_token, verify_setup_token
 from polar_flow_server.models.activity import Activity
@@ -57,6 +62,7 @@ from polar_flow_server.models.sync_log import SyncLog, SyncTrigger
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.models.user import User
 from polar_flow_server.services.scheduler import get_scheduler
+from polar_flow_server.services.sync_guard import SyncInProgressError
 from polar_flow_server.services.sync_orchestrator import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -238,6 +244,79 @@ def _get_base_url(request: Request[Any, Any, Any]) -> str:
     return f"{proto}://{host}"
 
 
+async def _connected_user_id(session: AsyncSession) -> str | None:
+    """polar_user_id of the connected user, or None before OAuth setup.
+
+    Health-data queries must be scoped to this user (same rule the CSV
+    exports follow) so a second user row never leaks into the dashboard.
+    """
+    result = await session.execute(select(User).where(User.is_active == True).limit(1))  # noqa: E712
+    user = result.scalar_one_or_none()
+    return user.polar_user_id if user else None
+
+
+_ZONE_COLORS = ["bg-sky-300", "bg-teal-400", "bg-lime-400", "bg-amber-400", "bg-red-400"]
+
+
+def _format_workouts(exercises: Sequence[Exercise]) -> list[dict[str, Any]]:
+    """Prepare Exercise rows for the dashboard's Recent Workouts card.
+
+    Formats duration/distance for display and parses the stored HR-zone
+    JSON (present only on exercises synced with detail flags) into
+    percentage-width segments for the zone bar.
+    """
+    workouts: list[dict[str, Any]] = []
+    for ex in exercises:
+        duration = None
+        if ex.duration_seconds:
+            hours, rem = divmod(ex.duration_seconds, 3600)
+            minutes = rem // 60
+            duration = f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
+
+        # Stored JSON with no schema enforcement must never take down the
+        # whole dashboard - bad zone data just means no bar for that workout
+        zones = None
+        if ex.heart_rate_zones_json:
+            try:
+                raw = sorted(json.loads(ex.heart_rate_zones_json), key=lambda z: z["index"])
+                total = sum(z.get("in_zone_seconds") or 0 for z in raw)
+                if total > 0:
+                    zones = [
+                        {
+                            "index": z["index"],
+                            "percent": round((z.get("in_zone_seconds") or 0) * 100 / total, 1),
+                            "minutes": round((z.get("in_zone_seconds") or 0) / 60),
+                            "color": _ZONE_COLORS[min(max(z["index"], 1), 5) - 1],
+                            "limits": f"{z.get('lower_limit_bpm', '?')}-{z.get('upper_limit_bpm', '?')} bpm",
+                        }
+                        for z in raw
+                    ]
+            except (ValueError, TypeError, KeyError):
+                logger.warning("Skipping malformed heart_rate_zones_json for exercise %s", ex.id)
+
+        workouts.append(
+            {
+                "date": ex.start_time.strftime("%a %d %b"),
+                "time": ex.start_time.strftime("%H:%M"),
+                "sport": (ex.detailed_sport_info or ex.sport or "Workout")
+                .replace("_", " ")
+                .title(),
+                "duration": duration,
+                "distance_km": (
+                    round(ex.distance_meters / 1000, 2) if ex.distance_meters else None
+                ),
+                "avg_hr": ex.average_heart_rate,
+                "max_hr": ex.max_heart_rate,
+                "calories": ex.calories,
+                "training_load": round(ex.training_load, 1) if ex.training_load else None,
+                "running_index": ex.running_index,
+                "has_route": bool(ex.route_json),
+                "zones": zones,
+            }
+        )
+    return workouts
+
+
 def _calculate_recovery_status(
     sleep: Sleep | None,
     recharge: NightlyRecharge | None,
@@ -250,7 +329,18 @@ def _calculate_recovery_status(
     - readiness_score: 0-100
     - recommendations: list of actionable advice
     - training_advice: what type of training is appropriate today
+
+    Metrics older than 48h are excluded rather than silently blended in —
+    "Today's Readiness" built on last week's sleep is worse than no number.
     """
+    stale_cutoff = date.today() - timedelta(days=2)
+    if sleep and sleep.date < stale_cutoff:
+        sleep = None
+    if recharge and recharge.date < stale_cutoff:
+        recharge = None
+    if cardio and cardio.date < stale_cutoff:
+        cardio = None
+
     recommendations: list[str] = []
     factors: list[float] = []
 
@@ -508,8 +598,18 @@ async def login_form(request: Request[Any, Any, Any], session: AsyncSession) -> 
 
     return Template(
         template_name="admin/login.html",
-        context={"csrf_token": _get_csrf_token(request)},
+        context={
+            "csrf_token": _get_csrf_token(request),
+            "next": _safe_next_path(request.query_params.get("next")),
+        },
     )
+
+
+def _safe_next_path(raw: str | None) -> str | None:
+    """Only allow post-login redirects to admin-local paths (no open redirect)."""
+    if raw and raw.startswith("/admin/") and "//" not in raw and "\\" not in raw:
+        return raw
+    return None
 
 
 def _trusted_proxy_matchers() -> tuple[set[str], list[IPv4Network | IPv6Network]]:
@@ -621,7 +721,8 @@ async def login_submit(
     # Successful login - clear any failed attempts
     await _login_rate_limiter.record_success(client_ip)
     await login_admin(request, admin)
-    return Redirect(path="/admin", status_code=HTTP_303_SEE_OTHER)
+    next_path = _safe_next_path(str(form_data.get("next", "")) or None)
+    return Redirect(path=next_path or "/admin", status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/logout", sync_to_thread=False)
@@ -629,6 +730,114 @@ async def logout(request: Request[Any, Any, Any]) -> Redirect:
     """Log out and redirect to login page."""
     logout_admin(request)
     return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+
+# =============================================================================
+# OAuth consent (the human half of the MCP connector sign-in flow)
+#
+# The SDK's /authorize endpoint validates the client and redirects here with
+# a signed blob of the authorization params. The admin logs in (if needed),
+# approves or denies, and we redirect back to the client with a code or an
+# access_denied error. Only exists when BASE_URL is configured (self-hosted).
+# =============================================================================
+
+
+def _consent_error(request: Request[Any, Any, Any], message: str) -> Template:
+    return Template(
+        template_name="admin/oauth_consent.html",
+        context={"error": message, "csrf_token": _get_csrf_token(request)},
+    )
+
+
+@get("/oauth/consent", sync_to_thread=False)
+async def oauth_consent_form(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Show the consent screen for a pending OAuth authorization request."""
+    if not is_authenticated(request):
+        target = quote(f"/admin/oauth/consent?req={request.query_params.get('req', '')}", safe="")
+        return Redirect(path=f"/admin/login?next={target}", status_code=HTTP_303_SEE_OTHER)
+
+    from polar_flow_server.mcp_server.oauth import PolarOAuthProvider, unpack_consent_request
+
+    data = unpack_consent_request(str(request.query_params.get("req", "")))
+    if data is None:
+        return _consent_error(
+            request, "This authorization request is invalid or has expired. Retry from the app."
+        )
+
+    client = await PolarOAuthProvider().get_client(data["client_id"])
+    if client is None:
+        return _consent_error(request, "Unknown application. Retry the connection from the app.")
+
+    user_id = await _connected_user_id(session)
+    if user_id is None:
+        return _consent_error(
+            request, "No Polar account is connected yet - complete setup before authorizing apps."
+        )
+
+    return Template(
+        template_name="admin/oauth_consent.html",
+        context={
+            "client_name": client.client_name or client.client_id,
+            "user_id": user_id,
+            "req": request.query_params.get("req", ""),
+            "csrf_token": _get_csrf_token(request),
+        },
+    )
+
+
+@post("/oauth/consent", sync_to_thread=False)
+async def oauth_consent_submit(
+    request: Request[Any, Any, Any], session: AsyncSession
+) -> Template | Redirect:
+    """Complete a consent decision: mint a code (approve) or bounce (deny)."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+    from mcp.server.auth.provider import construct_redirect_uri
+
+    from polar_flow_server.mcp_server.oauth import (
+        PolarOAuthProvider,
+        build_consent_redirect,
+        unpack_consent_request,
+    )
+
+    form_data = await request.form()
+    data = unpack_consent_request(str(form_data.get("req", "")))
+    if data is None:
+        return _consent_error(
+            request, "This authorization request is invalid or has expired. Retry from the app."
+        )
+
+    # The hop back to the client CANNOT be a redirect response to this form
+    # POST: browsers enforce the page's form-action CSP ('self') against the
+    # whole redirect chain, so a 303 to the client's origin gets blocked.
+    # Render a self-navigating page instead - plain navigation is not
+    # subject to form-action, and it works for any client origin without
+    # loosening the CSP.
+    if form_data.get("action") != "approve":
+        return Template(
+            template_name="admin/oauth_redirect.html",
+            context={
+                "target": construct_redirect_uri(
+                    data["redirect_uri"], error="access_denied", state=data["state"]
+                ),
+                "denied": True,
+            },
+        )
+
+    user_id = await _connected_user_id(session)
+    if user_id is None:
+        return _consent_error(
+            request, "No Polar account is connected yet - complete setup before authorizing apps."
+        )
+
+    code = await PolarOAuthProvider().create_authorization_code(data, user_id)
+    return Template(
+        template_name="admin/oauth_redirect.html",
+        context={"target": build_consent_redirect(data, code), "denied": False},
+    )
 
 
 @post("/setup/oauth", sync_to_thread=False, status_code=HTTP_200_OK)
@@ -697,107 +906,156 @@ async def admin_dashboard(
     if not is_authenticated(request):
         return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
 
-    # Get latest sleep data (last 7 days)
+    # All health-data queries below are scoped to the connected user, matching
+    # the CSV exports — with >1 user row an unscoped "latest" mixes users' data.
+    uid = await _connected_user_id(session)
+
+    def scoped(stmt: Any, model: Any) -> Any:
+        return stmt.where(model.user_id == uid) if uid else stmt
+
     since_date = date.today() - timedelta(days=7)
-    recent_sleep_stmt = (
-        select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7)
+
+    # ~17 independent lookups used to run as sequential round trips — on a
+    # remote Postgres that's ~17x RTT per page view (issue #87). They are
+    # built up front and executed concurrently, each on a short-lived
+    # session, so wall-clock is roughly one round trip. Statements are
+    # unchanged; only the scheduling differs.
+    stmts: dict[str, Any] = {
+        "recent_sleep": scoped(
+            select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.desc()).limit(7),
+            Sleep,
+        ),
+        "latest_hrv": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.hrv_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "resting_hr": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.heart_rate_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "latest_cardio": scoped(
+            select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1), CardioLoad
+        ),
+        "latest_hr": scoped(
+            select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1),
+            ContinuousHeartRate,
+        ),
+        "latest_alertness": scoped(
+            select(SleepWiseAlertness)
+            .order_by(SleepWiseAlertness.period_start_time.desc())
+            .limit(1),
+            SleepWiseAlertness,
+        ),
+        "latest_spo2": scoped(select(SpO2).order_by(SpO2.test_time.desc()).limit(1), SpO2),
+        # Both biosensing counts in one SELECT via scalar subqueries
+        "bio_counts": select(
+            scoped(select(func.count(SpO2.id)), SpO2).scalar_subquery().label("spo2"),
+            scoped(select(func.count(ECG.id)), ECG).scalar_subquery().label("ecg"),
+        ),
+        "latest_skin_temp": scoped(
+            select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1),
+            SkinTemperature,
+        ),
+        "latest_activity": scoped(
+            select(Activity).order_by(Activity.date.desc()).limit(1), Activity
+        ),
+        "latest_activity_samples": scoped(
+            select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1), ActivitySamples
+        ),
+        "breathing": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.breathing_rate_avg.isnot(None))
+            .order_by(NightlyRecharge.date.desc())
+            .limit(1),
+            NightlyRecharge,
+        ),
+        "recent_recharge": scoped(
+            select(NightlyRecharge)
+            .where(NightlyRecharge.date >= since_date)
+            .order_by(NightlyRecharge.date.desc())
+            .limit(7),
+            NightlyRecharge,
+        ),
+        "recent_exercises": scoped(
+            select(Exercise).order_by(Exercise.start_time.desc()).limit(20), Exercise
+        ),
+        "latest_ecg": scoped(
+            select(ECG).where(ECG.samples_json.isnot(None)).order_by(ECG.test_time.desc()).limit(1),
+            ECG,
+        ),
+        "recent_body_temps": scoped(
+            select(BodyTemperature).order_by(BodyTemperature.start_time.desc()).limit(21),
+            BodyTemperature,
+        ),
+        "latest_bedtime": scoped(
+            select(SleepWiseBedtime).order_by(SleepWiseBedtime.period_end_time.desc()).limit(1),
+            SleepWiseBedtime,
+        ),
+        "sync_logs": select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10),
+    }
+    if uid:
+        stmts["baselines"] = (
+            select(UserBaseline)
+            .where(UserBaseline.user_id == uid)
+            .order_by(UserBaseline.metric_name)
+        )
+        stmts["patterns"] = (
+            select(PatternAnalysis)
+            .where(PatternAnalysis.user_id == uid)
+            .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
+        )
+
+    async def _run(stmt: Any) -> Any:
+        async with async_session_maker() as short_session:
+            return await short_session.execute(stmt)
+
+    gathered = await asyncio.gather(*(_run(stmt) for stmt in stmts.values()))
+    results = dict(zip(stmts.keys(), gathered, strict=True))
+
+    recent_sleep = results["recent_sleep"].scalars().all()
+    latest_recharge = results["latest_hrv"].scalar_one_or_none()
+    latest_hrv = latest_recharge.hrv_avg if latest_recharge else None
+    resting_hr_record = results["resting_hr"].scalar_one_or_none()
+    latest_resting_hr = resting_hr_record.heart_rate_avg if resting_hr_record else None
+    latest_cardio = results["latest_cardio"].scalar_one_or_none()
+    latest_hr = results["latest_hr"].scalar_one_or_none()
+    latest_alertness = results["latest_alertness"].scalar_one_or_none()
+    latest_spo2 = results["latest_spo2"].scalar_one_or_none()
+    bio_counts = results["bio_counts"].one()
+    spo2_count = bio_counts.spo2 or 0
+    ecg_count = bio_counts.ecg or 0
+    latest_skin_temp = results["latest_skin_temp"].scalar_one_or_none()
+    latest_activity = results["latest_activity"].scalar_one_or_none()
+    latest_activity_samples = results["latest_activity_samples"].scalar_one_or_none()
+    breathing_record = results["breathing"].scalar_one_or_none()
+    latest_breathing_rate = breathing_record.breathing_rate_avg if breathing_record else None
+    recent_recharge = results["recent_recharge"].scalars().all()
+    recent_workouts = _format_workouts(results["recent_exercises"].scalars().all())
+    latest_ecg = results["latest_ecg"].scalar_one_or_none()
+    body_temp_records = results["recent_body_temps"].scalars().all()
+    # Oldest-first trend of period aggregates for the body temperature chart
+    body_temp_trend_json = json.dumps(
+        [
+            {
+                "date": r.end_time.strftime("%b %d"),
+                "min": r.temp_min,
+                "avg": r.temp_avg,
+                "max": r.temp_max,
+            }
+            for r in reversed(body_temp_records)
+            if r.temp_avg is not None and r.temp_min is not None and r.temp_max is not None
+        ]
     )
-    result = await session.execute(recent_sleep_stmt)
-    recent_sleep = result.scalars().all()
-
-    # Get latest HRV from Nightly Recharge
-    latest_hrv = None
-    latest_hrv_stmt = (
-        select(NightlyRecharge)
-        .where(NightlyRecharge.hrv_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1)
-    )
-    hrv_result = await session.execute(latest_hrv_stmt)
-    latest_recharge = hrv_result.scalar_one_or_none()
-    if latest_recharge:
-        latest_hrv = latest_recharge.hrv_avg
-
-    # Get latest Resting HR from Nightly Recharge (separate query - may be different record)
-    latest_resting_hr = None
-    resting_hr_stmt = (
-        select(NightlyRecharge)
-        .where(NightlyRecharge.heart_rate_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1)
-    )
-    resting_hr_result = await session.execute(resting_hr_stmt)
-    resting_hr_record = resting_hr_result.scalar_one_or_none()
-    if resting_hr_record:
-        latest_resting_hr = resting_hr_record.heart_rate_avg
-
-    # Get latest cardio load
-    latest_cardio_stmt = select(CardioLoad).order_by(CardioLoad.date.desc()).limit(1)
-    cardio_result = await session.execute(latest_cardio_stmt)
-    latest_cardio = cardio_result.scalar_one_or_none()
-
-    # Get latest continuous HR
-    latest_hr_stmt = select(ContinuousHeartRate).order_by(ContinuousHeartRate.date.desc()).limit(1)
-    hr_result = await session.execute(latest_hr_stmt)
-    latest_hr = hr_result.scalar_one_or_none()
-
-    # Get latest alertness
-    latest_alertness_stmt = (
-        select(SleepWiseAlertness).order_by(SleepWiseAlertness.period_start_time.desc()).limit(1)
-    )
-    alertness_result = await session.execute(latest_alertness_stmt)
-    latest_alertness = alertness_result.scalar_one_or_none()
-
-    # Get latest SpO2
-    latest_spo2_stmt = select(SpO2).order_by(SpO2.test_time.desc()).limit(1)
-    spo2_result = await session.execute(latest_spo2_stmt)
-    latest_spo2 = spo2_result.scalar_one_or_none()
-
-    # Biosensing record counts used by Heart Rate tab cards
-    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
-    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
-
-    # Get latest skin temperature (night-time, has baseline deviation)
-    latest_skin_temp_stmt = (
-        select(SkinTemperature).order_by(SkinTemperature.sleep_date.desc()).limit(1)
-    )
-    skin_temp_result = await session.execute(latest_skin_temp_stmt)
-    latest_skin_temp = skin_temp_result.scalar_one_or_none()
-
-    # Get latest activity (for steps)
-    latest_activity_stmt = select(Activity).order_by(Activity.date.desc()).limit(1)
-    activity_result = await session.execute(latest_activity_stmt)
-    latest_activity = activity_result.scalar_one_or_none()
-
-    # Get latest activity samples (minute-by-minute steps, for "Today at a Glance")
-    latest_activity_samples_stmt = (
-        select(ActivitySamples).order_by(ActivitySamples.date.desc()).limit(1)
-    )
-    activity_samples_result = await session.execute(latest_activity_samples_stmt)
-    latest_activity_samples = activity_samples_result.scalar_one_or_none()
-
-    # Get latest breathing rate from Nightly Recharge
-    latest_breathing_rate = None
-    breathing_stmt = (
-        select(NightlyRecharge)
-        .where(NightlyRecharge.breathing_rate_avg.isnot(None))
-        .order_by(NightlyRecharge.date.desc())
-        .limit(1)
-    )
-    breathing_result = await session.execute(breathing_stmt)
-    breathing_record = breathing_result.scalar_one_or_none()
-    if breathing_record:
-        latest_breathing_rate = breathing_record.breathing_rate_avg
-
-    # Get recent recharge data (last 7 days)
-    recent_recharge_stmt = (
-        select(NightlyRecharge)
-        .where(NightlyRecharge.date >= since_date)
-        .order_by(NightlyRecharge.date.desc())
-        .limit(7)
-    )
-    recharge_list_result = await session.execute(recent_recharge_stmt)
-    recent_recharge = recharge_list_result.scalars().all()
+    latest_bedtime = results["latest_bedtime"].scalar_one_or_none()
+    recent_sync_logs = results["sync_logs"].scalars().all()
+    user_baselines: list[UserBaseline] = list(results["baselines"].scalars().all()) if uid else []
+    user_patterns: list[PatternAnalysis] = list(results["patterns"].scalars().all()) if uid else []
 
     # Calculate recovery recommendations
     recovery_status = _calculate_recovery_status(
@@ -806,44 +1064,27 @@ async def admin_dashboard(
         cardio=latest_cardio,
     )
 
-    # Get recent sync logs
-    sync_logs_stmt = select(SyncLog).order_by(SyncLog.started_at.desc()).limit(10)
-    sync_logs_result = await session.execute(sync_logs_stmt)
-    recent_sync_logs = sync_logs_result.scalars().all()
-
-    # Get analytics data: baselines and patterns for the connected user
-    user_baselines: list[UserBaseline] = []
-    user_patterns: list[PatternAnalysis] = []
-
-    # Get connected user
-    connected_user_stmt = select(User).where(User.is_active == True).limit(1)  # noqa: E712
-    connected_user_result = await session.execute(connected_user_stmt)
-    connected_user = connected_user_result.scalar_one_or_none()
-
-    if connected_user:
-        # Fetch baselines for this user
-        baselines_stmt = (
-            select(UserBaseline)
-            .where(UserBaseline.user_id == connected_user.polar_user_id)
-            .order_by(UserBaseline.metric_name)
-        )
-        baselines_result = await session.execute(baselines_stmt)
-        user_baselines = list(baselines_result.scalars().all())
-
-        # Fetch patterns for this user
-        patterns_stmt = (
-            select(PatternAnalysis)
-            .where(PatternAnalysis.user_id == connected_user.polar_user_id)
-            .order_by(PatternAnalysis.significance.desc(), PatternAnalysis.analyzed_at.desc())
-        )
-        patterns_result = await session.execute(patterns_stmt)
-        user_patterns = list(patterns_result.scalars().all())
+    # Record dates feeding the stat tiles' age badges (issue #70): the tiles
+    # show "latest" values, which can silently be days old after a sync gap.
+    tile_dates = {
+        "hrv": latest_recharge.date if latest_recharge else None,
+        "sleep": recent_sleep[0].date if recent_sleep else None,
+        "breathing": breathing_record.date if breathing_record else None,
+        "alertness": latest_alertness.period_start_time.date() if latest_alertness else None,
+        "resting_hr": resting_hr_record.date if resting_hr_record else None,
+        "daily_hr": latest_hr.date if latest_hr else None,
+        "spo2": latest_spo2.test_time.date() if latest_spo2 else None,
+        "skin_temp": latest_skin_temp.sleep_date if latest_skin_temp else None,
+        "activity": latest_activity.date if latest_activity else None,
+        "cardio": latest_cardio.date if latest_cardio else None,
+    }
 
     return Template(
         template_name="admin/dashboard.html",
         context={
             # Latest data
             "recent_sleep": recent_sleep,
+            "tile_dates": tile_dates,
             "recent_recharge": recent_recharge,
             "latest_hrv": latest_hrv,
             "latest_resting_hr": latest_resting_hr,
@@ -859,6 +1100,13 @@ async def admin_dashboard(
             "latest_breathing_rate": latest_breathing_rate,
             # Recovery
             "recovery_status": recovery_status,
+            # Workouts (training tab)
+            "recent_workouts": recent_workouts,
+            # Biosensing detail (issue #78)
+            "latest_ecg": latest_ecg,
+            "body_temp_trend_json": body_temp_trend_json,
+            "has_body_temp_trend": body_temp_trend_json != "[]",
+            "latest_bedtime": latest_bedtime,
             # Sync history (for top badge)
             "recent_sync_logs": recent_sync_logs,
             # Analytics
@@ -914,11 +1162,6 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             trigger=SyncTrigger.MANUAL,
         )
 
-        # Get updated counts
-        sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
-        exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-        activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
-
         # Check sync status
         if sync_log.status == "partial":
             # Partial success - some endpoints worked, some failed
@@ -928,9 +1171,6 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
                 context={
                     "results": sync_log.records_synced or {},
                     "errors": errors,
-                    "sleep_count": sleep_count,
-                    "exercise_count": exercise_count,
-                    "activity_count": activity_count,
                 },
             )
         elif sync_log.status == "failed":
@@ -954,9 +1194,16 @@ async def trigger_manual_sync(request: Request[Any, Any, Any], session: AsyncSes
             template_name="admin/partials/sync_success.html",
             context={
                 "results": sync_log.records_synced or {},
-                "sleep_count": sleep_count,
-                "exercise_count": exercise_count,
-                "activity_count": activity_count,
+            },
+        )
+    except SyncInProgressError:
+        return Template(
+            template_name="admin/partials/sync_error.html",
+            context={
+                "error": (
+                    "A sync is already running. Wait for it to finish — "
+                    "it will appear in the sync history below."
+                )
             },
         )
     except Exception as e:
@@ -1154,32 +1401,48 @@ async def admin_settings(
     api_keys_result = await session.execute(api_keys_stmt)
     api_keys = api_keys_result.scalars().all()
 
-    # Get data counts for all endpoints
-    sleep_count = (await session.execute(select(func.count(Sleep.id)))).scalar() or 0
-    exercise_count = (await session.execute(select(func.count(Exercise.id)))).scalar() or 0
-    activity_count = (await session.execute(select(func.count(Activity.id)))).scalar() or 0
-    recharge_count = (await session.execute(select(func.count(NightlyRecharge.id)))).scalar() or 0
-    cardio_load_count = (await session.execute(select(func.count(CardioLoad.id)))).scalar() or 0
-    alertness_count = (
-        await session.execute(select(func.count(SleepWiseAlertness.id)))
-    ).scalar() or 0
-    bedtime_count = (await session.execute(select(func.count(SleepWiseBedtime.id)))).scalar() or 0
-    activity_samples_count = (
-        await session.execute(select(func.count(ActivitySamples.id)))
-    ).scalar() or 0
-    continuous_hr_count = (
-        await session.execute(select(func.count(ContinuousHeartRate.id)))
-    ).scalar() or 0
-
-    # Biosensing counts (v1.4.0)
-    spo2_count = (await session.execute(select(func.count(SpO2.id)))).scalar() or 0
-    ecg_count = (await session.execute(select(func.count(ECG.id)))).scalar() or 0
-    body_temp_count = (await session.execute(select(func.count(BodyTemperature.id)))).scalar() or 0
-    skin_temp_count = (await session.execute(select(func.count(SkinTemperature.id)))).scalar() or 0
-
-    # Analytics counts
-    baseline_count = (await session.execute(select(func.count(UserBaseline.id)))).scalar() or 0
-    pattern_count = (await session.execute(select(func.count(PatternAnalysis.id)))).scalar() or 0
+    # All 15 data counts in ONE round trip (issue #87): scalar subqueries in
+    # a single SELECT instead of 15 sequential queries (~15x RTT on a remote
+    # Postgres).
+    count_models: dict[str, Any] = {
+        "sleep_count": Sleep,
+        "exercise_count": Exercise,
+        "activity_count": Activity,
+        "recharge_count": NightlyRecharge,
+        "cardio_load_count": CardioLoad,
+        "alertness_count": SleepWiseAlertness,
+        "bedtime_count": SleepWiseBedtime,
+        "activity_samples_count": ActivitySamples,
+        "continuous_hr_count": ContinuousHeartRate,
+        "spo2_count": SpO2,
+        "ecg_count": ECG,
+        "body_temp_count": BodyTemperature,
+        "skin_temp_count": SkinTemperature,
+        "baseline_count": UserBaseline,
+        "pattern_count": PatternAnalysis,
+    }
+    counts_stmt = select(
+        *(
+            select(func.count(model.id)).scalar_subquery().label(name)
+            for name, model in count_models.items()
+        )
+    )
+    counts = (await session.execute(counts_stmt)).one()._asdict()
+    sleep_count = counts["sleep_count"] or 0
+    exercise_count = counts["exercise_count"] or 0
+    activity_count = counts["activity_count"] or 0
+    recharge_count = counts["recharge_count"] or 0
+    cardio_load_count = counts["cardio_load_count"] or 0
+    alertness_count = counts["alertness_count"] or 0
+    bedtime_count = counts["bedtime_count"] or 0
+    activity_samples_count = counts["activity_samples_count"] or 0
+    continuous_hr_count = counts["continuous_hr_count"] or 0
+    spo2_count = counts["spo2_count"] or 0
+    ecg_count = counts["ecg_count"] or 0
+    body_temp_count = counts["body_temp_count"] or 0
+    skin_temp_count = counts["skin_temp_count"] or 0
+    baseline_count = counts["baseline_count"] or 0
+    pattern_count = counts["pattern_count"] or 0
 
     # Get scheduler status
     scheduler = get_scheduler()
@@ -1214,9 +1477,42 @@ async def admin_settings(
         "partial_24h": sum(1 for s in recent_syncs if s.status == "partial"),
     }
 
+    # MCP connector apps (OAuth clients) with their live token counts
+    from polar_flow_server.models.oauth import OAuthClient, OAuthIssuedToken
+
+    oauth_clients = (
+        (await session.execute(select(OAuthClient).order_by(OAuthClient.created_at.desc())))
+        .scalars()
+        .all()
+    )
+    now_ts = datetime.now(UTC).timestamp()
+    token_count_rows = (
+        await session.execute(
+            select(OAuthIssuedToken.client_id, func.count())
+            .where(
+                OAuthIssuedToken.revoked == False,  # noqa: E712
+                OAuthIssuedToken.token_type == "access",
+                OAuthIssuedToken.expires_at > now_ts,
+            )
+            .group_by(OAuthIssuedToken.client_id)
+        )
+    ).all()
+    token_counts: dict[str, int] = {str(cid): int(n) for cid, n in token_count_rows}
+    oauth_apps = [
+        {
+            "client_id": c.client_id,
+            "name": c.client_metadata.get("client_name") or c.client_id,
+            "created_at": c.created_at,
+            "active_tokens": token_counts.get(c.client_id, 0),
+        }
+        for c in oauth_clients
+    ]
+
     return Template(
         template_name="admin/settings.html",
         context={
+            "csrf_token": _get_csrf_token(request),
+            "oauth_apps": oauth_apps,
             "has_credentials": bool(app_settings and app_settings.polar_client_id),
             "client_id": app_settings.polar_client_id if app_settings else None,
             "connected_user": connected_user,
@@ -1241,11 +1537,34 @@ async def admin_settings(
             "pattern_count": pattern_count,
             # Sync scheduler
             "sync_interval_minutes": settings.sync_interval_minutes,
+            "sync_days_lookback": settings.sync_days_lookback,
             "scheduler_status": scheduler_status,
             "recent_sync_logs": recent_sync_logs,
             "sync_stats": sync_stats,
         },
     )
+
+
+@post("/oauth-apps/revoke", sync_to_thread=False)
+async def revoke_oauth_app(request: Request[Any, Any, Any], session: AsyncSession) -> Redirect:
+    """Revoke every token an MCP connector app holds (from Settings)."""
+    if not is_authenticated(request):
+        return Redirect(path="/admin/login", status_code=HTTP_303_SEE_OTHER)
+
+    from sqlalchemy import update as sa_update
+
+    from polar_flow_server.models.oauth import OAuthIssuedToken
+
+    form_data = await request.form()
+    client_id = str(form_data.get("client_id", ""))
+    if client_id:
+        await session.execute(
+            sa_update(OAuthIssuedToken)
+            .where(OAuthIssuedToken.client_id == client_id)
+            .values(revoked=True)
+        )
+        await session.commit()
+    return Redirect(path="/admin/settings", status_code=HTTP_303_SEE_OTHER)
 
 
 @post("/settings/reset-oauth", sync_to_thread=False, status_code=HTTP_200_OK)
@@ -1487,17 +1806,20 @@ async def admin_create_api_key(
 async def chart_sleep_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get sleep data for charts.
 
     Returns sleep score, duration, and stage breakdown for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(Sleep).where(Sleep.date >= since_date).order_by(Sleep.date.asc())
+    if uid:
+        stmt = stmt.where(Sleep.user_id == uid)
     result = await session.execute(stmt)
     sleep_data = result.scalars().all()
 
@@ -1529,17 +1851,20 @@ async def chart_sleep_data(
 async def chart_activity_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get activity data for charts.
 
     Returns steps, calories, and active time for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(Activity).where(Activity.date >= since_date).order_by(Activity.date.asc())
+    if uid:
+        stmt = stmt.where(Activity.user_id == uid)
     result = await session.execute(stmt)
     activity_data = result.scalars().all()
 
@@ -1565,21 +1890,24 @@ async def chart_activity_data(
 async def chart_heart_rate_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get heart rate data for charts.
 
     Returns min/avg/max heart rate for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(ContinuousHeartRate)
         .where(ContinuousHeartRate.date >= since_date)
         .order_by(ContinuousHeartRate.date.asc())
     )
+    if uid:
+        stmt = stmt.where(ContinuousHeartRate.user_id == uid)
     result = await session.execute(stmt)
     hr_data = result.scalars().all()
 
@@ -1597,21 +1925,24 @@ async def chart_heart_rate_data(
 async def chart_hrv_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get HRV data from Nightly Recharge for charts.
 
     Returns HRV average and ANS charge for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = (
         select(NightlyRecharge)
         .where(NightlyRecharge.date >= since_date)
         .order_by(NightlyRecharge.date.asc())
     )
+    if uid:
+        stmt = stmt.where(NightlyRecharge.user_id == uid)
     result = await session.execute(stmt)
     recharge_data = result.scalars().all()
 
@@ -1630,17 +1961,20 @@ async def chart_hrv_data(
 async def chart_cardio_load_data(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> dict[str, Any]:
     """Get cardio load data for charts.
 
     Returns strain, tolerance, and load ratio for the last N days.
     """
     if not is_authenticated(request):
-        return {"error": "Authentication required", "status": 401}
+        raise NotAuthorizedException(detail="Authentication required")
 
+    uid = await _connected_user_id(session)
     since_date = date.today() - timedelta(days=days)
     stmt = select(CardioLoad).where(CardioLoad.date >= since_date).order_by(CardioLoad.date.asc())
+    if uid:
+        stmt = stmt.where(CardioLoad.user_id == uid)
     result = await session.execute(stmt)
     cardio_data = result.scalars().all()
 
@@ -1666,7 +2000,7 @@ async def chart_cardio_load_data(
 async def export_sleep_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export sleep data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1714,7 +2048,7 @@ async def export_sleep_csv(
 async def export_activity_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export activity data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1762,7 +2096,7 @@ async def export_activity_csv(
 async def export_recharge_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export recharge/HRV data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1808,7 +2142,7 @@ async def export_recharge_csv(
 async def export_cardio_load_csv(
     request: Request[Any, Any, Any],
     session: AsyncSession,
-    days: int = 30,
+    days: Annotated[int, Parameter(ge=1, le=365)] = 30,
 ) -> Response[bytes] | Redirect:
     """Export cardio load data as CSV for the connected user."""
     if not is_authenticated(request):
@@ -1867,6 +2201,10 @@ admin_routes = [
     oauth_authorize,
     admin_settings,
     reset_oauth_credentials,
+    # MCP connector OAuth consent (auth required via session check)
+    oauth_consent_form,
+    oauth_consent_submit,
+    revoke_oauth_app,
     # API Key management
     admin_regenerate_api_key,
     admin_revoke_api_key,

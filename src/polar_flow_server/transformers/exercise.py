@@ -5,6 +5,7 @@ Converts polar-flow SDK Exercise model to database-ready dictionary.
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -46,6 +47,10 @@ class ExerciseTransformer:
         # Calculate stop_time from start_time + duration
         stop_time = sdk_exercise.start_time + timedelta(seconds=sdk_exercise.duration_seconds)
 
+        zones = getattr(sdk_exercise, "heart_rate_zones", None)
+        samples = getattr(sdk_exercise, "samples", None)
+        route = getattr(sdk_exercise, "route", None)
+
         return {
             "polar_exercise_id": sdk_exercise.id,
             "start_time": sdk_exercise.start_time,
@@ -60,4 +65,55 @@ class ExerciseTransformer:
             "calories": sdk_exercise.calories,
             "training_load": sdk_exercise.training_load,
             "has_route": sdk_exercise.has_route,
+            "running_index": getattr(sdk_exercise, "running_index", None),
+            "training_load_pro_json": (
+                json.dumps(sdk_exercise.training_load_pro)
+                if sdk_exercise.training_load_pro
+                else None
+            ),
+            "heart_rate_zones_json": (
+                json.dumps(
+                    [
+                        {
+                            "index": z.index,
+                            "lower_limit_bpm": z.lower_limit,
+                            "upper_limit_bpm": z.upper_limit,
+                            "in_zone_seconds": z.in_zone_seconds,
+                        }
+                        for z in zones
+                    ]
+                )
+                if zones
+                else None
+            ),
+            "samples_json": (
+                json.dumps(
+                    [
+                        {
+                            "sample_type": s.sample_type,
+                            "recording_rate": s.recording_rate,
+                            "values": s.values,
+                        }
+                        for s in samples
+                    ]
+                )
+                if samples
+                else None
+            ),
+            "route_json": (
+                json.dumps(
+                    [
+                        {
+                            "latitude": p.latitude,
+                            "longitude": p.longitude,
+                            "time": p.time,
+                            "satellites": p.satellites,
+                            "fix": p.fix,
+                        }
+                        for p in route
+                    ]
+                )
+                if route
+                else None
+            ),
         }

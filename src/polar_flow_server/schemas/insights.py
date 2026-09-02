@@ -78,7 +78,9 @@ class CurrentMetrics(BaseModel):
 
     hrv: float | None = Field(default=None, description="Most recent HRV (ms)")
     sleep_score: int | None = Field(default=None, description="Most recent sleep score")
-    resting_hr: int | None = Field(default=None, description="Most recent resting heart rate")
+    # float, not int: sourced from NightlyRecharge.heart_rate_avg (a Float
+    # column) - an int annotation made insights explode on any real average
+    resting_hr: float | None = Field(default=None, description="Most recent resting heart rate")
     training_load_ratio: float | None = Field(
         default=None, description="Acute:chronic training load ratio"
     )

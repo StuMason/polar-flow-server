@@ -1,7 +1,8 @@
 """Sleep data API endpoints."""
 
+import json
 from datetime import date, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from litestar import Router, get
 from litestar.openapi.spec import Example
@@ -92,7 +93,7 @@ async def get_sleep_by_date(
         ),
     ],
     session: AsyncSession,
-) -> dict[str, str | int | float | None] | None:
+) -> dict[str, Any] | None:
     """Get sleep data for a specific date.
 
     Args:
@@ -147,6 +148,26 @@ async def get_sleep_by_date(
         "heart_rate_max": record.heart_rate_max,
         "breathing_rate_avg": record.breathing_rate_avg,
         "skin_temperature_avg": record.skin_temperature_avg,
+        "device_id": record.device_id,
+        "continuity": record.continuity,
+        "continuity_class": record.continuity_class,
+        "sleep_cycles": record.sleep_cycles,
+        "unrecognized_sleep_seconds": record.unrecognized_sleep_seconds,
+        "short_interruption_seconds": record.short_interruption_seconds,
+        "long_interruption_seconds": record.long_interruption_seconds,
+        "sleep_charge": record.sleep_charge,
+        "sleep_goal_hours": (
+            record.sleep_goal_seconds / 3600 if record.sleep_goal_seconds else None
+        ),
+        "group_duration_score": record.group_duration_score,
+        "group_solidity_score": record.group_solidity_score,
+        "group_regeneration_score": record.group_regeneration_score,
+        # Overnight series: time -> sleep stage (0=awake, 1=light, 3=deep, 4=REM)
+        "hypnogram": json.loads(record.hypnogram_json) if record.hypnogram_json else None,
+        # Overnight series: time -> bpm (~5 minute intervals)
+        "heart_rate_samples": (
+            json.loads(record.heart_rate_samples_json) if record.heart_rate_samples_json else None
+        ),
     }
 
 

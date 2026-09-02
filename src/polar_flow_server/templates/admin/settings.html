@@ -95,7 +95,7 @@
                         <p class="text-sm font-medium text-blue-900">Connected to Polar Flow</p>
                         <p class="text-sm text-blue-700 mt-1">User ID: {{ connected_user.polar_user_id }}</p>
                         {% if connected_user.last_sync_at %}
-                        <p class="text-xs text-blue-600 mt-1">Last sync: {{ connected_user.last_sync_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        <p class="text-xs text-blue-600 mt-1">Last sync: {{ connected_user.last_sync_at | utc_dt }}</p>
                         {% endif %}
                     </div>
                 </div>
@@ -155,12 +155,12 @@
         <div class="grid grid-cols-2 gap-4 text-sm">
             <div class="p-4 border border-gray-200 rounded-lg">
                 <p class="text-gray-600 mb-1">Sync Interval</p>
-                <p class="text-2xl font-bold text-gray-900">1 hour</p>
+                <p class="text-2xl font-bold text-gray-900">{% if sync_interval_minutes % 60 == 0 %}{{ sync_interval_minutes // 60 }} hour{% if sync_interval_minutes // 60 != 1 %}s{% endif %}{% else %}{{ sync_interval_minutes }} minutes{% endif %}</p>
                 <p class="text-xs text-gray-500 mt-1">Automatic sync frequency</p>
             </div>
             <div class="p-4 border border-gray-200 rounded-lg">
                 <p class="text-gray-600 mb-1">Days Lookback</p>
-                <p class="text-2xl font-bold text-gray-900">30 days</p>
+                <p class="text-2xl font-bold text-gray-900">{{ sync_days_lookback }} days</p>
                 <p class="text-xs text-gray-500 mt-1">Default data history to fetch</p>
             </div>
         </div>
@@ -274,7 +274,8 @@
                     hx-target="#sync-result"
                     hx-swap="innerHTML"
                     hx-indicator="#sync-spinner"
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    hx-disabled-elt="this"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <svg id="sync-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -290,21 +291,13 @@
             <div>
                 <div class="text-xs text-gray-500 uppercase">Next Run</div>
                 <div class="text-sm font-medium text-gray-900 whitespace-nowrap">
-                    {% if scheduler.next_run_at %}
-                        {% if scheduler.next_run_at is string %}
-                            {{ scheduler.next_run_at|replace('T', ' ')|replace('+00:00', ' UTC') }}
-                        {% else %}
-                            {{ scheduler.next_run_at.strftime('%Y-%m-%d %H:%M UTC') }}
-                        {% endif %}
-                    {% else %}
-                        --
-                    {% endif %}
+                    {{ scheduler.next_run_at | utc_dt }}
                 </div>
             </div>
             <div>
                 <div class="text-xs text-gray-500 uppercase">Last Run</div>
                 <div class="text-sm font-medium text-gray-900">
-                    {% if scheduler.last_run_at %}{{ scheduler.last_run_at }}{% else %}Never{% endif %}
+                    {% if scheduler.last_run_at %}{{ scheduler.last_run_at | utc_dt }}{% else %}Never{% endif %}
                 </div>
             </div>
             <div>
@@ -340,7 +333,7 @@
                         <tr class="cursor-pointer hover:bg-gray-50" onclick="toggleSyncDetails('sync-details-{{ loop.index }}')">
                             <td class="px-3 py-2 whitespace-nowrap text-gray-500">
                                 <span class="inline-block w-4 text-gray-400 mr-1" id="sync-chevron-{{ loop.index }}">▶</span>
-                                {{ log.started_at.strftime('%m/%d %H:%M') }}
+                                {{ log.started_at | utc_dt('%m/%d %H:%M') }}
                             </td>
                             <td class="px-3 py-2 whitespace-nowrap">
                                 <code class="text-xs bg-gray-100 px-1 rounded">{{ log.user_id[:12] }}{% if log.user_id|length > 12 %}...{% endif %}</code>
@@ -513,7 +506,7 @@
                         </td>
                         <td class="px-4 py-3 text-sm text-gray-500">
                             {% if key.last_used_at %}
-                            {{ key.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                            {{ key.last_used_at | utc_dt }}
                             {% else %}
                             <span class="text-gray-400">Never</span>
                             {% endif %}
@@ -575,10 +568,108 @@
     </div>
 </div>
 
+{% if oauth_apps %}
+<!-- Connected Applications (MCP OAuth) -->
+<div class="mt-8 bg-white shadow rounded-lg">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-900">Connected Applications</h2>
+        <p class="text-sm text-gray-500 mt-1">
+            Apps you authorized via the MCP connector sign-in. Revoking access
+            invalidates all of an app's tokens immediately.
+        </p>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Application</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connected</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active tokens</th>
+                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for app in oauth_apps %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ app.name }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ app.created_at | utc_dt }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ app.active_tokens }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <form method="POST" action="/admin/oauth-apps/revoke" class="inline">
+                            {% if csrf_token %}<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">{% endif %}
+                            <input type="hidden" name="client_id" value="{{ app.client_id }}">
+                            <button
+                                type="submit"
+                                class="inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                                Revoke access
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <script>
 let currentKeyId = null;
 let currentKeyPrefix = null;
 let currentKeyName = null;
+
+// Modal focus management (#72): remember the opener, move focus into the
+// dialog, keep Tab inside it, and restore focus on close.
+const MODAL_IDS = ['regenerate-modal', 'revoke-modal', 'create-key-modal'];
+let modalReturnFocus = null;
+
+function showModal(id) {
+    modalReturnFocus = document.activeElement;
+    const modal = document.getElementById(id);
+    modal.classList.remove('hidden');
+    const target = modal.querySelector('button, [href], input, select, textarea');
+    if (target) target.focus();
+}
+
+function hideModal(id) {
+    document.getElementById(id).classList.add('hidden');
+    if (modalReturnFocus && document.contains(modalReturnFocus)) {
+        modalReturnFocus.focus();
+    }
+    modalReturnFocus = null;
+}
+
+function openModalElement() {
+    for (const id of MODAL_IDS) {
+        const m = document.getElementById(id);
+        if (m && !m.classList.contains('hidden')) return m;
+    }
+    return null;
+}
+
+document.addEventListener('keydown', function(e) {
+    const modal = openModalElement();
+    if (!modal) return;
+    if (e.key === 'Escape') {
+        hideModal(modal.id);
+        return;
+    }
+    if (e.key === 'Tab') {
+        const focusables = [...modal.querySelectorAll('button, [href], input, select, textarea')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+        if (!focusables.length) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+});
 
 function openRegenerateModal(keyId, keyPrefix, keyName) {
     currentKeyId = keyId;
@@ -586,11 +677,11 @@ function openRegenerateModal(keyId, keyPrefix, keyName) {
     currentKeyName = keyName;
     document.getElementById('regenerate-key-prefix').textContent = keyPrefix + '...';
     document.getElementById('regenerate-key-name').textContent = keyName;
-    document.getElementById('regenerate-modal').classList.remove('hidden');
+    showModal('regenerate-modal');
 }
 
 function closeRegenerateModal() {
-    document.getElementById('regenerate-modal').classList.add('hidden');
+    hideModal('regenerate-modal');
     currentKeyId = null;
 }
 
@@ -600,11 +691,11 @@ function openRevokeModal(keyId, keyPrefix, keyName) {
     currentKeyName = keyName;
     document.getElementById('revoke-key-prefix').textContent = keyPrefix + '...';
     document.getElementById('revoke-key-name').textContent = keyName;
-    document.getElementById('revoke-modal').classList.remove('hidden');
+    showModal('revoke-modal');
 }
 
 function closeRevokeModal() {
-    document.getElementById('revoke-modal').classList.add('hidden');
+    hideModal('revoke-modal');
     currentKeyId = null;
 }
 
@@ -730,11 +821,11 @@ document.addEventListener('keydown', function(e) {
 });
 
 function openCreateKeyModal() {
-    document.getElementById('create-key-modal').classList.remove('hidden');
+    showModal('create-key-modal');
 }
 
 function closeCreateKeyModal() {
-    document.getElementById('create-key-modal').classList.add('hidden');
+    hideModal('create-key-modal');
 }
 
 async function confirmCreateKey() {
@@ -785,7 +876,7 @@ function toggleSyncDetails(id) {
 </script>
 
 <!-- Regenerate API Key Modal -->
-<div id="regenerate-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="regenerate-modal" role="dialog" aria-modal="true" aria-labelledby="regenerate-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 rounded-full">
@@ -793,7 +884,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Regenerate API Key</h3>
+            <h3 id="regenerate-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Regenerate API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     You are about to regenerate the API key:
@@ -843,7 +934,7 @@ function toggleSyncDetails(id) {
 </div>
 
 <!-- Revoke API Key Modal -->
-<div id="revoke-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="revoke-modal" role="dialog" aria-modal="true" aria-labelledby="revoke-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
@@ -851,7 +942,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Revoke API Key</h3>
+            <h3 id="revoke-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Revoke API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     You are about to revoke the API key:
@@ -862,7 +953,7 @@ function toggleSyncDetails(id) {
                 </div>
                 <div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
                     <p class="text-sm text-red-800">
-                        <strong>Warning:</strong> This action cannot be undone. The key will be permanently deactivated. To restore access, you will need to reconnect via OAuth.
+                        <strong>Warning:</strong> This action cannot be undone. The key will be permanently deactivated. To restore API access, create a new API key afterwards.
                     </p>
                 </div>
             </div>
@@ -901,7 +992,7 @@ function toggleSyncDetails(id) {
 </div>
 
 <!-- Create API Key Modal -->
-<div id="create-key-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+<div id="create-key-modal" role="dialog" aria-modal="true" aria-labelledby="create-key-modal-title" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
@@ -909,7 +1000,7 @@ function toggleSyncDetails(id) {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
                 </svg>
             </div>
-            <h3 class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
+            <h3 id="create-key-modal-title" class="mt-4 text-lg font-medium text-gray-900 text-center">Create API Key</h3>
             <div class="mt-2 px-4 py-3">
                 <p class="text-sm text-gray-500 text-center">
                     Create a new API key for the connected Polar user. This key will allow access to the REST API.

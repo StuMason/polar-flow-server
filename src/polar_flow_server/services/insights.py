@@ -266,11 +266,13 @@ class InsightsService:
         rhr_result = await self.session.execute(rhr_stmt)
         resting_hr = rhr_result.scalar()
 
-        # Get most recent training load ratio
+        # Get most recent training load ratio. Polar emits -1.0 as a "not
+        # available" sentinel - it must never surface as a current value.
         ratio_stmt = (
             select(CardioLoad.cardio_load_ratio)
             .where(CardioLoad.user_id == user_id)
             .where(CardioLoad.cardio_load_ratio.isnot(None))
+            .where(CardioLoad.cardio_load_ratio > 0)
             .order_by(CardioLoad.date.desc())
             .limit(1)
         )
@@ -347,9 +349,13 @@ class InsightsService:
                 .limit(1)
             )
         elif metric_name == "training_load_ratio":
+            # Polar emits -1.0 as a "not available" sentinel; the baseline
+            # calc already excludes it (> 0) so the current value must too,
+            # or percent_of_baseline turns into nonsense like -131%.
             stmt = (
                 select(CardioLoad.cardio_load_ratio)
                 .where(CardioLoad.user_id == user_id)
+                .where(CardioLoad.cardio_load_ratio > 0)
                 .order_by(CardioLoad.date.desc())
                 .limit(1)
             )

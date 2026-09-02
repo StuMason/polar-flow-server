@@ -1,18 +1,20 @@
 # polar-flow-server
 
-Self-hosted health analytics server for Polar devices.
+Self-hosted health analytics for Polar devices — own your data, analyze it against your own baselines, and let your AI assistant read it.
 
-![Dashboard](assets/dashboard.png)
+![Dashboard](assets/dashboard-today.png)
 
 ## What This Does
 
-Polar devices collect health data: sleep, HRV, activity, exercises. The Polar API provides access to this data, but only for the last 28-30 days. This server:
+Your watch knows more about you than you do, and Polar's API only serves the last 28-30 days of it. This server:
 
-1. Syncs data from Polar API automatically
-2. Stores everything in a local database (DuckDB or PostgreSQL)
-3. Runs analytics (HRV baselines, recovery scores, sleep debt)
-4. Exposes REST API for dashboards and integrations
-5. Provides MCP server for Claude Desktop integration
+1. Syncs all 13 Polar API endpoints automatically and keeps the history forever
+2. Stores everything in a local PostgreSQL database — no cloud between you and your data
+3. Runs analytics: personal baselines, IQR anomaly detection, overtraining risk, sleep-HRV correlation
+4. Exposes a REST API for dashboards and integrations
+5. Ships a built-in [MCP server](mcp-server.md) with OAuth sign-in, so an AI assistant can answer "should I train hard today?" from *your* overnight HRV vs *your* baseline — including a rendered in-conversation card in clients that support MCP Apps:
+
+![MCP Apps card](assets/mcp-apps-card.png)
 
 ## Features
 
@@ -34,7 +36,7 @@ Polar devices collect health data: sleep, HRV, activity, exercises. The Polar AP
 - Unified insights API with natural language observations
 
 **Deployment:**
-- Self-hosted mode: Single user, DuckDB, Docker
+- Self-hosted mode: Single user, PostgreSQL, Docker
 - SaaS mode: Multi-user, PostgreSQL, Laravel integration
 
 ## Architecture
@@ -52,7 +54,7 @@ flowchart LR
 Python data analytics engine:
 - Litestar (async web framework)
 - SQLAlchemy 2.0 (async ORM)
-- DuckDB (self-hosted) or PostgreSQL (SaaS)
+- PostgreSQL (asyncpg)
 - Polars (data processing)
 - Strict type checking with mypy
 

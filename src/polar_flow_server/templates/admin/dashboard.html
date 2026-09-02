@@ -3,6 +3,12 @@
 {% block title %}Dashboard - polar-flow-server{% endblock %}
 
 {% block content %}
+{% macro age_badge(d) -%}
+{%- if d is not none -%}{%- set age = d | days_old -%}
+{%- if age >= 1 -%}
+<div class="text-[10px] mt-1 font-medium {% if age >= 3 %}text-amber-600{% else %}text-gray-400{% endif %}">{{ age }}d ago</div>
+{%- endif -%}{%- endif -%}
+{%- endmacro %}
 <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
     <div class="min-w-0">
         <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -14,22 +20,22 @@
             {% if last_sync.status == 'success' %}
             <span class="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
                 <span class="w-2 h-2 rounded-full bg-green-500 mr-1.5"></span>
-                Synced {{ (last_sync.completed_at or last_sync.started_at).strftime('%m/%d %H:%M') }}
+                Synced {{ (last_sync.completed_at or last_sync.started_at) | utc_dt('%m/%d %H:%M') }}
             </span>
             {% elif last_sync.status == 'partial' %}
             <span class="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
                 <span class="w-2 h-2 rounded-full bg-yellow-500 mr-1.5"></span>
-                Partial sync {{ (last_sync.completed_at or last_sync.started_at).strftime('%m/%d %H:%M') }}
+                Partial sync {{ (last_sync.completed_at or last_sync.started_at) | utc_dt('%m/%d %H:%M') }}
             </span>
             {% elif last_sync.status == 'skipped' %}
             <span class="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
                 <span class="w-2 h-2 rounded-full bg-gray-400 mr-1.5"></span>
-                Sync skipped {{ (last_sync.completed_at or last_sync.started_at).strftime('%m/%d %H:%M') }}
+                Sync skipped {{ (last_sync.completed_at or last_sync.started_at) | utc_dt('%m/%d %H:%M') }}
             </span>
             {% elif last_sync.status == 'failed' %}
             <span class="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
                 <span class="w-2 h-2 rounded-full bg-red-500 mr-1.5"></span>
-                Sync failed {{ (last_sync.completed_at or last_sync.started_at).strftime('%m/%d %H:%M') }}
+                Sync failed {{ (last_sync.completed_at or last_sync.started_at) | utc_dt('%m/%d %H:%M') }}
             </span>
             {% else %}
             <span class="inline-flex shrink-0 items-center whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
@@ -200,6 +206,7 @@
                 <div class="text-indigo-900 text-2xl font-bold mt-1">
                     {% if latest_hrv %}{{ latest_hrv|round(0) }}<span class="text-sm font-normal ml-1">ms</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.hrv) }}
             </div>
         </div>
 
@@ -210,6 +217,7 @@
                 <div class="text-violet-900 text-2xl font-bold mt-1">
                     {% if recent_sleep and recent_sleep[0].sleep_score %}{{ recent_sleep[0].sleep_score }}<span class="text-sm font-normal ml-1">/100</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.sleep) }}
             </div>
         </div>
 
@@ -220,6 +228,7 @@
                 <div class="text-blue-900 text-2xl font-bold mt-1">
                     {% if latest_breathing_rate %}{{ latest_breathing_rate|round(1) }}<span class="text-sm font-normal ml-1">/min</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.breathing) }}
             </div>
         </div>
 
@@ -230,6 +239,7 @@
                 <div class="text-sky-900 text-2xl font-bold mt-1">
                     {% if latest_alertness %}{{ latest_alertness.grade|round(1) }}<span class="text-sm font-normal ml-1">/10</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.alertness) }}
             </div>
         </div>
     </div>
@@ -243,6 +253,7 @@
                 <div class="text-rose-900 text-2xl font-bold mt-1">
                     {% if latest_resting_hr %}{{ latest_resting_hr|round(0) }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.resting_hr) }}
             </div>
         </div>
 
@@ -253,6 +264,7 @@
                 <div class="text-red-900 text-2xl font-bold mt-1">
                     {% if latest_hr and latest_hr.hr_avg %}{{ latest_hr.hr_avg }}<span class="text-sm font-normal ml-1">bpm</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.daily_hr) }}
             </div>
         </div>
 
@@ -261,8 +273,9 @@
             <div class="p-4">
                 <div class="text-fuchsia-700 text-xs font-medium uppercase">SpO2</div>
                 <div class="text-fuchsia-900 text-2xl font-bold mt-1">
-                    {% if latest_spo2 and latest_spo2.spo2_avg %}{{ latest_spo2.spo2_avg|round(0) }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
+                    {% if latest_spo2 %}{{ latest_spo2.blood_oxygen_percent }}<span class="text-sm font-normal ml-1">%</span>{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.spo2) }}
             </div>
         </div>
 
@@ -275,6 +288,7 @@
                         {% if latest_skin_temp.deviation_from_baseline >= 0 %}+{% endif %}{{ latest_skin_temp.deviation_from_baseline|round(1) }}<span class="text-sm font-normal ml-1">°C</span>
                     {% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.skin_temp) }}
             </div>
         </div>
     </div>
@@ -288,6 +302,7 @@
                 <div class="text-emerald-900 text-2xl font-bold mt-1">
                     {% if latest_activity and latest_activity.steps %}{{ "{:,}".format(latest_activity.steps) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.activity) }}
             </div>
         </div>
 
@@ -298,6 +313,7 @@
                 <div class="text-green-900 text-2xl font-bold mt-1">
                     {% if latest_activity and latest_activity.calories_active %}{{ "{:,}".format(latest_activity.calories_active) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.activity) }}
             </div>
         </div>
 
@@ -308,6 +324,7 @@
                 <div class="text-teal-900 text-2xl font-bold mt-1">
                     {% if latest_cardio and latest_cardio.strain %}{{ latest_cardio.strain|round(0) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.cardio) }}
             </div>
         </div>
 
@@ -318,6 +335,7 @@
                 <div class="text-lime-900 text-2xl font-bold mt-1">
                     {% if latest_cardio and latest_cardio.cardio_load_ratio and latest_cardio.cardio_load_ratio > 0 %}{{ latest_cardio.cardio_load_ratio|round(2) }}{% else %}--{% endif %}
                 </div>
+                {{ age_badge(tile_dates.cardio) }}
             </div>
         </div>
     </div>
@@ -336,6 +354,8 @@
             <div class="h-56">
                 <canvas
                     id="todaySleepStagesChart"
+                    role="img"
+                    aria-label="Doughnut chart of last night's light, deep and REM sleep minutes"
                     data-light-min="{{ (recent_sleep[0].light_sleep_seconds / 60) if recent_sleep[0].light_sleep_seconds else 0 }}"
                     data-deep-min="{{ (recent_sleep[0].deep_sleep_seconds / 60) if recent_sleep[0].deep_sleep_seconds else 0 }}"
                     data-rem-min="{{ (recent_sleep[0].rem_sleep_seconds / 60) if recent_sleep[0].rem_sleep_seconds else 0 }}"
@@ -353,7 +373,7 @@
             </h3>
             {% if latest_hr and latest_hr.samples_json %}
             <div class="h-56">
-                <canvas id="todayHrChart"></canvas>
+                <canvas id="todayHrChart" role="img" aria-label="Line chart of today's heart rate through the day"></canvas>
             </div>
             {% else %}
             <div class="h-56 flex items-center justify-center text-sm text-gray-400">No heart rate samples yet</div>
@@ -367,7 +387,7 @@
             </h3>
             {% if latest_activity_samples and latest_activity_samples.samples_json %}
             <div class="h-56">
-                <canvas id="todayStepsChart"></canvas>
+                <canvas id="todayStepsChart" role="img" aria-label="Bar chart of today's steps per hour"></canvas>
             </div>
             {% else %}
             <div class="h-56 flex items-center justify-center text-sm text-gray-400">No step samples yet</div>
@@ -390,17 +410,17 @@
         <div class="flex items-center gap-4">
             <!-- Export Dropdown -->
             <div class="relative">
-                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" onclick="document.getElementById('export-menu').classList.toggle('hidden')">
+                <button id="export-btn" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" aria-haspopup="true" aria-expanded="false" aria-controls="export-menu" onclick="toggleExportMenu()">
                     <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                     </svg>
                     Export CSV
                 </button>
-                <div id="export-menu" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
-                    <a href="/admin/export/sleep.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
-                    <a href="/admin/export/activity.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
-                    <a href="/admin/export/recharge.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
-                    <a href="/admin/export/cardio-load.csv?days=30" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
+                <div id="export-menu" role="menu" aria-labelledby="export-btn" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border z-10">
+                    <a href="/admin/export/sleep.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sleep Data</a>
+                    <a href="/admin/export/activity.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Activity Data</a>
+                    <a href="/admin/export/recharge.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Recharge/HRV Data</a>
+                    <a href="/admin/export/cardio-load.csv?days=30" role="menuitem" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cardio Load Data</a>
                 </div>
             </div>
             <select id="chart-days" class="text-sm border-gray-300 rounded-md shadow-sm" onchange="handleChartRangeChange()">
@@ -419,14 +439,14 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Score</h3>
             <div class="h-64">
-                <canvas id="sleepScoreChart"></canvas>
+                <canvas id="sleepScoreChart" role="img" aria-label="Line chart of nightly sleep score over the selected period"></canvas>
             </div>
         </div>
 
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Sleep Duration</h3>
             <div class="h-64">
-                <canvas id="sleepDurationChart"></canvas>
+                <canvas id="sleepDurationChart" role="img" aria-label="Stacked chart of sleep stage durations per night"></canvas>
             </div>
         </div>
     </div>
@@ -520,13 +540,55 @@
     </div>
 </div>
 
+<!-- SleepWise: alertness curve + circadian bedtime window (issue #78) -->
+{% if (latest_alertness and latest_alertness.hourly_data_json) or latest_bedtime %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 hidden" data-tab-panel="sleep">
+    {% if latest_alertness and latest_alertness.hourly_data_json %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Alertness Through the Day</h2>
+            <span class="text-xs text-gray-500">{{ latest_alertness.period_start_time.strftime('%d %b') }} · grade {{ latest_alertness.grade|round(1) }} ({{ latest_alertness.grade_classification|replace('_', ' ')|title }})</span>
+        </div>
+        <div class="h-56">
+            <canvas id="alertnessHourlyChart" role="img" aria-label="Bar chart of predicted alertness level per hour"></canvas>
+        </div>
+    </div>
+    <script id="alertness-hourly" type="application/json">{{ latest_alertness.hourly_data_json | replace('</', '<\/') | safe }}</script>
+    {% endif %}
+    {% if latest_bedtime %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Circadian Bedtime</h2>
+            <span class="text-xs text-gray-500">{{ latest_bedtime.period_end_time.strftime('%d %b') }} · {{ latest_bedtime.quality|replace('_', ' ')|title }}</span>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Preferred Sleep Window</div>
+                <div class="text-2xl font-bold text-indigo-700">
+                    {{ latest_bedtime.preferred_sleep_start.strftime('%H:%M') }} &ndash; {{ latest_bedtime.preferred_sleep_end.strftime('%H:%M') }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">The window your circadian rhythm favours for sleep</div>
+            </div>
+            <div>
+                <div class="text-gray-500 text-xs uppercase mb-1">Sleep Gate</div>
+                <div class="text-lg font-semibold text-gray-900">
+                    {{ latest_bedtime.sleep_gate_start.strftime('%H:%M') }} &ndash; {{ latest_bedtime.sleep_gate_end.strftime('%H:%M') }}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">Best moment to actually fall asleep tonight</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Heart Charts -->
 <div class="mb-6 hidden" data-tab-panel="heart">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Heart Rate (Min/Avg/Max)</h3>
             <div class="h-64">
-                <canvas id="hrChart"></canvas>
+                <canvas id="hrChart" role="img" aria-label="Line chart of daily minimum, average and maximum heart rate"></canvas>
             </div>
         </div>
 
@@ -556,7 +618,7 @@
 
             {% if latest_hr.samples_json %}
             <div class="mt-4 h-40">
-                <canvas id="todayHrHeartTabChart"></canvas>
+                <canvas id="todayHrHeartTabChart" role="img" aria-label="Line chart of today's heart rate through the day"></canvas>
             </div>
             {% else %}
             <p class="mt-4 text-xs text-gray-500">No intraday heart-rate samples available for this date.</p>
@@ -569,17 +631,84 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">HRV (RMSSD)</h3>
             <div class="h-64">
-                <canvas id="hrvChart"></canvas>
+                <canvas id="hrvChart" role="img" aria-label="Line chart of nightly HRV over the selected period"></canvas>
             </div>
         </div>
 
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">ANS Charge</h3>
             <div class="h-64">
-                <canvas id="ansChart"></canvas>
+                <canvas id="ansChart" role="img" aria-label="Line chart of nightly ANS charge over the selected period"></canvas>
             </div>
         </div>
     </div>
+</div>
+
+<!-- Recent Workouts (issue #74: synced since day one, invisible until now) -->
+{# Zone bar colors are injected from routes.py; Tailwind's scanner needs the
+   literal class names in a template: bg-sky-300 bg-teal-400 bg-lime-400 bg-amber-400 bg-red-400 #}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="training">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Workouts</h2>
+    {% if recent_workouts %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+                <tr class="text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <th class="py-2 pr-4">Date</th>
+                    <th class="py-2 pr-4">Sport</th>
+                    <th class="py-2 pr-4">Duration</th>
+                    <th class="py-2 pr-4">Distance</th>
+                    <th class="py-2 pr-4">Heart Rate</th>
+                    <th class="py-2 pr-4">Calories</th>
+                    <th class="py-2 pr-4">Load</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 text-sm text-gray-900">
+                {% for w in recent_workouts %}
+                <tr>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        <span class="font-medium">{{ w.date }}</span>
+                        <span class="text-gray-400 text-xs ml-1">{{ w.time }}</span>
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {{ w.sport }}
+                        {% if w.has_route %}
+                        <span class="ml-1 inline-flex items-center text-xs text-indigo-500" title="GPS route recorded">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                            <span class="sr-only">GPS route recorded</span>
+                        </span>
+                        {% endif %}
+                        {% if w.zones %}
+                        <div class="flex h-1.5 mt-1.5 rounded-full overflow-hidden w-36" role="img"
+                             aria-label="Time in heart rate zones: {% for z in w.zones %}zone {{ z.index }} {{ z.minutes }} minutes{% if not loop.last %}, {% endif %}{% endfor %}">
+                            {% for z in w.zones %}
+                            <div class="{{ z.color }}" style="width: {{ z.percent }}%"
+                                 title="Zone {{ z.index }} ({{ z.limits }}): {{ z.minutes }} min"></div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.duration or '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.distance_km ~ ' km' if w.distance_km else '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {% if w.avg_hr %}{{ w.avg_hr }}<span class="text-gray-400 text-xs"> avg</span>{% if w.max_hr %} · {{ w.max_hr }}<span class="text-gray-400 text-xs"> max</span>{% endif %}{% else %}--{% endif %}
+                    </td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">{{ w.calories or '--' }}</td>
+                    <td class="py-2.5 pr-4 whitespace-nowrap">
+                        {{ w.training_load or '--' }}
+                        {% if w.running_index %}<span class="text-gray-400 text-xs ml-1" title="Running index">RI {{ w.running_index }}</span>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">No workouts synced yet. Sessions recorded on the watch appear here after the next sync.</p>
+    {% endif %}
 </div>
 
 <!-- Training Charts -->
@@ -588,13 +717,13 @@
         <div class="bg-white shadow rounded-lg p-4">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Daily Steps</h3>
             <div class="h-64">
-                <canvas id="activityChart"></canvas>
+                <canvas id="activityChart" role="img" aria-label="Bar chart of daily steps and calories over the selected period"></canvas>
             </div>
         </div>
         <div class="bg-white shadow rounded-lg p-4 lg:col-span-2">
             <h3 class="text-sm font-medium text-gray-700 mb-3">Training Load (Strain vs Tolerance)</h3>
             <div class="h-64">
-                <canvas id="cardioChart"></canvas>
+                <canvas id="cardioChart" role="img" aria-label="Line chart of cardio load strain and tolerance over the selected period"></canvas>
             </div>
         </div>
     </div>
@@ -649,10 +778,10 @@
         <div>
             <div class="text-gray-500 text-xs uppercase">SpO2 ({{ latest_spo2.test_time.strftime('%m/%d') }})</div>
             <div class="text-xl font-bold text-purple-700">
-                {{ latest_spo2.spo2_avg|round(1) if latest_spo2.spo2_avg else '--' }}<span class="text-sm font-normal ml-1">%</span>
+                {{ latest_spo2.blood_oxygen_percent }}<span class="text-sm font-normal ml-1">%</span>
             </div>
-            {% if latest_spo2.spo2_min %}
-            <div class="text-xs text-gray-500">Min: {{ latest_spo2.spo2_min }}%</div>
+            {% if latest_spo2.spo2_class %}
+            <div class="text-xs {% if latest_spo2.spo2_class != 'NORMAL' %}text-red-600{% else %}text-gray-500{% endif %}">{{ latest_spo2.spo2_class|title }}</div>
             {% endif %}
         </div>
         {% endif %}
@@ -677,6 +806,58 @@
         </div>
     </div>
 </div>
+{% endif %}
+
+<!-- ECG Waveform (issue #78: stored since sync day one, rendered at last) -->
+{% if latest_ecg %}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-gray-900">Latest ECG</h2>
+        <span class="text-xs text-gray-500">{{ latest_ecg.test_time.strftime('%d %b %Y %H:%M') }}{% if latest_ecg.duration_seconds %} · {{ latest_ecg.duration_seconds|round(0)|int }}s test{% endif %}</span>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
+        <div>
+            <div class="text-gray-500 text-xs uppercase">Avg HR</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.avg_heart_rate }}<span class="text-sm font-normal ml-1">bpm</span></div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">HRV</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.hrv_ms|round(0)|int }}<span class="text-sm font-normal ml-1">ms</span></div>
+            <div class="text-xs text-gray-500">{{ latest_ecg.hrv_level|title }}</div>
+        </div>
+        <div>
+            <div class="text-gray-500 text-xs uppercase">R-R Interval</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.rri_ms|round(0)|int }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% if latest_ecg.ptt_systolic_ms %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">PTT Systolic</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.ptt_systolic_ms|round(1) }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% endif %}
+        {% if latest_ecg.ptt_diastolic_ms %}
+        <div>
+            <div class="text-gray-500 text-xs uppercase">PTT Diastolic</div>
+            <div class="text-xl font-bold text-gray-900">{{ latest_ecg.ptt_diastolic_ms|round(1) }}<span class="text-sm font-normal ml-1">ms</span></div>
+        </div>
+        {% endif %}
+    </div>
+    <div class="h-48">
+        <canvas id="ecgWaveformChart" role="img" aria-label="ECG waveform trace of the latest test"></canvas>
+    </div>
+</div>
+<script id="ecg-waveform-samples" type="application/json">{{ latest_ecg.samples_json | replace('</', '<\/') | safe }}</script>
+{% endif %}
+
+<!-- Body Temperature Trend (issue #78) -->
+{% if has_body_temp_trend %}
+<div class="bg-white shadow rounded-lg p-6 mb-6 hidden" data-tab-panel="heart">
+    <h2 class="text-lg font-semibold text-gray-900 mb-4">Body Temperature</h2>
+    <div class="h-56">
+        <canvas id="bodyTempTrendChart" role="img" aria-label="Line chart of body temperature per measurement period with min-max band"></canvas>
+    </div>
+</div>
+<script id="body-temp-trend" type="application/json">{{ body_temp_trend_json | replace('</', '<\/') | safe }}</script>
 {% endif %}
 
 <!-- Personal Baselines (Analytics) -->
@@ -870,6 +1051,8 @@ function setActiveDashboardTab(tab) {
     buttons.forEach(btn => {
         const isActive = btn.dataset.tab === tab;
         btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        // Roving tabindex: only the active tab is in the tab order (#72)
+        btn.setAttribute('tabindex', isActive ? '0' : '-1');
 
         if (btn.dataset.tabVariant === 'bottom') {
             // Mobile floating nav: highlight with color only, no underline border.
@@ -901,7 +1084,39 @@ function setActiveDashboardTab(tab) {
     }
 }
 
+// ARIA wiring for the tab UI (#72). Panels can be shared between tabs
+// (data-tab-panel="a,b"), so panel ids and aria-controls lists are derived
+// here instead of being hand-maintained in the markup.
+function initTabAccessibility() {
+    const panels = [...document.querySelectorAll('[data-tab-panel]')];
+    panels.forEach((panel, i) => {
+        if (!panel.id) panel.id = `tabpanel-${i}`;
+        panel.setAttribute('role', 'tabpanel');
+    });
+    document.querySelectorAll('.dashboard-tab-btn').forEach(btn => {
+        const ids = panels
+            .filter(p => p.dataset.tabPanel.split(',').map(v => v.trim()).includes(btn.dataset.tab))
+            .map(p => p.id);
+        btn.setAttribute('aria-controls', ids.join(' '));
+    });
+    // Arrow-key navigation per tablist (Left/Right/Home/End)
+    document.querySelectorAll('[role="tablist"]').forEach(list => {
+        const tabs = [...list.querySelectorAll('[role="tab"]')];
+        list.addEventListener('keydown', e => {
+            const idx = tabs.indexOf(document.activeElement);
+            if (idx === -1) return;
+            let next = null;
+            if (e.key === 'ArrowRight') next = tabs[(idx + 1) % tabs.length];
+            else if (e.key === 'ArrowLeft') next = tabs[(idx - 1 + tabs.length) % tabs.length];
+            else if (e.key === 'Home') next = tabs[0];
+            else if (e.key === 'End') next = tabs[tabs.length - 1];
+            if (next) { e.preventDefault(); next.click(); next.focus(); }
+        });
+    });
+}
+
 function initDashboardTabs() {
+    initTabAccessibility();
     const tabs = ['overview', 'sleep', 'heart', 'training', 'trends'];
     const hashTab = window.location.hash.replace('#tab-', '');
     const initialTab = tabs.includes(hashTab) ? hashTab : 'overview';
@@ -917,12 +1132,30 @@ function initDashboardTabs() {
     setActiveDashboardTab(initialTab);
 }
 
+function toggleExportMenu(forceClose) {
+    const menu = document.getElementById('export-menu');
+    const btn = document.getElementById('export-btn');
+    const close = forceClose === true || !menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', close);
+    btn.setAttribute('aria-expanded', close ? 'false' : 'true');
+}
+
 // Close export menu when clicking outside
 document.addEventListener('click', function(e) {
     const menu = document.getElementById('export-menu');
     const btn = document.getElementById('export-btn');
-    if (!menu.contains(e.target) && !btn.contains(e.target)) {
-        menu.classList.add('hidden');
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+        toggleExportMenu(true);
+    }
+});
+
+// Escape dismisses the export menu and returns focus to its button (#72)
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    const menu = document.getElementById('export-menu');
+    if (menu && !menu.classList.contains('hidden')) {
+        toggleExportMenu(true);
+        document.getElementById('export-btn').focus();
     }
 });
 
@@ -995,10 +1228,12 @@ const commonOptions = {
     }
 };
 
-// Format date labels for display
+// Format date labels for display. Date-only strings parse as UTC midnight
+// via new Date(str), so users west of UTC saw every label a day early —
+// parse the parts as a local date instead, and use the browser locale.
 function formatDateLabel(dateStr) {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 // Create custom tooltip callback
@@ -1017,32 +1252,100 @@ function createTooltipCallback(descriptions) {
     };
 }
 
+// Which fetched-data canvases belong to each tab (todayHr* charts render
+// from server-embedded JSON and are not part of this).
+const chartCanvasesByTab = {
+    sleep: ['sleepScoreChart', 'sleepDurationChart'],
+    heart: ['hrChart', 'hrvChart', 'ansChart'],
+    training: ['activityChart', 'cardioChart']
+};
+
+// Fetch one chart payload. An expired session means every response would be
+// a 401 — bounce to login instead of leaving silently blank charts. Any other
+// failure throws so the tab shows its error state.
+async function fetchChartData(url) {
+    const r = await fetch(url);
+    if (r.status === 401) {
+        window.location.href = '/admin/login';
+        throw new Error('session expired');
+    }
+    if (!r.ok) {
+        throw new Error(`chart request failed (${r.status})`);
+    }
+    return r.json();
+}
+
+// Show an inline note in place of a chart canvas (no data / load failure).
+function showChartNote(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.classList.add('hidden');
+    let note = canvas.parentElement.querySelector('.chart-note');
+    if (!note) {
+        note = document.createElement('p');
+        note.className = 'chart-note flex h-full items-center justify-center text-sm text-gray-400';
+        canvas.parentElement.appendChild(note);
+    }
+    note.textContent = message;
+}
+
+function clearChartNote(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    canvas.classList.remove('hidden');
+    const note = canvas.parentElement.querySelector('.chart-note');
+    if (note) note.remove();
+}
+
+// Render via renderFn when the payload has rows; otherwise say so instead of
+// drawing an empty axis-less white box.
+function renderIfData(data, canvasIds, renderFn) {
+    if (data.labels && data.labels.length) {
+        canvasIds.forEach(clearChartNote);
+        renderFn();
+    } else {
+        canvasIds.forEach(id => showChartNote(id, 'No data yet — run a sync to see this chart.'));
+    }
+}
+
 // Fetch and render only the charts belonging to the given tab. Charts are only
 // ever created while their tab panel is visible, so the entrance animation is
 // consistent whether it's the first tab shown or one opened later.
 async function loadChartsForTab(tab) {
     const days = document.getElementById('chart-days').value;
 
-    if (tab === 'sleep') {
-        const sleepData = await fetch(`/admin/api/charts/sleep?days=${days}`).then(r => r.json());
-        renderSleepScoreChart(sleepData);
-        renderSleepDurationChart(sleepData);
-    } else if (tab === 'heart') {
-        const [hrData, hrvData] = await Promise.all([
-            fetch(`/admin/api/charts/heart-rate?days=${days}`).then(r => r.json()),
-            fetch(`/admin/api/charts/hrv?days=${days}`).then(r => r.json())
-        ]);
-        renderHrChart(hrData);
-        renderHrvChart(hrvData);
-        renderAnsChart(hrvData);
-        renderTodayHrHeartTabChart();
-    } else if (tab === 'training') {
-        const [activityData, cardioData] = await Promise.all([
-            fetch(`/admin/api/charts/activity?days=${days}`).then(r => r.json()),
-            fetch(`/admin/api/charts/cardio-load?days=${days}`).then(r => r.json())
-        ]);
-        renderActivityChart(activityData);
-        renderCardioChart(cardioData);
+    try {
+        if (tab === 'sleep') {
+            const sleepData = await fetchChartData(`/admin/api/charts/sleep?days=${days}`);
+            renderIfData(sleepData, chartCanvasesByTab.sleep, () => {
+                renderSleepScoreChart(sleepData);
+                renderSleepDurationChart(sleepData);
+            });
+        } else if (tab === 'heart') {
+            const [hrData, hrvData] = await Promise.all([
+                fetchChartData(`/admin/api/charts/heart-rate?days=${days}`),
+                fetchChartData(`/admin/api/charts/hrv?days=${days}`)
+            ]);
+            renderIfData(hrData, ['hrChart'], () => renderHrChart(hrData));
+            renderIfData(hrvData, ['hrvChart', 'ansChart'], () => {
+                renderHrvChart(hrvData);
+                renderAnsChart(hrvData);
+            });
+            renderTodayHrHeartTabChart();
+        } else if (tab === 'training') {
+            const [activityData, cardioData] = await Promise.all([
+                fetchChartData(`/admin/api/charts/activity?days=${days}`),
+                fetchChartData(`/admin/api/charts/cardio-load?days=${days}`)
+            ]);
+            renderIfData(activityData, ['activityChart'], () => renderActivityChart(activityData));
+            renderIfData(cardioData, ['cardioChart'], () => renderCardioChart(cardioData));
+        }
+    } catch (e) {
+        // Let the next visit to this tab retry instead of staying blank.
+        initializedChartTabs.delete(tab);
+        (chartCanvasesByTab[tab] || []).forEach(id =>
+            showChartNote(id, "Couldn't load chart data — check your connection and try again.")
+        );
     }
 }
 
@@ -1913,10 +2216,159 @@ function renderTodayStepsChart() {
 }
 
 // Initialize dashboard tabs (charts are lazy-loaded per tab, on first visit)
+function readJsonScript(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    try {
+        return JSON.parse(el.textContent || 'null');
+    } catch (e) {
+        return null;
+    }
+}
+
+function renderEcgWaveformChart() {
+    const canvas = document.getElementById('ecgWaveformChart');
+    const samples = readJsonScript('ecg-waveform-samples');
+    if (!canvas || !samples || !samples.length) return;
+
+    // ECG traces run at ~130Hz; decimate to keep the chart responsive
+    const MAX_POINTS = 2000;
+    const step = Math.max(1, Math.ceil(samples.length / MAX_POINTS));
+    const points = [];
+    for (let i = 0; i < samples.length; i += step) points.push(samples[i]);
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: points.map(p => (p.time_ms / 1000).toFixed(1)),
+            datasets: [{
+                label: 'ECG',
+                data: points.map(p => p.amplitude_mv),
+                borderColor: '#dc2626',
+                borderWidth: 1,
+                pointRadius: 0,
+                tension: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: {
+                    ticks: { maxTicksLimit: 10 },
+                    grid: { display: false },
+                    title: { display: true, text: 'Seconds' }
+                },
+                y: { grid: { color: '#fef2f2' }, title: { display: true, text: 'mV' } }
+            }
+        }
+    });
+}
+
+function renderBodyTempTrendChart() {
+    const canvas = document.getElementById('bodyTempTrendChart');
+    const trend = readJsonScript('body-temp-trend');
+    if (!canvas || !trend || !trend.length) return;
+
+    new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: trend.map(p => p.date),
+            datasets: [
+                {
+                    label: 'Max',
+                    data: trend.map(p => p.max),
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+                    pointRadius: 0,
+                    fill: '+2'
+                },
+                {
+                    label: 'Average',
+                    data: trend.map(p => p.avg),
+                    borderColor: '#9333ea',
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    pointRadius: 2
+                },
+                {
+                    label: 'Min',
+                    data: trend.map(p => p.min),
+                    borderColor: 'transparent',
+                    pointRadius: 0,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    filter: (ctx) => ctx.dataset.label === 'Average',
+                    callbacks: { label: (ctx) => `${ctx.raw?.toFixed(2)} °C avg` }
+                }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 8 }, grid: { display: false } },
+                y: { grid: { color: '#f3f4f6' }, title: { display: true, text: '°C' } }
+            }
+        }
+    });
+}
+
+function renderAlertnessHourlyChart() {
+    const canvas = document.getElementById('alertnessHourlyChart');
+    const hours = readJsonScript('alertness-hourly');
+    if (!canvas || !hours || !hours.length) return;
+
+    const valid = hours.filter(h => h.alertness_level !== null && h.alertness_level !== undefined);
+    if (!valid.length) return;
+
+    const hourLabel = (h) => {
+        const m = /T(\d{2}):/.exec(h.start_time || '');
+        return m ? `${m[1]}:00` : '';
+    };
+    // Polar alertness levels: higher = more alert
+    const color = (level) => level >= 3 ? '#4ade80' : level >= 2 ? '#facc15' : '#f87171';
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: valid.map(hourLabel),
+            datasets: [{
+                label: 'Alertness',
+                data: valid.map(h => h.alertness_level),
+                backgroundColor: valid.map(h => color(h.alertness_level)),
+                borderRadius: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => `Level ${ctx.raw}` } }
+            },
+            scales: {
+                x: { ticks: { maxTicksLimit: 12 }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' }, title: { display: true, text: 'Alertness level' } }
+            }
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initDashboardTabs();
     renderTodaySleepStagesChart();
     renderTodayHrChart();
+    renderEcgWaveformChart();
+    renderBodyTempTrendChart();
+    renderAlertnessHourlyChart();
     renderTodayStepsChart();
 });
 

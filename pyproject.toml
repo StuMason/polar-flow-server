@@ -1,6 +1,6 @@
 [project]
 name = "polar-flow-server"
-version = "1.4.0"
+version = "1.5.0"
 description = "Self-hosted health analytics server for Polar devices"
 readme = "README.md"
 authors = [
@@ -18,7 +18,7 @@ dependencies = [
     "asyncpg>=0.31.0",  # PostgreSQL async driver
     "psycopg[binary]>=3.2.3",  # PostgreSQL sync driver (for Alembic migrations)
     # Polar Flow SDK
-    "polar-flow-api>=1.4.0",
+    "polar-flow-api>=1.5.0",
     # Data processing
     "polars>=1.17.1",
     "pyarrow>=23.0.1",
@@ -36,6 +36,7 @@ dependencies = [
     "structlog>=25.5.0",
     "httpx>=0.28.1",
     "scipy>=1.14.0,<2.0.0",
+    "mcp==2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -94,7 +95,7 @@ disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["apscheduler.*", "duckdb_engine.*"]
+module = ["apscheduler.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,12 +1,14 @@
 """Polar data sync service."""
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
 
 import structlog
 from polar_flow import PolarFlow
-from polar_flow.exceptions import PolarFlowError
+from polar_flow.exceptions import NotFoundError, PolarFlowError, RateLimitError
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,13 +19,16 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
 from polar_flow_server.models.spo2 import SpO2
+from polar_flow_server.models.sync_log import SyncErrorType
 from polar_flow_server.models.temperature import BodyTemperature, SkinTemperature
 from polar_flow_server.services.baseline import BaselineService
+from polar_flow_server.services.sync_error_handler import SyncErrorHandler
 from polar_flow_server.transformers import (
     ActivitySamplesTransformer,
     ActivityTransformer,
@@ -32,6 +37,7 @@ from polar_flow_server.transformers import (
     ContinuousHRTransformer,
     ECGTransformer,
     ExerciseTransformer,
+    PhysicalInfoTransformer,
     RechargeTransformer,
     SkinTemperatureTransformer,
     SleepTransformer,
@@ -41,6 +47,9 @@ from polar_flow_server.transformers import (
 )
 
 logger = structlog.get_logger()
+
+# Single-retry backoff for transient endpoint failures (5xx / network blips).
+TRANSIENT_RETRY_BACKOFF_SECONDS = 2.0
 
 
 @dataclass
@@ -56,6 +65,9 @@ class SyncResult:
 
     records: dict[str, int] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
+    # Seconds Polar asked us to back off (worst Retry-After seen), if any
+    # endpoint hit a 429 during this sync.
+    rate_limited_for: int | None = None
 
     @property
     def has_errors(self) -> bool:
@@ -132,6 +144,57 @@ class SyncService:
         """
         self.session = session
         self.logger = logger.bind(service="sync")
+        self.error_handler = SyncErrorHandler()
+
+    async def _call_with_retry(
+        self,
+        result: SyncResult,
+        endpoint: str,
+        fn: Callable[..., Awaitable[int]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> int:
+        """Run one endpoint sync, retrying once after a short backoff when
+        the failure is transient (Polar 5xx, timeout, connection blip).
+
+        Rate limits are deliberately not retried here: Retry-After windows
+        are minutes long, so the 429 is recorded on the result instead and
+        the orchestrator's tracker holds the next cycle back (issue #64).
+        """
+        try:
+            return await fn(*args, **kwargs)
+        except RateLimitError as e:
+            result.rate_limited_for = max(result.rate_limited_for or 0, e.retry_after)
+            raise
+        except Exception as e:
+            # NB: key must not be "endpoint" - classify()'s own logging
+            # passes endpoint= alongside **context and would collide.
+            sync_error = self.error_handler.classify(e, context={"sync_endpoint": endpoint})
+            # Generic PolarFlowErrors classify as API_ERROR whatever the
+            # status; only server-side (5xx) or status-less failures are
+            # worth a retry - a 4xx will just fail identically again.
+            status = getattr(e, "status_code", None)
+            retryable = sync_error.is_transient and (
+                sync_error.error_type in (SyncErrorType.API_UNAVAILABLE, SyncErrorType.API_TIMEOUT)
+                or (
+                    sync_error.error_type == SyncErrorType.API_ERROR
+                    and (status is None or status >= 500)
+                )
+            )
+            if not retryable:
+                raise
+            self.logger.info(
+                "Transient error, retrying once",
+                endpoint=endpoint,
+                error=str(e),
+                backoff_seconds=TRANSIENT_RETRY_BACKOFF_SECONDS,
+            )
+            await asyncio.sleep(TRANSIENT_RETRY_BACKOFF_SECONDS)
+            try:
+                return await fn(*args, **kwargs)
+            except RateLimitError as retry_exc:
+                result.rate_limited_for = max(result.rate_limited_for or 0, retry_exc.retry_after)
+                raise
 
     async def sync_user(
         self,
@@ -184,6 +247,7 @@ class SyncService:
                 "ecg": 0,
                 "body_temperature": 0,
                 "skin_temperature": 0,
+                "physical_info": 0,
             },
             errors={},
         )
@@ -191,7 +255,9 @@ class SyncService:
         async with PolarFlow(access_token=polar_token) as client:
             # Sync sleep data
             try:
-                result.records["sleep"] = await self._sync_sleep(client, user_id, days)
+                result.records["sleep"] = await self._call_with_retry(
+                    result, "sleep", self._sync_sleep, client, user_id, days
+                )
             except Exception as e:
                 error_msg = _format_polar_error(e, "sleep")
                 result.errors["sleep"] = error_msg
@@ -199,7 +265,9 @@ class SyncService:
 
             # Sync nightly recharge
             try:
-                result.records["recharge"] = await self._sync_recharge(client, user_id)
+                result.records["recharge"] = await self._call_with_retry(
+                    result, "recharge", self._sync_recharge, client, user_id
+                )
             except Exception as e:
                 error_msg = _format_polar_error(e, "recharge")
                 result.errors["recharge"] = error_msg
@@ -207,7 +275,9 @@ class SyncService:
 
             # Sync daily activity
             try:
-                result.records["activity"] = await self._sync_activity(client, user_id, days)
+                result.records["activity"] = await self._call_with_retry(
+                    result, "activity", self._sync_activity, client, user_id, days
+                )
             except Exception as e:
                 error_msg = _format_polar_error(e, "activity")
                 result.errors["activity"] = error_msg
@@ -215,7 +285,9 @@ class SyncService:
 
             # Sync exercises
             try:
-                result.records["exercises"] = await self._sync_exercises(client, user_id)
+                result.records["exercises"] = await self._call_with_retry(
+                    result, "exercises", self._sync_exercises, client, user_id
+                )
             except Exception as e:
                 error_msg = _format_polar_error(e, "exercises")
                 result.errors["exercises"] = error_msg
@@ -224,7 +296,9 @@ class SyncService:
             # Sync cardio load (requires SDK >= 1.3.0)
             if hasattr(client, "cardio_load"):
                 try:
-                    result.records["cardio_load"] = await self._sync_cardio_load(client, user_id)
+                    result.records["cardio_load"] = await self._call_with_retry(
+                        result, "cardio_load", self._sync_cardio_load, client, user_id
+                    )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "cardio_load")
                     result.errors["cardio_load"] = error_msg
@@ -233,8 +307,12 @@ class SyncService:
             # Sync SleepWise alertness (requires SDK >= 1.3.0)
             if hasattr(client, "sleepwise"):
                 try:
-                    result.records["sleepwise_alertness"] = await self._sync_sleepwise_alertness(
-                        client, user_id
+                    result.records["sleepwise_alertness"] = await self._call_with_retry(
+                        result,
+                        "sleepwise_alertness",
+                        self._sync_sleepwise_alertness,
+                        client,
+                        user_id,
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "sleepwise_alertness")
@@ -244,8 +322,8 @@ class SyncService:
                     )
 
                 try:
-                    result.records["sleepwise_bedtime"] = await self._sync_sleepwise_bedtime(
-                        client, user_id
+                    result.records["sleepwise_bedtime"] = await self._call_with_retry(
+                        result, "sleepwise_bedtime", self._sync_sleepwise_bedtime, client, user_id
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "sleepwise_bedtime")
@@ -257,8 +335,13 @@ class SyncService:
             # Sync activity samples (requires SDK >= 1.3.0)
             if hasattr(client, "activity_samples"):
                 try:
-                    result.records["activity_samples"] = await self._sync_activity_samples(
-                        client, user_id, days
+                    result.records["activity_samples"] = await self._call_with_retry(
+                        result,
+                        "activity_samples",
+                        self._sync_activity_samples,
+                        client,
+                        user_id,
+                        days,
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "activity_samples")
@@ -270,8 +353,8 @@ class SyncService:
             # Sync continuous heart rate (requires SDK >= 1.3.0)
             if hasattr(client, "continuous_hr"):
                 try:
-                    result.records["continuous_hr"] = await self._sync_continuous_hr(
-                        client, user_id, days
+                    result.records["continuous_hr"] = await self._call_with_retry(
+                        result, "continuous_hr", self._sync_continuous_hr, client, user_id, days
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "continuous_hr")
@@ -283,22 +366,26 @@ class SyncService:
             # Sync biosensing data (requires SDK >= 1.4.0 and compatible devices)
             if hasattr(client, "biosensing"):
                 try:
-                    result.records["spo2"] = await self._sync_spo2(client, user_id)
+                    result.records["spo2"] = await self._call_with_retry(
+                        result, "spo2", self._sync_spo2, client, user_id
+                    )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "spo2")
                     result.errors["spo2"] = error_msg
                     self.logger.warning("SpO2 sync failed", user_id=user_id, error=error_msg)
 
                 try:
-                    result.records["ecg"] = await self._sync_ecg(client, user_id)
+                    result.records["ecg"] = await self._call_with_retry(
+                        result, "ecg", self._sync_ecg, client, user_id
+                    )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "ecg")
                     result.errors["ecg"] = error_msg
                     self.logger.warning("ECG sync failed", user_id=user_id, error=error_msg)
 
                 try:
-                    result.records["body_temperature"] = await self._sync_body_temperature(
-                        client, user_id
+                    result.records["body_temperature"] = await self._call_with_retry(
+                        result, "body_temperature", self._sync_body_temperature, client, user_id
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "body_temperature")
@@ -308,14 +395,27 @@ class SyncService:
                     )
 
                 try:
-                    result.records["skin_temperature"] = await self._sync_skin_temperature(
-                        client, user_id
+                    result.records["skin_temperature"] = await self._call_with_retry(
+                        result, "skin_temperature", self._sync_skin_temperature, client, user_id
                     )
                 except Exception as e:
                     error_msg = _format_polar_error(e, "skin_temperature")
                     result.errors["skin_temperature"] = error_msg
                     self.logger.warning(
                         "Skin temperature sync failed", user_id=user_id, error=error_msg
+                    )
+
+            # Sync physical info (requires SDK >= 1.5.0 non-transactional endpoint)
+            if hasattr(client.physical_info, "get"):
+                try:
+                    result.records["physical_info"] = await self._call_with_retry(
+                        result, "physical_info", self._sync_physical_info, client, user_id
+                    )
+                except Exception as e:
+                    error_msg = _format_polar_error(e, "physical_info")
+                    result.errors["physical_info"] = error_msg
+                    self.logger.warning(
+                        "Physical info sync failed", user_id=user_id, error=error_msg
                     )
 
         # Commit all changes to database
@@ -495,10 +595,19 @@ class SyncService:
         # Fetch from Polar API (last 30 days)
         exercises = await client.exercises.list()
 
+        # SDK >= 1.5.0 returns samples, HR zones and the GPS route inline
+        # via query flags on the detail call (get_route is new in 1.5.0)
+        supports_detail_flags = hasattr(client.exercises, "get_route")
+
         count = 0
         for exercise in exercises:
             # Get detailed exercise data
-            detailed = await client.exercises.get(exercise_id=exercise.id)
+            if supports_detail_flags:
+                detailed = await client.exercises.get(
+                    exercise_id=exercise.id, samples=True, zones=True, route=True
+                )
+            else:
+                detailed = await client.exercises.get(exercise_id=exercise.id)
 
             # Use transformer for type-safe SDK -> DB mapping
             exercise_dict = ExerciseTransformer.transform(detailed, user_id)
@@ -514,6 +623,43 @@ class SyncService:
             count += 1
 
         return count
+
+    async def _sync_physical_info(
+        self,
+        client: PolarFlow,
+        user_id: str,
+    ) -> int:
+        """Sync physical information (VO2 max, HR thresholds, weight).
+
+        Uses the non-transactional GET /v3/users/physical-info endpoint
+        (SDK >= 1.5.0). Snapshots are keyed by Polar's modified timestamp,
+        so unchanged profiles upsert the same row.
+
+        Args:
+            client: Polar Flow client
+            user_id: User identifier
+
+        Returns:
+            Number of physical info records synced (0 or 1)
+        """
+        self.logger.debug("Syncing physical info", user_id=user_id)
+
+        try:
+            info = await client.physical_info.get()
+        except NotFoundError:
+            # User has never filled in physical info - absence is not an error
+            return 0
+
+        info_dict = PhysicalInfoTransformer.transform(info, user_id)
+
+        stmt = insert(PhysicalInfo).values(user_id=user_id, **info_dict)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["user_id", "recorded_at"],
+            set_=info_dict,
+        )
+
+        await self.session.execute(stmt)
+        return 1
 
     async def _sync_cardio_load(
         self,
@@ -654,10 +800,10 @@ class SyncService:
 
                 await self.session.execute(stmt)
                 count += 1
-            except Exception as e:
-                # Skip days with errors
+            except NotFoundError as e:
+                # No data recorded for this day - normal, keep going.
                 self.logger.debug(
-                    "Error fetching continuous HR for date",
+                    "No continuous HR for date",
                     date=str(fetch_date),
                     error=str(e),
                 )
@@ -683,7 +829,8 @@ class SyncService:
 
         try:
             spo2_data = await client.biosensing.get_spo2()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("SpO2 sync skipped", error=str(e))
             return 0
 
@@ -716,7 +863,8 @@ class SyncService:
 
         try:
             ecg_data = await client.biosensing.get_ecg()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("ECG sync skipped", error=str(e))
             return 0
 
@@ -749,7 +897,8 @@ class SyncService:
 
         try:
             temp_data = await client.biosensing.get_body_temperature()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("Body temperature sync skipped", error=str(e))
             return 0
 
@@ -782,7 +931,8 @@ class SyncService:
 
         try:
             temp_data = await client.biosensing.get_skin_temperature()
-        except Exception as e:
+        except NotFoundError as e:
+            # Genuinely no data / device doesn't support it - not an error.
             self.logger.debug("Skin temperature sync skipped", error=str(e))
             return 0
 

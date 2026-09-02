@@ -1,9 +1,11 @@
 """Comprehensive data API endpoints for all Polar data types."""
 
+import json
 from datetime import date, timedelta
 from typing import Annotated, Any
 
 from litestar import Router, get
+from litestar.exceptions import NotFoundException
 from litestar.openapi.spec import Example
 from litestar.params import Parameter
 from litestar.status_codes import HTTP_200_OK
@@ -17,6 +19,7 @@ from polar_flow_server.models.cardio_load import CardioLoad
 from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
+from polar_flow_server.models.physical_info import PhysicalInfo
 from polar_flow_server.models.recharge import NightlyRecharge
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
@@ -79,7 +82,7 @@ async def get_activity_by_date(
         ),
     ],
     session: AsyncSession,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Get activity data for a specific date."""
     stmt = select(Activity).where(
         Activity.user_id == user_id,
@@ -89,7 +92,7 @@ async def get_activity_by_date(
     r = result.scalar_one_or_none()
 
     if not r:
-        return None
+        raise NotFoundException(detail=f"No activity data for {target_date}")
 
     return {
         "date": str(r.date),
@@ -133,9 +136,59 @@ async def get_recharge_list(
             "ans_charge_status": r.ans_charge_status,
             "breathing_rate_avg": r.breathing_rate_avg,
             "heart_rate_avg": r.heart_rate_avg,
+            "nightly_recharge_status": r.nightly_recharge_status,
+            "beat_to_beat_avg": r.beat_to_beat_avg,
         }
         for r in records
     ]
+
+
+# ==============================================================================
+# Physical Info Endpoints
+# ==============================================================================
+
+
+@get("/users/{user_id:str}/physical-info", status_code=HTTP_200_OK)
+async def get_physical_info(
+    user_id: str,
+    session: AsyncSession,
+) -> dict[str, Any] | None:
+    """Get the user's current physical information (VO2 max, HR thresholds, weight).
+
+    Returns the most recent snapshot, plus a short history of older
+    snapshots so weight / VO2 max changes over time are visible.
+    """
+    stmt = (
+        select(PhysicalInfo)
+        .where(PhysicalInfo.user_id == user_id)
+        .order_by(PhysicalInfo.recorded_at.desc())
+    )
+    result = await session.execute(stmt)
+    records = result.scalars().all()
+
+    if not records:
+        return None
+
+    def _serialize(r: PhysicalInfo) -> dict[str, Any]:
+        return {
+            "recorded_at": r.recorded_at.isoformat(),
+            "weight_kg": r.weight_kg,
+            "height_cm": r.height_cm,
+            "maximum_heart_rate": r.maximum_heart_rate,
+            "resting_heart_rate": r.resting_heart_rate,
+            "aerobic_threshold": r.aerobic_threshold,
+            "anaerobic_threshold": r.anaerobic_threshold,
+            "vo2_max": r.vo2_max,
+            "weight_source": r.weight_source,
+            "training_background": r.training_background,
+            "typical_day": r.typical_day,
+            "sleep_goal_hours": (r.sleep_goal_seconds / 3600 if r.sleep_goal_seconds else None),
+        }
+
+    return {
+        **_serialize(records[0]),
+        "history": [_serialize(r) for r in records[1:11]],
+    }
 
 
 # ==============================================================================
@@ -207,6 +260,45 @@ async def get_heart_rate_list(
     ]
 
 
+@get("/users/{user_id:str}/heart-rate/{target_date:str}/samples", status_code=HTTP_200_OK)
+async def get_heart_rate_samples(
+    user_id: str,
+    target_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve heart rate samples for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+        ),
+    ],
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get a day's continuous heart rate samples (~5-minute intervals).
+
+    Each sample carries a `sample_time` and a `heart_rate` in bpm;
+    zero/no-signal samples were excluded at sync time.
+    """
+    stmt = select(ContinuousHeartRate).where(
+        ContinuousHeartRate.user_id == user_id,
+        ContinuousHeartRate.date == date.fromisoformat(target_date),
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"No heart rate data for {target_date}")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Heart rate data for {target_date} has no samples")
+
+    return {
+        "date": str(r.date),
+        "hr_min": r.hr_min,
+        "hr_avg": r.hr_avg,
+        "hr_max": r.hr_max,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json),
+    }
+
+
 # ==============================================================================
 # Exercise Endpoints
 # ==============================================================================
@@ -246,21 +338,23 @@ async def get_exercises_list(
     ]
 
 
-@get("/users/{user_id:str}/exercises/{exercise_id:int}", status_code=HTTP_200_OK)
+@get("/users/{user_id:str}/exercises/{exercise_id:str}", status_code=HTTP_200_OK)
 async def get_exercise_detail(
     user_id: str,
     exercise_id: Annotated[
-        int,
+        str,
         Parameter(
             description="Exercise ID (from the exercises list endpoint)",
             examples=[
-                Example(value=1, summary="First exercise"),
-                Example(value=42, summary="Example exercise ID"),
+                Example(
+                    value="9f2b8e4a-1c3d-4e5f-8a6b-7c8d9e0f1a2b",
+                    summary="Exercise ID from the list endpoint",
+                ),
             ],
         ),
     ],
     session: AsyncSession,
-) -> dict[str, Any] | None:
+) -> dict[str, Any]:
     """Get detailed exercise data."""
     stmt = select(Exercise).where(
         Exercise.user_id == user_id,
@@ -270,7 +364,7 @@ async def get_exercise_detail(
     r = result.scalar_one_or_none()
 
     if not r:
-        return None
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
 
     return {
         "id": r.id,
@@ -292,6 +386,79 @@ async def get_exercise_detail(
         "ascent_meters": r.ascent_meters,
         "descent_meters": r.descent_meters,
         "notes": r.notes,
+        "running_index": r.running_index,
+        "training_load_pro": (
+            json.loads(r.training_load_pro_json) if r.training_load_pro_json else None
+        ),
+        "heart_rate_zones": (
+            json.loads(r.heart_rate_zones_json) if r.heart_rate_zones_json else None
+        ),
+        "has_samples": r.samples_json is not None,
+        "has_route_data": r.route_json is not None,
+    }
+
+
+@get("/users/{user_id:str}/exercises/{exercise_id:str}/samples", status_code=HTTP_200_OK)
+async def get_exercise_samples(
+    user_id: str,
+    exercise_id: str,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get an exercise's raw sample series (HR, speed, cadence, altitude, ...).
+
+    Each series has a sample_type, recording_rate (seconds between samples),
+    and the values list.
+    """
+    stmt = select(Exercise).where(
+        Exercise.user_id == user_id,
+        Exercise.id == exercise_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Exercise {exercise_id} has no sample data")
+
+    return {
+        "exercise_id": r.id,
+        "sport": r.sport,
+        "start_time": str(r.start_time),
+        "samples": json.loads(r.samples_json),
+    }
+
+
+@get("/users/{user_id:str}/exercises/{exercise_id:str}/route", status_code=HTTP_200_OK)
+async def get_exercise_route(
+    user_id: str,
+    exercise_id: str,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get an exercise's GPS route as structured points.
+
+    Each point has latitude, longitude, time offset from exercise start
+    (ISO 8601 duration), satellites, and fix quality.
+    """
+    stmt = select(Exercise).where(
+        Exercise.user_id == user_id,
+        Exercise.id == exercise_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"Exercise {exercise_id} not found")
+    if not r.route_json:
+        raise NotFoundException(detail=f"Exercise {exercise_id} has no route data")
+
+    points = json.loads(r.route_json)
+    return {
+        "exercise_id": r.id,
+        "sport": r.sport,
+        "start_time": str(r.start_time),
+        "point_count": len(points),
+        "route": points,
     }
 
 
@@ -392,6 +559,44 @@ async def get_activity_samples_list(
     ]
 
 
+@get("/users/{user_id:str}/activity-samples/{target_date:str}", status_code=HTTP_200_OK)
+async def get_activity_samples_by_date(
+    user_id: str,
+    target_date: Annotated[
+        str,
+        Parameter(
+            description="Date to retrieve activity samples for (YYYY-MM-DD format)",
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+        ),
+    ],
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get a day's minute-by-minute step samples.
+
+    `interval_ms` is the spacing between samples (60000 = 1 minute); each
+    sample carries a timestamp and the steps recorded in that interval.
+    """
+    stmt = select(ActivitySamples).where(
+        ActivitySamples.user_id == user_id,
+        ActivitySamples.date == date.fromisoformat(target_date),
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"No activity samples for {target_date}")
+    if not r.samples_json:
+        raise NotFoundException(detail=f"Activity data for {target_date} has no samples")
+
+    return {
+        "date": str(r.date),
+        "total_steps": r.total_steps,
+        "interval_ms": r.interval_ms,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json),
+    }
+
+
 # ==============================================================================
 # Biosensing Endpoints (SpO2, ECG, Temperature)
 # ==============================================================================
@@ -446,6 +651,7 @@ async def get_ecg_list(
 
     return [
         {
+            "id": r.id,
             "test_time": str(r.test_time),
             "avg_heart_rate": r.avg_heart_rate,
             "hrv_ms": r.hrv_ms,
@@ -453,9 +659,49 @@ async def get_ecg_list(
             "rri_ms": r.rri_ms,
             "duration_seconds": r.duration_seconds,
             "sample_count": r.sample_count,
+            "has_samples": r.samples_json is not None,
         }
         for r in records
     ]
+
+
+@get("/users/{user_id:str}/ecg/{ecg_id:int}", status_code=HTTP_200_OK)
+async def get_ecg_detail(
+    user_id: str,
+    ecg_id: int,
+    session: AsyncSession,
+) -> dict[str, Any]:
+    """Get one ECG test's full detail including the waveform samples.
+
+    `samples` is the raw ECG waveform; `quality` carries the per-segment
+    quality measurements when the device recorded them.
+    """
+    stmt = select(ECG).where(
+        ECG.user_id == user_id,
+        ECG.id == ecg_id,
+    )
+    result = await session.execute(stmt)
+    r = result.scalar_one_or_none()
+
+    if not r:
+        raise NotFoundException(detail=f"ECG test {ecg_id} not found")
+
+    return {
+        "id": r.id,
+        "test_time": str(r.test_time),
+        "device_id": r.device_id,
+        "avg_heart_rate": r.avg_heart_rate,
+        "hrv_ms": r.hrv_ms,
+        "hrv_level": r.hrv_level,
+        "rri_ms": r.rri_ms,
+        "ptt_systolic_ms": r.ptt_systolic_ms,
+        "ptt_diastolic_ms": r.ptt_diastolic_ms,
+        "ptt_quality_index": r.ptt_quality_index,
+        "duration_seconds": r.duration_seconds,
+        "sample_count": r.sample_count,
+        "samples": json.loads(r.samples_json) if r.samples_json else None,
+        "quality": json.loads(r.quality_json) if r.quality_json else None,
+    }
 
 
 @get("/users/{user_id:str}/temperature/body", status_code=HTTP_200_OK)
@@ -597,21 +843,28 @@ data_router = Router(
         get_activity_by_date,
         # Recharge
         get_recharge_list,
+        # Physical Info
+        get_physical_info,
         # Cardio Load
         get_cardio_load_list,
         # Heart Rate
         get_heart_rate_list,
+        get_heart_rate_samples,
         # Exercises
         get_exercises_list,
         get_exercise_detail,
+        get_exercise_samples,
+        get_exercise_route,
         # SleepWise
         get_alertness_list,
         get_bedtime_list,
         # Activity Samples
         get_activity_samples_list,
+        get_activity_samples_by_date,
         # Biosensing
         get_spo2_list,
         get_ecg_list,
+        get_ecg_detail,
         get_body_temperature_list,
         get_skin_temperature_list,
         # Export
