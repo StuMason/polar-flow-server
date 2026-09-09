@@ -520,12 +520,12 @@
                             {% if recharge.ans_charge is not none %}{{ recharge.ans_charge|round(1) }}{% else %}--{% endif %}
                         </td>
                         <td class="px-4 py-2 whitespace-nowrap text-sm">
-                            {% if recharge.nightly_recharge_status %}
+                            {% if recharge.nightly_recharge_status is not none %}
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                                {% if 'GOOD' in recharge.nightly_recharge_status or 'VERY_GOOD' in recharge.nightly_recharge_status %}bg-green-100 text-green-800
-                                {% elif 'COMPROMISED' in recharge.nightly_recharge_status %}bg-yellow-100 text-yellow-800
-                                {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                {{ recharge.nightly_recharge_status|replace('NIGHTLY_RECHARGE_STATUS_', '')|replace('_', ' ')|title }}
+                                {% if recharge.nightly_recharge_status >= 5 %}bg-green-100 text-green-800
+                                {% elif recharge.nightly_recharge_status >= 3 %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ recharge.nightly_recharge_status|recharge_status }}
                             </span>
                             {% else %}--{% endif %}
                         </td>

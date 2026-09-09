@@ -66,9 +66,33 @@ def days_old(value: date | datetime) -> int:
     return (datetime.now(UTC).date() - value).days
 
 
+# Polar's Nightly Recharge status scale (AccessLink nightly-recharge-status, 1-6).
+RECHARGE_STATUS_LABELS: dict[int, str] = {
+    1: "Very poor",
+    2: "Poor",
+    3: "Compromised",
+    4: "OK",
+    5: "Good",
+    6: "Very good",
+}
+
+
+def recharge_status(value: int | None) -> str:
+    """Jinja filter: label for a 1-6 nightly recharge status.
+
+    The column became an int in #123 but the dashboard kept treating it as
+    the old NIGHTLY_RECHARGE_STATUS_* string, so any row with a status
+    500'd the page (issue #132).
+    """
+    if value is None:
+        return "--"
+    return RECHARGE_STATUS_LABELS.get(int(value), str(value))
+
+
 def _register_template_filters(engine: JinjaTemplateEngine) -> None:
     engine.engine.filters["utc_dt"] = format_utc
     engine.engine.filters["days_old"] = days_old
+    engine.engine.filters["recharge_status"] = recharge_status
 
 
 # Configure structured logging
