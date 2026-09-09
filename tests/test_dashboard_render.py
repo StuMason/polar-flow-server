@@ -102,3 +102,55 @@ class TestDeadOobSwapsRemoved:
         templates = Path(polar_flow_server.__file__).parent / "templates"
         for page in templates.rglob("*.html"):
             assert 'id="sleep-count"' not in page.read_text()
+
+
+async def _seed_recharge(nightly_recharge_status: int | None) -> None:
+    from datetime import date
+
+    from polar_flow_server.core.database import async_session_maker
+    from polar_flow_server.models.recharge import NightlyRecharge
+
+    async with async_session_maker() as session:
+        session.add(
+            NightlyRecharge(
+                user_id="test-user",
+                date=date.today(),
+                hrv_avg=45.0,
+                ans_charge=1.5,
+                nightly_recharge_status=nightly_recharge_status,
+            )
+        )
+        await session.commit()
+
+
+class TestRechargeStatusBadge:
+    """Issue #132: nightly_recharge_status became an int (1-6) in #123 but the
+    dashboard still did `'GOOD' in status`, so any row with a status 500'd."""
+
+    @pytest.mark.parametrize(
+        ("status", "label", "colour"),
+        [
+            (6, "Very good", "bg-green-100"),
+            (3, "Compromised", "bg-yellow-100"),
+            (1, "Very poor", "bg-red-100"),
+        ],
+    )
+    async def test_int_status_renders_label_and_colour(
+        self, app_client, admin_account, status, label, colour
+    ):
+        await _login(app_client, admin_account)
+        await _seed_recharge(nightly_recharge_status=status)
+
+        response = await app_client.get("/admin/dashboard")
+        assert response.status_code == 200
+        assert label in response.text
+        # The colour class sits on the span immediately wrapping the label.
+        badge = response.text.split(label, 1)[0].rsplit("<span", 1)[1]
+        assert colour in badge
+
+    async def test_missing_status_renders_dash(self, app_client, admin_account):
+        await _login(app_client, admin_account)
+        await _seed_recharge(nightly_recharge_status=None)
+
+        response = await app_client.get("/admin/dashboard")
+        assert response.status_code == 200
