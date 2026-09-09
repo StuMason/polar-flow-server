@@ -95,9 +95,17 @@ jobs:
       - name: Publish server to MCP Registry
         if: steps.check.outputs.skip != 'true'
         run: |
-          # Docker Hub propagation can lag right after push — retry a few times
+          # Docker Hub propagation can lag right after push — retry a few times.
+          # This job runs on every push to main but the version only changes on
+          # a release, so if the lookup above timed out and we get here with a
+          # version the registry already has, that is a no-op, not a failure.
           for i in 1 2 3; do
-            ./mcp-publisher publish && exit 0
+            if out=$(./mcp-publisher publish 2>&1); then echo "$out"; exit 0; fi
+            echo "$out"
+            if grep -q "duplicate version" <<<"$out"; then
+              echo "Version already in the registry - nothing to publish"
+              exit 0
+            fi
             echo "Registry publish attempt $i failed"
             [ "$i" -lt 3 ] && sleep 30
           done
