@@ -27,6 +27,24 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Decide which tags to push
+        id: tags
+        run: |
+          # This workflow runs on every push to main, but the version only
+          # moves on a release. Only push the version tag the first time we
+          # see it, so a pinned tag never silently changes underneath users.
+          # A Docker Hub lookup hiccup falls open to pushing both tags.
+          VERSION=${{ steps.version.outputs.version }}
+          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TAGS="$IMAGE:latest"
+          if curl -sf --max-time 30 "https://hub.docker.com/v2/repositories/${{ env.IMAGE_NAME }}/tags/$VERSION" >/dev/null; then
+            echo "Docker Hub already has $VERSION; pushing latest only"
+          else
+            echo "Pushing latest and $VERSION"
+            TAGS="$TAGS"$'\n'"$IMAGE:$VERSION"
+          fi
+          { echo "tags<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -41,9 +59,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
