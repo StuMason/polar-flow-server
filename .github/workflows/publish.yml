@@ -83,11 +83,15 @@ jobs:
       - name: Skip if this version is already in the registry
         id: check
         run: |
-          # A lookup hiccup must not kill the release — treat as "not yet published"
-          LATEST=$(curl -s --max-time 30 "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.StuMason/polar-flow-server" \
-            | jq -r '.servers[] | select(.server.name == "io.github.StuMason/polar-flow-server") | .server.version' | head -1 || true)
-          echo "Registry has: ${LATEST:-nothing}; building: ${{ steps.version.outputs.version }}"
-          if [ "$LATEST" = "${{ steps.version.outputs.version }}" ]; then
+          # A lookup hiccup must not kill the release — treat as "not yet published".
+          # The by-name versions endpoint answers in well under a second; the
+          # search endpoint used before routinely blew the 30s cap, so this
+          # guard had never actually skipped anything.
+          VERSION=${{ steps.version.outputs.version }}
+          HAVE=$(curl -s --max-time 30 "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.StuMason%2Fpolar-flow-server/versions" \
+            | jq -r --arg v "$VERSION" '[.servers[]?.server.version] | if index($v) then $v else empty end' || true)
+          echo "Registry has $VERSION: $([ -n "$HAVE" ] && echo yes || echo no)"
+          if [ "$HAVE" = "$VERSION" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
