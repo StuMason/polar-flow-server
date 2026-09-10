@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-10
+
 ### Fixed
 - Admin dashboard returned 500 after login for anyone with Nightly Recharge data: the recovery status column became Polar's 1-6 integer scale in #123 but the template still ran string checks against it. The badge now maps 1-6 to Very poor / Poor / Compromised / OK / Good / Very good (#132)
 
