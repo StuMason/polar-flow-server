@@ -27,6 +27,24 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
 
+      - name: Decide which tags to push
+        id: tags
+        run: |
+          # This workflow runs on every push to main, but the version only
+          # moves on a release. Only push the version tag the first time we
+          # see it, so a pinned tag never silently changes underneath users.
+          # A Docker Hub lookup hiccup falls open to pushing both tags.
+          VERSION=${{ steps.version.outputs.version }}
+          IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          TAGS="$IMAGE:latest"
+          if curl -sf --max-time 30 "https://hub.docker.com/v2/repositories/${{ env.IMAGE_NAME }}/tags/$VERSION" >/dev/null; then
+            echo "Docker Hub already has $VERSION; pushing latest only"
+          else
+            echo "Pushing latest and $VERSION"
+            TAGS="$TAGS"$'\n'"$IMAGE:$VERSION"
+          fi
+          { echo "tags<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -41,9 +59,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -67,11 +83,15 @@ jobs:
       - name: Skip if this version is already in the registry
         id: check
         run: |
-          # A lookup hiccup must not kill the release — treat as "not yet published"
-          LATEST=$(curl -s --max-time 30 "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.StuMason/polar-flow-server" \
-            | jq -r '.servers[] | select(.server.name == "io.github.StuMason/polar-flow-server") | .server.version' | head -1 || true)
-          echo "Registry has: ${LATEST:-nothing}; building: ${{ steps.version.outputs.version }}"
-          if [ "$LATEST" = "${{ steps.version.outputs.version }}" ]; then
+          # A lookup hiccup must not kill the release — treat as "not yet published".
+          # The by-name versions endpoint answers in well under a second; the
+          # search endpoint used before routinely blew the 30s cap, so this
+          # guard had never actually skipped anything.
+          VERSION=${{ steps.version.outputs.version }}
+          HAVE=$(curl -s --max-time 30 "https://registry.modelcontextprotocol.io/v0.1/servers/io.github.StuMason%2Fpolar-flow-server/versions" \
+            | jq -r --arg v "$VERSION" '[.servers[]?.server.version] | if index($v) then $v else empty end' || true)
+          echo "Registry has $VERSION: $([ -n "$HAVE" ] && echo yes || echo no)"
+          if [ "$HAVE" = "$VERSION" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           fi
 
