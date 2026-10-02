@@ -13,6 +13,28 @@ if TYPE_CHECKING:
     from polar_flow.models.exercise import Exercise
 
 
+def _clean_training_load_pro(
+    training_load_pro: dict[str, float | str] | None,
+) -> dict[str, float | str | None] | None:
+    """Null Polar's -1 "not available" sentinel in Training Load Pro values."""
+    if not training_load_pro:
+        return None
+    return {
+        key: None if isinstance(value, (int, float)) and value < 0 else value
+        for key, value in training_load_pro.items()
+    }
+
+
+def _training_load(
+    training_load: float | None, training_load_pro: dict[str, float | str | None] | None
+) -> float | None:
+    """Polar's training_load, or Training Load Pro cardio load when that's all the watch sends."""
+    if training_load is not None:
+        return training_load
+    cardio_load = (training_load_pro or {}).get("cardio-load")
+    return float(cardio_load) if isinstance(cardio_load, (int, float)) else None
+
+
 class ExerciseTransformer:
     """Transform SDK Exercise -> Database Exercise dict.
 
@@ -47,6 +69,7 @@ class ExerciseTransformer:
         # Calculate stop_time from start_time + duration
         stop_time = sdk_exercise.start_time + timedelta(seconds=sdk_exercise.duration_seconds)
 
+        training_load_pro = _clean_training_load_pro(sdk_exercise.training_load_pro)
         zones = getattr(sdk_exercise, "heart_rate_zones", None)
         samples = getattr(sdk_exercise, "samples", None)
         route = getattr(sdk_exercise, "route", None)
@@ -63,14 +86,10 @@ class ExerciseTransformer:
             "average_heart_rate": sdk_exercise.average_heart_rate,
             "max_heart_rate": sdk_exercise.maximum_heart_rate,
             "calories": sdk_exercise.calories,
-            "training_load": sdk_exercise.training_load,
+            "training_load": _training_load(sdk_exercise.training_load, training_load_pro),
             "has_route": sdk_exercise.has_route,
             "running_index": getattr(sdk_exercise, "running_index", None),
-            "training_load_pro_json": (
-                json.dumps(sdk_exercise.training_load_pro)
-                if sdk_exercise.training_load_pro
-                else None
-            ),
+            "training_load_pro_json": json.dumps(training_load_pro) if training_load_pro else None,
             "heart_rate_zones_json": (
                 json.dumps(
                     [

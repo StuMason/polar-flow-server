@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-02
+
+Data-quality fixes from an end-to-end MCP field test against real watch data.
+
+### Changed
+- `resting_hr` (baselines, insights, patterns, overtraining risk) is now the lowest 5-minute average heart rate during the night's sleep. It was Nightly Recharge's overnight average HR, which reads well above true resting HR. The metric key is unchanged; values will drop
+- Exercise `training_load` falls back to Training Load Pro cardio load when the watch reports only that (it was null on every session from current watches)
+
+### Fixed
+- Sleep records' HRV and breathing rate were always null: Polar's sleep endpoint doesn't carry them. The recharge sync now copies the same night's values onto the sleep row (REST, CSV export and MCP all benefit)
+- Polar's -1 "not available" sentinel is stored as NULL for cardio load, load ratio, tolerance and Training Load Pro values instead of leaking through as data
+- Migration `l3m4n5o6p7q8` applies all of the above to rows synced before this release
+
+### Added
+- MCP `get_exercises` returns `detailed_sport_info` (the specific activity when `sport` is the generic `OTHER`)
+- MCP `get_recovery` returns `ans_charge_status_label` and `nightly_recharge_status_label` next to Polar's integer scales
+- MCP tool descriptions corrected: activity score can exceed 100, sleep skin temperature lives in `get_biosensing`, continuous-HR daily min is no longer described as resting HR
+
 ## [1.5.2] - 2026-10-02
 
 ### Fixed

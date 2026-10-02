@@ -8,6 +8,25 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin, generate_uuid
 
+# Polar's Nightly Recharge status scale (AccessLink nightly-recharge-status, 1-6).
+RECHARGE_STATUS_LABELS: dict[int, str] = {
+    1: "Very poor",
+    2: "Poor",
+    3: "Compromised",
+    4: "OK",
+    5: "Good",
+    6: "Very good",
+}
+
+# ANS charge relative to the user's usual level (AccessLink ans-charge-status, 1-5).
+ANS_CHARGE_STATUS_LABELS: dict[int, str] = {
+    1: "Much below usual",
+    2: "Below usual",
+    3: "Usual",
+    4: "Above usual",
+    5: "Much above usual",
+}
+
 
 class NightlyRecharge(Base, UserScopedMixin, TimestampMixin):
     """Nightly Recharge data from Polar devices.

@@ -9,6 +9,7 @@ from typing import Any
 import structlog
 from polar_flow import PolarFlow
 from polar_flow.exceptions import NotFoundError, PolarFlowError, RateLimitError
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -525,6 +526,17 @@ class SyncService:
             )
 
             await self.session.execute(stmt)
+
+            # Polar's sleep endpoint carries no HRV or breathing rate; the
+            # same night's recharge does, so copy them onto the sleep row.
+            await self.session.execute(
+                update(Sleep)
+                .where(Sleep.user_id == user_id, Sleep.date == recharge_dict["date"])
+                .values(
+                    hrv_avg=recharge_dict["hrv_avg"],
+                    breathing_rate_avg=recharge_dict["breathing_rate_avg"],
+                )
+            )
             count += 1
 
         return count

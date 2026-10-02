@@ -147,10 +147,11 @@ class BaselineService:
         )
 
     async def calculate_resting_hr_baseline(self, user_id: str) -> str:
-        """Calculate resting heart rate baseline from nightly recharge.
+        """Calculate resting heart rate baseline from sleep.
 
-        Uses heart_rate_avg from nightly recharge which is measured
-        during sleep and represents resting heart rate.
+        Resting HR is the lowest 5-minute average heart rate during the
+        night's sleep. Nightly recharge's heart_rate_avg is the average over
+        the first hours of sleep and reads well above true resting HR.
 
         Args:
             user_id: User identifier
@@ -163,17 +164,17 @@ class BaselineService:
         since_date = datetime.now(UTC).date() - timedelta(days=90)
 
         stmt = (
-            select(NightlyRecharge.date, NightlyRecharge.heart_rate_avg)
-            .where(NightlyRecharge.user_id == user_id)
-            .where(NightlyRecharge.date >= since_date)
-            .where(NightlyRecharge.heart_rate_avg.isnot(None))
-            .order_by(NightlyRecharge.date.desc())
+            select(Sleep.date, Sleep.heart_rate_min)
+            .where(Sleep.user_id == user_id)
+            .where(Sleep.date >= since_date)
+            .where(Sleep.heart_rate_min.isnot(None))
+            .order_by(Sleep.date.desc())
         )
 
         result = await self.session.execute(stmt)
         rows = result.fetchall()
 
-        values = [float(row.heart_rate_avg) for row in rows]
+        values = [float(row.heart_rate_min) for row in rows]
         dates = [row.date for row in rows]
 
         return await self._upsert_baseline(

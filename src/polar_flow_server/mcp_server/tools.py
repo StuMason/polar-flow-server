@@ -26,7 +26,11 @@ from polar_flow_server.models.continuous_hr import ContinuousHeartRate
 from polar_flow_server.models.ecg import ECG
 from polar_flow_server.models.exercise import Exercise
 from polar_flow_server.models.physical_info import PhysicalInfo
-from polar_flow_server.models.recharge import NightlyRecharge
+from polar_flow_server.models.recharge import (
+    ANS_CHARGE_STATUS_LABELS,
+    RECHARGE_STATUS_LABELS,
+    NightlyRecharge,
+)
 from polar_flow_server.models.sleep import Sleep
 from polar_flow_server.models.sleepwise_alertness import SleepWiseAlertness
 from polar_flow_server.models.sleepwise_bedtime import SleepWiseBedtime
@@ -53,7 +57,8 @@ async def get_health_insights(user_id: UserIdParam = None) -> dict[str, Any]:
     """Get a complete health and recovery assessment for the user.
 
     This is the best first call for any "how am I doing?" question. Returns
-    current metrics (HRV in ms, sleep score 0-100, resting heart rate in bpm)
+    current metrics (HRV in ms, sleep score 0-100, resting heart rate in bpm
+    = the lowest 5-minute average during last night's sleep)
     compared against the user's own personal baselines, detected patterns
     (sleep-HRV correlation, overtraining risk, HRV/sleep trends), anomalies
     (metrics outside the user's normal bounds), plain-language observations,
@@ -79,8 +84,11 @@ async def get_sleep(days: DaysParam = 30, user_id: UserIdParam = None) -> dict[s
 
     Each record has the sleep date, sleep score (0-100, Polar's overall
     quality rating), hours asleep split by stage (light/deep/REM), overnight
-    averages for HRV (ms), heart rate (bpm), breathing rate (breaths/min),
-    and skin temperature deviation (deg C), plus sleep start/end times.
+    averages for HRV (ms) and breathing rate (breaths/min) from that night's
+    Nightly Recharge (null when the watch recorded no recharge), in-sleep
+    heart rate avg/min/max (bpm; the min is the resting HR used by
+    get_baselines), plus sleep start/end times. Skin temperature is in
+    get_biosensing (`skin_temperature`).
     Nights with no recorded sleep are simply absent - gaps in the dates mean
     the watch wasn't worn, not zero sleep.
     """
@@ -118,7 +126,6 @@ async def get_sleep(days: DaysParam = 30, user_id: UserIdParam = None) -> dict[s
                 "heart_rate_min_bpm": r.heart_rate_min,
                 "heart_rate_max_bpm": r.heart_rate_max,
                 "breathing_rate_avg": r.breathing_rate_avg,
-                "skin_temperature_avg": r.skin_temperature_avg,
                 "continuity_score": r.continuity,
                 "sleep_cycles": r.sleep_cycles,
                 "sleep_charge": r.sleep_charge,
@@ -133,11 +140,14 @@ async def get_recovery(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
     """Get recovery data: nightly recharge (ANS/HRV) and cardio load.
 
     `nightly_recharge` measures overnight autonomic nervous system recovery:
-    ANS charge from -10 (very poor) to +10 (excellent) with a status label,
-    overnight HRV average (ms), breathing rate, and heart rate. `cardio_load`
+    ANS charge from -10 (very poor) to +10 (excellent), its status vs the
+    user's usual level (1-5, with a label), the overall Nightly Recharge
+    status (1-6, Very poor to Very good, with a label), overnight HRV
+    average (ms), breathing rate, and heart rate. `cardio_load`
     measures training strain vs tolerance: a load ratio above ~1.3 means
     training load is rising faster than the body is adapting (overreaching
-    risk); below ~0.8 means detraining. Use alongside get_sleep to judge
+    risk); below ~0.8 means detraining. Ratio and tolerance are null until
+    Polar has enough training history to compute them. Use alongside get_sleep to judge
     readiness to train; both lists are most recent day first.
     """
     uid = await resolve_scoped_user_id(user_id)
@@ -172,7 +182,15 @@ async def get_recovery(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
                 "date": str(r.date),
                 "ans_charge": r.ans_charge,
                 "ans_charge_status": r.ans_charge_status,
+                "ans_charge_status_label": ANS_CHARGE_STATUS_LABELS.get(r.ans_charge_status)
+                if r.ans_charge_status is not None
+                else None,
                 "nightly_recharge_status": r.nightly_recharge_status,
+                "nightly_recharge_status_label": RECHARGE_STATUS_LABELS.get(
+                    r.nightly_recharge_status
+                )
+                if r.nightly_recharge_status is not None
+                else None,
                 "hrv_avg_ms": r.hrv_avg,
                 "beat_to_beat_avg_ms": r.beat_to_beat_avg,
                 "breathing_rate_avg": r.breathing_rate_avg,
@@ -200,8 +218,8 @@ async def get_activity(days: DaysParam = 30, user_id: UserIdParam = None) -> dic
     """Get daily activity summaries, most recent day first.
 
     Each record has steps, active and total calories (kcal), distance (km),
-    active minutes, and Polar's activity score (0-100, how much of the daily
-    activity goal was reached). Useful for spotting sedentary streaks or
+    active minutes, and Polar's activity score (percent of the daily activity
+    goal reached; above 100 means the goal was exceeded). Useful for spotting sedentary streaks or
     unusually big days when explaining recovery or sleep changes.
     """
     uid = await resolve_scoped_user_id(user_id)
@@ -257,8 +275,9 @@ async def get_exercises(
 ) -> dict[str, Any]:
     """Get workout history, or one workout's full detail.
 
-    Without `exercise_id`: recent workouts, newest first, each with sport,
-    start time, duration (minutes), distance (km), calories, average/max
+    Without `exercise_id`: recent workouts, newest first, each with sport
+    and detailed_sport_info (Polar's specific activity, e.g.
+    STRENGTH_TRAINING, when sport is the generic OTHER), start time, duration (minutes), distance (km), calories, average/max
     heart rate (bpm), and training load. With `exercise_id`: every recorded
     metric for that single workout, including speed (m/s), cadence, power
     (watts), elevation, the time-in-zone heart rate breakdown (compare zone
@@ -266,7 +285,9 @@ async def get_exercises(
     and Training Load Pro. `has_samples`/`route_point_count` say whether
     raw per-second series and a GPS route exist (served by the REST API,
     not this tool). Training load is Polar's cardio strain estimate for
-    the session - compare against get_recovery's tolerance. Calories are
+    the session (Training Load Pro cardio load when the watch reports only
+    that) - compare against get_recovery's tolerance. Training Load Pro
+    values Polar could not compute are null. Calories are
     null when the device reported an implausibly low value for the duration
     (sensor noise, e.g. no HR strap) - null means unmeasured, not zero burn.
     """
@@ -287,6 +308,7 @@ async def get_exercises(
             "polar_exercise_id": r.polar_exercise_id,
             "start_time": str(r.start_time),
             "sport": r.sport,
+            "detailed_sport_info": r.detailed_sport_info,
             "duration_seconds": r.duration_seconds,
             "distance_meters": r.distance_meters,
             "calories": _plausible_calories(r.calories, r.duration_seconds),
@@ -336,6 +358,7 @@ async def get_exercises(
                 "id": r.id,
                 "start_time": str(r.start_time),
                 "sport": r.sport,
+                "detailed_sport_info": r.detailed_sport_info,
                 "duration_minutes": (
                     round(r.duration_seconds / 60, 1) if r.duration_seconds else None
                 ),
@@ -376,8 +399,8 @@ async def get_biosensing(
     spot measurements (deg C, min/avg/max); `skin_temperature` nightly values
     with deviation from the user's baseline and an is_elevated flag (useful
     for illness or cycle tracking); `heart_rate` daily continuous-HR
-    summaries (min/avg/max bpm - the daily min approximates true resting
-    HR); `alertness` SleepWise predicted alertness periods (grade and
+    summaries (min/avg/max bpm across the whole day; today's row covers
+    only the hours so far); `alertness` SleepWise predicted alertness periods (grade and
     classification); `bedtime` SleepWise circadian bedtime recommendations
     (preferred sleep window and gate times).
     """
@@ -399,8 +422,9 @@ async def get_biosensing(
 async def get_baselines(user_id: UserIdParam = None) -> dict[str, Any]:
     """Get the user's personal baselines and physical reference values.
 
-    Baselines exist for hrv_rmssd, sleep_score, resting_hr, training_load,
-    and training_load_ratio. Each has rolling averages (7d/30d/90d), median
+    Baselines exist for hrv_rmssd, sleep_score, resting_hr (lowest 5-minute
+    average HR during each night's sleep), training_load, and
+    training_load_ratio. Each has rolling averages (7d/30d/90d), median
     and IQR statistics with lower/upper anomaly bounds (values outside them
     are abnormal FOR THIS USER), min/max, sample count, and a status that
     says how much history backs it (ready/partial/insufficient). Use these

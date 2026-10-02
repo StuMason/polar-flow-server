@@ -12,6 +12,11 @@ if TYPE_CHECKING:
     from polar_flow.models.cardio_load import CardioLoad
 
 
+def _or_none_if_negative(value: float | None) -> float | None:
+    """Polar's -1 "not available" sentinel is NULL, never a real value."""
+    return None if value is None or value < 0 else value
+
+
 class CardioLoadTransformer:
     """Transform SDK CardioLoad -> Database CardioLoad dict.
 
@@ -53,11 +58,12 @@ class CardioLoadTransformer:
 
         return {
             "date": load_date,
-            "cardio_load": sdk_cardio_load.cardio_load,
+            "cardio_load": _or_none_if_negative(sdk_cardio_load.cardio_load),
             "cardio_load_status": sdk_cardio_load.cardio_load_status,
-            "cardio_load_ratio": sdk_cardio_load.cardio_load_ratio,
+            # Polar sends -1 for load, ratio and tolerance when it cannot compute them
+            "cardio_load_ratio": _or_none_if_negative(sdk_cardio_load.cardio_load_ratio),
             "strain": sdk_cardio_load.strain,
-            "tolerance": sdk_cardio_load.tolerance,
+            "tolerance": _or_none_if_negative(sdk_cardio_load.tolerance),
             "load_very_low": load_level.very_low,
             "load_low": load_level.low,
             "load_medium": load_level.medium,

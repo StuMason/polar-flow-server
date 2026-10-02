@@ -354,6 +354,7 @@ async def test_get_exercises_list_and_uuid_detail(app_client) -> None:
                 polar_exercise_id="polar-ex-1",
                 start_time=datetime.now(UTC) - timedelta(days=2),
                 sport="RUNNING",
+                detailed_sport_info="RUNNING_TRAIL",
                 duration_seconds=1800,
                 distance_meters=5000.0,
                 calories=350,
@@ -372,11 +373,13 @@ async def test_get_exercises_list_and_uuid_detail(app_client) -> None:
         assert len(records) == 1
         assert records[0]["sport"] == "RUNNING"
         assert records[0]["duration_minutes"] == 30.0
+        assert records[0]["detailed_sport_info"] == "RUNNING_TRAIL"
 
         detail = await client.call_tool("get_exercises", {"exercise_id": records[0]["id"]})
         assert not detail.is_error
         assert detail.structured_content["polar_exercise_id"] == "polar-ex-1"
         assert detail.structured_content["average_power_watts"] == 210
+        assert detail.structured_content["detailed_sport_info"] == "RUNNING_TRAIL"
 
         missing = await client.call_tool("get_exercises", {"exercise_id": "no-such-id"})
         assert missing.is_error
@@ -706,3 +709,29 @@ async def test_rest_api_still_works_after_refactor(app_client) -> None:
         "/api/v1/users/someone-else/sleep", headers={"X-API-Key": raw_key}
     )
     assert denied.status_code == 401
+
+
+async def test_get_recovery_labels_statuses(app_client) -> None:
+    """Recharge statuses are Polar's integer scales; the tool labels them."""
+    from polar_flow_server.models.recharge import NightlyRecharge
+
+    user_id = await _seed_user()
+    async with async_session_maker() as session:
+        session.add(
+            NightlyRecharge(
+                user_id=user_id,
+                date=date.today() - timedelta(days=1),
+                ans_charge=-9.0,
+                ans_charge_status=1,
+                nightly_recharge_status=5,
+            )
+        )
+        await session.commit()
+    raw_key = await _user_key(user_id)
+
+    async with _mcp_client(app_client.app, raw_key) as client:
+        result = await client.call_tool("get_recovery", {"days": 7})
+        assert not result.is_error
+        night = result.structured_content["nightly_recharge"][0]
+        assert night["ans_charge_status_label"] == "Much below usual"
+        assert night["nightly_recharge_status_label"] == "Good"

@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import Float, func, select, type_coerce
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from polar_flow_server.models.baseline import UserBaseline
@@ -255,12 +255,12 @@ class InsightsService:
         sleep_result = await self.session.execute(sleep_stmt)
         sleep_score = sleep_result.scalar()
 
-        # Get most recent resting HR
+        # Get most recent resting HR (lowest 5-minute average during sleep)
         rhr_stmt = (
-            select(NightlyRecharge.heart_rate_avg)
-            .where(NightlyRecharge.user_id == user_id)
-            .where(NightlyRecharge.heart_rate_avg.isnot(None))
-            .order_by(NightlyRecharge.date.desc())
+            select(Sleep.heart_rate_min)
+            .where(Sleep.user_id == user_id)
+            .where(Sleep.heart_rate_min.isnot(None))
+            .order_by(Sleep.date.desc())
             .limit(1)
         )
         rhr_result = await self.session.execute(rhr_stmt)
@@ -336,9 +336,10 @@ class InsightsService:
             )
         elif metric_name == "resting_hr":
             stmt = (
-                select(NightlyRecharge.heart_rate_avg)
-                .where(NightlyRecharge.user_id == user_id)
-                .order_by(NightlyRecharge.date.desc())
+                select(type_coerce(Sleep.heart_rate_min, Float).label("heart_rate_min"))
+                .where(Sleep.user_id == user_id)
+                .where(Sleep.heart_rate_min.isnot(None))
+                .order_by(Sleep.date.desc())
                 .limit(1)
             )
         elif metric_name == "training_load":
