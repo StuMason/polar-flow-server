@@ -374,6 +374,7 @@ async def test_get_exercises_list_and_uuid_detail(app_client) -> None:
         assert records[0]["sport"] == "RUNNING"
         assert records[0]["duration_minutes"] == 30.0
         assert records[0]["detailed_sport_info"] == "RUNNING_TRAIL"
+        assert "T" in records[0]["start_time"]  # ISO 8601, not str(datetime)
 
         detail = await client.call_tool("get_exercises", {"exercise_id": records[0]["id"]})
         assert not detail.is_error

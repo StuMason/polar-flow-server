@@ -156,7 +156,7 @@ class UserInsights(BaseModel):
     data_freshness: datetime | None = Field(
         default=None, description="Timestamp of most recent data"
     )
-    data_age_days: int = Field(description="Days of data available")
+    data_age_days: int = Field(description="Days with sleep or recharge data in the last 90 days")
 
     # Status
     status: InsightStatus = Field(description="Overall insights availability")

@@ -12,7 +12,7 @@ prompt caches warm.
 
 import asyncio
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -306,7 +306,7 @@ async def get_exercises(
         return {
             "id": r.id,
             "polar_exercise_id": r.polar_exercise_id,
-            "start_time": str(r.start_time),
+            "start_time": _iso(r.start_time),
             "sport": r.sport,
             "detailed_sport_info": r.detailed_sport_info,
             "duration_seconds": r.duration_seconds,
@@ -356,7 +356,7 @@ async def get_exercises(
         "records": [
             {
                 "id": r.id,
-                "start_time": str(r.start_time),
+                "start_time": _iso(r.start_time),
                 "sport": r.sport,
                 "detailed_sport_info": r.detailed_sport_info,
                 "duration_minutes": (
@@ -697,7 +697,7 @@ async def _query_biosensing(
         )
         return [
             {
-                "test_time": str(r.test_time),
+                "test_time": _iso(r.test_time),
                 "blood_oxygen_percent": r.blood_oxygen_percent,
                 "spo2_class": r.spo2_class,
                 "avg_heart_rate_bpm": r.avg_heart_rate,
@@ -714,7 +714,7 @@ async def _query_biosensing(
         )
         return [
             {
-                "test_time": str(r.test_time),
+                "test_time": _iso(r.test_time),
                 "avg_heart_rate_bpm": r.avg_heart_rate,
                 "hrv_ms": r.hrv_ms,
                 "hrv_level": r.hrv_level,
@@ -732,8 +732,8 @@ async def _query_biosensing(
         )
         return [
             {
-                "start_time": str(r.start_time),
-                "end_time": str(r.end_time),
+                "start_time": _iso(r.start_time),
+                "end_time": _iso(r.end_time),
                 "measurement_type": r.measurement_type,
                 "sensor_location": r.sensor_location,
                 "temp_min_celsius": r.temp_min,
@@ -786,8 +786,8 @@ async def _query_biosensing(
         )
         return [
             {
-                "period_start_time": str(r.period_start_time),
-                "period_end_time": str(r.period_end_time),
+                "period_start_time": _iso(r.period_start_time),
+                "period_end_time": _iso(r.period_end_time),
                 "grade": r.grade,
                 "grade_classification": r.grade_classification,
             }
@@ -804,16 +804,21 @@ async def _query_biosensing(
     )
     return [
         {
-            "period_start_time": str(r.period_start_time),
-            "period_end_time": str(r.period_end_time),
-            "preferred_sleep_start": str(r.preferred_sleep_start),
-            "preferred_sleep_end": str(r.preferred_sleep_end),
-            "sleep_gate_start": str(r.sleep_gate_start),
-            "sleep_gate_end": str(r.sleep_gate_end),
+            "period_start_time": _iso(r.period_start_time),
+            "period_end_time": _iso(r.period_end_time),
+            "preferred_sleep_start": _iso(r.preferred_sleep_start),
+            "preferred_sleep_end": _iso(r.preferred_sleep_end),
+            "sleep_gate_start": _iso(r.sleep_gate_start),
+            "sleep_gate_end": _iso(r.sleep_gate_end),
             "quality": r.quality,
         }
         for r in rows.scalars().all()
     ]
+
+
+def _iso(value: datetime | None) -> str | None:
+    """ISO 8601 timestamp (``2026-10-02T08:30:46+00:00``), None stays None."""
+    return value.isoformat() if value is not None else None
 
 
 def _hours(seconds: int | None) -> float | None:

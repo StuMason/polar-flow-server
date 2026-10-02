@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-02
+
+Follow-ups from the 1.6.0 MCP field test.
+
+### Fixed
+- `data_age_days` counted calendar days since the first-ever record, so a long gap with no wear still reported `status: ready` and unlocked patterns that then said "insufficient data". It now counts days with sleep or recharge data in the last 90 days, the same window baselines and patterns use
+- Baseline anomaly lower bounds are floored at 0 (they went negative for wide IQRs, e.g. HRV -4.9 ms)
+- Today's partial day no longer counts as the "current" training load or feeds the training load baseline; the latest complete day is used
+- MCP timestamps are ISO 8601 (`2026-10-02T08:30:46+00:00`) everywhere instead of Python's `2026-10-02 08:30:46+00:00`, and a missing timestamp is `null` rather than the string `"None"`
+
 ## [1.6.0] - 2026-10-02
 
 Data-quality fixes from an end-to-end MCP field test against real watch data.

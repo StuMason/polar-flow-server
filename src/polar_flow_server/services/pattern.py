@@ -715,12 +715,13 @@ class AnomalyService:
         if rhr:
             values["resting_hr"] = float(rhr)
 
-        # Training load
+        # Training load (latest complete day; today's covers only the hours so far)
         stmt = (
             select(CardioLoad.cardio_load)
             .where(CardioLoad.user_id == user_id)
             .where(CardioLoad.cardio_load.isnot(None))
             .where(CardioLoad.cardio_load > 0)
+            .where(CardioLoad.date < datetime.now(UTC).date())
             .order_by(CardioLoad.date.desc())
             .limit(1)
         )
