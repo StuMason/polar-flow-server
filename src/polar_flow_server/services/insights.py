@@ -329,7 +329,7 @@ class InsightsService:
             )
         elif metric_name == "sleep_score":
             stmt = (
-                select(Sleep.sleep_score)  # type: ignore[assignment]
+                select(Sleep.sleep_score)
                 .where(Sleep.user_id == user_id)
                 .order_by(Sleep.date.desc())
                 .limit(1)
