@@ -23,6 +23,7 @@ Data-quality fixes from an end-to-end MCP field test against real watch data.
 ### Added
 - MCP `get_exercises` returns `detailed_sport_info` (the specific activity when `sport` is the generic `OTHER`)
 - MCP `get_recovery` returns `ans_charge_status_label` and `nightly_recharge_status_label` next to Polar's integer scales
+- MCP `get_sleep` no longer returns `skin_temperature_avg` (it was always null); skin temperature is in `get_biosensing` (`skin_temperature`)
 - MCP tool descriptions corrected: activity score can exceed 100, sleep skin temperature lives in `get_biosensing`, continuous-HR daily min is no longer described as resting HR
 
 ## [1.5.2] - 2026-10-02

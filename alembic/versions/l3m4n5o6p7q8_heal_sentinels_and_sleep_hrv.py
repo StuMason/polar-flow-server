@@ -48,7 +48,10 @@ def upgrade() -> None:
         )
     ).fetchall()
     for row in rows:
-        tlp = json.loads(row.training_load_pro_json)
+        try:
+            tlp = json.loads(row.training_load_pro_json)
+        except ValueError:
+            continue
         cleaned = {
             key: None if isinstance(value, (int, float)) and value < 0 else value
             for key, value in tlp.items()
@@ -57,6 +60,8 @@ def upgrade() -> None:
         cardio_load = cleaned.get("cardio-load")
         if training_load is None and isinstance(cardio_load, (int, float)):
             training_load = float(cardio_load)
+        if cleaned == tlp and training_load == row.training_load:
+            continue
         conn.execute(
             sa.text(
                 "UPDATE exercise SET training_load = :training_load, "
