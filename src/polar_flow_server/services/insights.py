@@ -343,6 +343,7 @@ class InsightsService:
                 select(CardioLoad.cardio_load)
                 .where(CardioLoad.user_id == user_id)
                 .where(CardioLoad.cardio_load.isnot(None))
+                .where(CardioLoad.cardio_load > 0)  # same population as the baseline
                 .where(CardioLoad.date < datetime.now(UTC).date())
                 .order_by(CardioLoad.date.desc())
                 .limit(1)

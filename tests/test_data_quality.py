@@ -8,7 +8,7 @@ resting HR is the lowest in-sleep heart rate rather than the overnight average.
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from polar_flow.models.cardio_load import CardioLoad as SDKCardioLoad
@@ -105,7 +105,7 @@ class TestExerciseTrainingLoad:
 
 
 async def test_recharge_sync_copies_hrv_onto_sleep(async_session: AsyncSession, test_user) -> None:
-    night = date.today() - timedelta(days=1)
+    night = datetime.now(UTC).date() - timedelta(days=1)
     async_session.add(Sleep(user_id=test_user.polar_user_id, date=night, sleep_score=70))
     await async_session.commit()
 
@@ -139,7 +139,7 @@ async def test_recharge_sync_copies_hrv_onto_sleep(async_session: AsyncSession, 
 async def test_resting_hr_baseline_uses_lowest_sleep_hr(
     async_session: AsyncSession, test_user
 ) -> None:
-    today = date.today()
+    today = datetime.now(UTC).date()
     for i in range(10):
         night = today - timedelta(days=i)
         async_session.add(
@@ -167,7 +167,7 @@ async def test_data_age_counts_recorded_days_not_calendar_span(
     from polar_flow_server.services.insights import InsightsService
 
     uid = test_user.polar_user_id
-    today = date.today()
+    today = datetime.now(UTC).date()
     async_session.add(Sleep(user_id=uid, date=today - timedelta(days=270), sleep_score=70))
     for i in range(8):
         night = today - timedelta(days=i)
@@ -199,7 +199,7 @@ async def test_current_training_load_skips_partial_today(
     from polar_flow_server.services.insights import InsightsService
 
     uid = test_user.polar_user_id
-    today = date.today()
+    today = datetime.now(UTC).date()
     async_session.add(CardioLoad(user_id=uid, date=today, cardio_load=10.2))
     async_session.add(CardioLoad(user_id=uid, date=today - timedelta(days=1), cardio_load=31.5))
     await async_session.commit()
