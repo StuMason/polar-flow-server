@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-10-02
+
+### Fixed
+- Exercise sync failed with Pydantic validation errors (`heart_rate_zones.0.index`, `samples.0.sample_type`): polar-flow-api 1.5.0 rejected the live AccessLink wire format (0-based zone index, integer sample-type key). Bumped to polar-flow-api 1.5.1
+
 ## [1.5.1] - 2026-09-10
 
 ### Fixed
