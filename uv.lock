@@ -988,7 +988,7 @@ wheels = [
 
 [[package]]
 name = "mcp"
-version = "2.1.1"
+version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1006,22 +1006,22 @@ dependencies = [
     { name = "typing-inspection" },
     { name = "uvicorn", marker = "sys_platform != 'emscripten'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d4/6e/21fb8e5d579dbe21d96ea4d5034200d46d8bdf2261053b5bd041f3c2f612/mcp-2.1.1.tar.gz", hash = "sha256:50b7ba1ebbe117008ea7bdd288234043e69c20b403d6851d19661e6d431a75ef", size = 3984589, upload-time = "2026-08-25T16:14:02.376Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/31/ac54fb0fdd5b37de704486e288bba4fbbb463f24cfcfedbede407b854513/mcp-2.2.0.tar.gz", hash = "sha256:2dc37ecb1974becdcebdbf7561e7c15a07dbbf20ba21ba16c3593b3038b3afbd", size = 4084129, upload-time = "2026-09-07T16:06:23.439Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/50/af/8644cc5fa26a59afd2df2e98eeb19e72926887fa4b7441aba4ff661140db/mcp-2.1.1-py3-none-any.whl", hash = "sha256:1c6c31c5d6471c58db76af3af8af67f46d11d01f0a59077d0a308cbdb3d3e915", size = 357912, upload-time = "2026-08-25T16:13:59.024Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/ff/8e7eade68b8a28f7da0ed1085544341b51f9c935dbf6b95c76b7edfea6a0/mcp-2.2.0-py3-none-any.whl", hash = "sha256:bde982589473a060ae145e3406e9a5333fe538c97229ba841f5a7f92be004f81", size = 365656, upload-time = "2026-09-07T16:06:19.711Z" },
 ]
 
 [[package]]
 name = "mcp-types"
-version = "2.1.1"
+version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6a/dd/1c4417dc0b722c23a1669032d5f044e41170fe5d4773b488a50fcce98c32/mcp_types-2.1.1.tar.gz", hash = "sha256:77dcbe48fba73cca71a673f2646a5f037a017b7a0a07ac89cec1113028890eda", size = 66674, upload-time = "2026-08-25T16:14:03.861Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ae/91/762d7755d971aff8a28d75f7961656148edf27875c8026e6385aaab08ae7/mcp_types-2.2.0.tar.gz", hash = "sha256:d3ed53703ddd10d9c6399f29d322bb66f3f67ab41348ac8556ba23e07fedefad", size = 65892, upload-time = "2026-09-07T16:06:25.187Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/71/d0/242e63c510f4a17381f55b1549a3f94f5687a0595984febd2b6f87a687a0/mcp_types-2.1.1-py3-none-any.whl", hash = "sha256:26f9f7f03f2a5730717a5b98e2ab7eb640ac352d05a00cdc725c311864778295", size = 69656, upload-time = "2026-08-25T16:14:00.667Z" },
+    { url = "https://files.pythonhosted.org/packages/8f/d7/6ffba5d8cd5dd9b8a19478875c50e04945314ba5074e84d749283f27f62d/mcp_types-2.2.0-py3-none-any.whl", hash = "sha256:ea476b73ee86709ab5abc9452385ed36cc05907e582355622e294595c9a04f13", size = 69106, upload-time = "2026-09-07T16:06:21.461Z" },
 ]
 
 [[package]]
@@ -1513,7 +1513,7 @@ wheels = [
 
 [[package]]
 name = "polar-flow-api"
-version = "1.5.0"
+version = "1.5.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1521,14 +1521,14 @@ dependencies = [
     { name = "rich" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0a/9e/d87898b571e8cfe4ff9c9a646de976a704abb66dd2f229be1f46e07a21f7/polar_flow_api-1.5.0.tar.gz", hash = "sha256:7b356449cc952e6c0ecd2cd975b081362ab9ccf78ab2d305ffeb5949e3d0c538", size = 139802, upload-time = "2026-08-05T13:29:22.659Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/06/b98a6297cc61ce8702eacc9031fc479f7f2bfe1dcfac06a013b712b6a871/polar_flow_api-1.5.1.tar.gz", hash = "sha256:118dd9ab6687f52f47777ca701bbce984d19f2ccaa0f6a597baed6cd59e118fc", size = 140240, upload-time = "2026-10-02T09:46:01.758Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/d0/9811b77565809311bc609f0032a6d768cc4a0ba392c4e676b2dff3cea093/polar_flow_api-1.5.0-py3-none-any.whl", hash = "sha256:a6453f8dbc87e9491faa4bace882876104d9260d71fb20b6f656080e6e5d6ceb", size = 44971, upload-time = "2026-08-05T13:29:21.296Z" },
+    { url = "https://files.pythonhosted.org/packages/93/3a/448b7695bd3a588dd162b89ae1cd5edbefdddf825eccec213489758f25d9/polar_flow_api-1.5.1-py3-none-any.whl", hash = "sha256:9df27a7ba2b26743d11eccdd8b29f0bae77bf116c75e628b1fad27ea32bb83a8", size = 45071, upload-time = "2026-10-02T09:46:00.502Z" },
 ]
 
 [[package]]
 name = "polar-flow-server"
-version = "1.5.1"
+version = "1.5.2"
 source = { editable = "." }
 dependencies = [
     { name = "advanced-alchemy" },
@@ -1587,13 +1587,13 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.7" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "litestar", extras = ["standard"], specifier = ">=2.14.0" },
-    { name = "mcp", specifier = "==2.1.1" },
+    { name = "mcp", specifier = "==2.2.0" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.27.0" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=1.0.3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.1" },
-    { name = "polar-flow-api", specifier = ">=1.5.0" },
+    { name = "polar-flow-api", specifier = ">=1.5.1" },
     { name = "polars", specifier = ">=1.17.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.3" },
     { name = "pyarrow", specifier = ">=23.0.1" },
