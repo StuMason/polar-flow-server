@@ -1,6 +1,6 @@
 """Insights aggregation service."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import structlog
 from sqlalchemy import Float, func, select, type_coerce
@@ -124,30 +124,25 @@ class InsightsService:
         )
 
     async def _get_data_age_days(self, user_id: str) -> int:
-        """Get the number of days of data available for a user."""
-        # Check earliest date across key tables
-        tables = [
+        """Count the days with sleep or recharge data in the last 90 days.
+
+        Baselines and patterns are computed over this same 90-day window
+        from the samples it contains, so features unlock on days actually
+        recorded. Counting calendar days since the first-ever record would
+        report "ready" after a months-long gap with no wear.
+        """
+        since = datetime.now(UTC).date() - timedelta(days=90)
+        dates: set[date] = set()
+        for model, date_col in (
             (Sleep, Sleep.date),
             (NightlyRecharge, NightlyRecharge.date),
-        ]
-
-        earliest_date = None
-
-        for model, date_col in tables:
+        ):
             stmt = (
-                select(func.min(date_col)).where(model.user_id == user_id)  # type: ignore[attr-defined]
+                select(date_col).where(model.user_id == user_id).where(date_col >= since).distinct()
             )
             result = await self.session.execute(stmt)
-            min_date = result.scalar()
-            if min_date:
-                if earliest_date is None or min_date < earliest_date:
-                    earliest_date = min_date
-
-        if earliest_date is None:
-            return 0
-
-        today = datetime.now(UTC).date()
-        return (today - earliest_date).days + 1
+            dates.update(result.scalars().all())
+        return len(dates)
 
     async def _get_data_freshness(self, user_id: str) -> datetime | None:
         """Get timestamp of most recent data."""
@@ -343,9 +338,12 @@ class InsightsService:
                 .limit(1)
             )
         elif metric_name == "training_load":
+            # Latest complete day: today's load only covers the hours so far
             stmt = (
                 select(CardioLoad.cardio_load)
                 .where(CardioLoad.user_id == user_id)
+                .where(CardioLoad.cardio_load.isnot(None))
+                .where(CardioLoad.date < datetime.now(UTC).date())
                 .order_by(CardioLoad.date.desc())
                 .limit(1)
             )

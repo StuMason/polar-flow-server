@@ -157,3 +157,53 @@ async def test_resting_hr_baseline_uses_lowest_sleep_hr(
     baseline = await service.get_baseline(test_user.polar_user_id, MetricName.RESTING_HR)
     assert baseline is not None
     assert baseline.baseline_value == 60
+
+
+async def test_data_age_counts_recorded_days_not_calendar_span(
+    async_session: AsyncSession, test_user
+) -> None:
+    """A months-old record plus a week of fresh wear is a week of data, not 'ready'."""
+    from polar_flow_server.schemas.insights import InsightStatus
+    from polar_flow_server.services.insights import InsightsService
+
+    uid = test_user.polar_user_id
+    today = date.today()
+    async_session.add(Sleep(user_id=uid, date=today - timedelta(days=270), sleep_score=70))
+    for i in range(8):
+        night = today - timedelta(days=i)
+        async_session.add(Sleep(user_id=uid, date=night, sleep_score=70))
+        async_session.add(NightlyRecharge(user_id=uid, date=night, hrv_avg=30))
+    await async_session.commit()
+
+    insights = await InsightsService(async_session).get_insights(uid)
+
+    assert insights.data_age_days == 8
+    assert insights.status == InsightStatus.PARTIAL
+    assert not insights.feature_availability.patterns.available
+
+
+def test_lower_bound_floored_at_zero() -> None:
+    from polar_flow_server.models.baseline import UserBaseline
+
+    wide = UserBaseline(q1=21.0, q3=38.25)
+    narrow = UserBaseline(q1=40.0, q3=50.0)
+
+    assert wide.lower_bound == 0.0
+    assert narrow.lower_bound == 25.0
+
+
+async def test_current_training_load_skips_partial_today(
+    async_session: AsyncSession, test_user
+) -> None:
+    from polar_flow_server.models.cardio_load import CardioLoad
+    from polar_flow_server.services.insights import InsightsService
+
+    uid = test_user.polar_user_id
+    today = date.today()
+    async_session.add(CardioLoad(user_id=uid, date=today, cardio_load=10.2))
+    async_session.add(CardioLoad(user_id=uid, date=today - timedelta(days=1), cardio_load=31.5))
+    await async_session.commit()
+
+    current = await InsightsService(async_session)._get_current_value(uid, "training_load")
+
+    assert current == 31.5

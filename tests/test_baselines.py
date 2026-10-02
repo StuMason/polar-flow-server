@@ -118,7 +118,7 @@ class TestBaselineService:
         assert baseline is not None
         assert baseline.iqr is not None
         assert baseline.iqr == baseline.q3 - baseline.q1
-        assert baseline.lower_bound == baseline.q1 - 1.5 * baseline.iqr
+        assert baseline.lower_bound == max(0.0, baseline.q1 - 1.5 * baseline.iqr)
         assert baseline.upper_bound == baseline.q3 + 1.5 * baseline.iqr
 
     @pytest.mark.asyncio

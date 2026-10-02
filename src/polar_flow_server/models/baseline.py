@@ -153,9 +153,13 @@ class UserBaseline(Base, UserScopedMixin, TimestampMixin):
 
     @property
     def lower_bound(self) -> float | None:
-        """Lower bound for anomaly detection (Q1 - 1.5*IQR)."""
+        """Lower bound for anomaly detection (Q1 - 1.5*IQR, floored at 0).
+
+        Every baselined metric is non-negative, so a negative bound only
+        misleads.
+        """
         if self.q1 is not None and self.iqr is not None:
-            return self.q1 - 1.5 * self.iqr
+            return max(0.0, self.q1 - 1.5 * self.iqr)
         return None
 
     @property

@@ -195,12 +195,14 @@ class BaselineService:
         """
         self.logger.debug("Calculating training load baseline", user_id=user_id)
 
-        since_date = datetime.now(UTC).date() - timedelta(days=90)
+        today = datetime.now(UTC).date()
+        since_date = today - timedelta(days=90)
 
         stmt = (
             select(CardioLoad.date, CardioLoad.cardio_load)
             .where(CardioLoad.user_id == user_id)
             .where(CardioLoad.date >= since_date)
+            .where(CardioLoad.date < today)  # today is a partial day
             .where(CardioLoad.cardio_load.isnot(None))
             .where(CardioLoad.cardio_load > 0)  # Exclude -1.0 (not available)
             .order_by(CardioLoad.date.desc())
