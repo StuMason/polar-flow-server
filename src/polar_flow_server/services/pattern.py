@@ -7,7 +7,7 @@ from statistics import mean
 
 import structlog
 from scipy import stats
-from sqlalchemy import select
+from sqlalchemy import Float, select, type_coerce
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -443,13 +443,13 @@ class PatternService:
 
         elif metric == "resting_hr":
             stmt = (
-                select(NightlyRecharge.date, NightlyRecharge.heart_rate_avg)
-                .where(NightlyRecharge.user_id == user_id)
-                .where(NightlyRecharge.date >= today - timedelta(days=30))
-                .where(NightlyRecharge.heart_rate_avg.isnot(None))
+                select(Sleep.date, type_coerce(Sleep.heart_rate_min, Float).label("heart_rate_min"))
+                .where(Sleep.user_id == user_id)
+                .where(Sleep.date >= today - timedelta(days=30))
+                .where(Sleep.heart_rate_min.isnot(None))
             )
             result = await self.session.execute(stmt)
-            data = [(row.date, float(row.heart_rate_avg)) for row in result.fetchall()]
+            data = [(row.date, float(row.heart_rate_min)) for row in result.fetchall()]
 
         else:
             return None
@@ -702,12 +702,12 @@ class AnomalyService:
         if sleep:
             values["sleep_score"] = float(sleep)
 
-        # Resting HR
+        # Resting HR (lowest 5-minute average during sleep)
         stmt = (
-            select(NightlyRecharge.heart_rate_avg)
-            .where(NightlyRecharge.user_id == user_id)
-            .where(NightlyRecharge.heart_rate_avg.isnot(None))
-            .order_by(NightlyRecharge.date.desc())
+            select(type_coerce(Sleep.heart_rate_min, Float).label("heart_rate_min"))
+            .where(Sleep.user_id == user_id)
+            .where(Sleep.heart_rate_min.isnot(None))
+            .order_by(Sleep.date.desc())
             .limit(1)
         )
         result = await self.session.execute(stmt)

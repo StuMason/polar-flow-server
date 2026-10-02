@@ -34,6 +34,7 @@ from polar_flow_server.core.security import verify_stored_tokens_decryptable
 from polar_flow_server.core.setup_token import announce_setup_token
 from polar_flow_server.mcp_server import build_mcp_server, create_mcp_mount
 from polar_flow_server.middleware import RateLimitHeadersMiddleware, SecurityHeadersMiddleware
+from polar_flow_server.models.recharge import RECHARGE_STATUS_LABELS
 from polar_flow_server.routes import root_redirect
 from polar_flow_server.services.scheduler import SyncScheduler, set_scheduler
 
@@ -64,17 +65,6 @@ def days_old(value: date | datetime) -> int:
     if isinstance(value, datetime):
         value = value.date()
     return (datetime.now(UTC).date() - value).days
-
-
-# Polar's Nightly Recharge status scale (AccessLink nightly-recharge-status, 1-6).
-RECHARGE_STATUS_LABELS: dict[int, str] = {
-    1: "Very poor",
-    2: "Poor",
-    3: "Compromised",
-    4: "OK",
-    5: "Good",
-    6: "Very good",
-}
 
 
 def recharge_status(value: int | None) -> str:

@@ -75,6 +75,9 @@ class SleepTransformer:
             "heart_rate_samples_json": (
                 json.dumps(sdk_sleep.heart_rate_samples) if sdk_sleep.heart_rate_samples else None
             ),
+            # hrv_avg / breathing_rate_avg are deliberately absent: the recharge
+            # sync copies them from the same night, and this upsert must not
+            # overwrite them.
             # In-sleep HR aggregates derived from the sample series
             "heart_rate_avg": round(sum(hr_values) / len(hr_values), 1) if hr_values else None,
             "heart_rate_min": min(hr_values) if hr_values else None,
