@@ -159,14 +159,14 @@
                 <p class="text-xs text-gray-500 mt-1">Automatic sync frequency</p>
             </div>
             <div class="p-4 border border-gray-200 rounded-lg">
-                <p class="text-gray-600 mb-1">Days Lookback</p>
-                <p class="text-2xl font-bold text-gray-900">{{ sync_days_lookback }} days</p>
-                <p class="text-xs text-gray-500 mt-1">Default data history to fetch</p>
+                <p class="text-gray-600 mb-1">Each Sync Asks Polar For</p>
+                <p class="text-2xl font-bold text-gray-900">Last {{ sync_days_lookback }} days</p>
+                <p class="text-xs text-gray-500 mt-1">Older data you've already synced stays here</p>
             </div>
         </div>
 
         <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
-            <p>Note: Activity data is limited to 28 days by the Polar API.</p>
+            <p>Everything this server syncs is kept for good. Polar only shares roughly the last 28 days, so older data has to be synced before it drops out of that window. Hourly syncs mean nothing gets missed, as long as the server keeps running.</p>
         </div>
     </div>
 
