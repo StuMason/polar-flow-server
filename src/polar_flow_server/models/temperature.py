@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, Integer, String, Text
+from sqlalchemy import Date, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin
@@ -48,7 +48,10 @@ class BodyTemperature(Base, TimestampMixin, UserScopedMixin):
         Text, nullable=True, comment="Temperature samples as JSON"
     )
 
-    __table_args__ = ({"sqlite_autoincrement": True},)
+    __table_args__ = (
+        UniqueConstraint("user_id", "start_time", name="uq_body_temperature_user_start_time"),
+        {"sqlite_autoincrement": True},
+    )
 
     # For upsert operations
     __upsert_index_elements__ = ["user_id", "start_time"]
@@ -83,6 +86,7 @@ class SkinTemperature(Base, TimestampMixin, UserScopedMixin):
 
     __table_args__ = (
         # Unique constraint: one record per user per night
+        UniqueConstraint("user_id", "sleep_date", name="uq_skin_temperature_user_sleep_date"),
         {"sqlite_autoincrement": True},
     )
 

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Sync failed with `UPDATE statement on table 'sync_logs' expected to update 1 row(s); 0 were matched` on any watch that returns body temperature, skin temperature, SpO2 or ECG data (#144). Those four tables had no unique constraint for the sync's upsert to target, so Postgres rejected the insert and rolled back the whole sync, including its log row. A migration adds the constraints; it skips any that already exist, so the manual workaround posted on the issue is safe to upgrade over
+
 ## [1.6.1] - 2026-10-02
 
 Follow-ups from the 1.6.0 MCP field test.
