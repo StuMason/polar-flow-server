@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin
@@ -59,7 +59,10 @@ class ECG(Base, TimestampMixin, UserScopedMixin):
         Float, nullable=True, comment="Test duration in seconds"
     )
 
-    __table_args__ = ({"sqlite_autoincrement": True},)
+    __table_args__ = (
+        UniqueConstraint("user_id", "test_time", name="uq_ecg_user_test_time"),
+        {"sqlite_autoincrement": True},
+    )
 
     # For upsert operations
     __upsert_index_elements__ = ["user_id", "test_time"]

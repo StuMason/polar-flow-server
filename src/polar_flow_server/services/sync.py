@@ -161,9 +161,14 @@ class SyncService:
         Rate limits are deliberately not retried here: Retry-After windows
         are minutes long, so the 429 is recorded on the result instead and
         the orchestrator's tracker holds the next cycle back (issue #64).
+
+        Each attempt runs in a savepoint: on Postgres a failed statement
+        aborts the whole transaction, so without one a database error in
+        a single endpoint failed every later endpoint and the final commit
+        rolled back the sync log too (issue #144).
         """
         try:
-            return await fn(*args, **kwargs)
+            return await self._in_savepoint(fn, *args, **kwargs)
         except RateLimitError as e:
             result.rate_limited_for = max(result.rate_limited_for or 0, e.retry_after)
             raise
@@ -192,10 +197,17 @@ class SyncService:
             )
             await asyncio.sleep(TRANSIENT_RETRY_BACKOFF_SECONDS)
             try:
-                return await fn(*args, **kwargs)
+                return await self._in_savepoint(fn, *args, **kwargs)
             except RateLimitError as retry_exc:
                 result.rate_limited_for = max(result.rate_limited_for or 0, retry_exc.retry_after)
                 raise
+
+    async def _in_savepoint(
+        self, fn: Callable[..., Awaitable[int]], *args: Any, **kwargs: Any
+    ) -> int:
+        """Run fn in a savepoint so a failure rolls back only its own writes."""
+        async with self.session.begin_nested():
+            return await fn(*args, **kwargs)
 
     async def sync_user(
         self,

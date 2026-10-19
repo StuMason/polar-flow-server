@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String
+from sqlalchemy import DateTime, Float, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polar_flow_server.models.base import Base, TimestampMixin, UserScopedMixin
@@ -63,6 +63,7 @@ class SpO2(Base, TimestampMixin, UserScopedMixin):
 
     __table_args__ = (
         # Unique constraint: one test per user per timestamp
+        UniqueConstraint("user_id", "test_time", name="uq_spo2_user_test_time"),
         {"sqlite_autoincrement": True},
     )
 
