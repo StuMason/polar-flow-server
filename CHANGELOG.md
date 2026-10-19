@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-19
+
+Sync fix for watches that record biosensing data.
+
 ### Fixed
 - Sync failed with `UPDATE statement on table 'sync_logs' expected to update 1 row(s); 0 were matched` on any watch that returns body temperature, skin temperature, SpO2 or ECG data (#144). Those four tables had no unique constraint for the sync's upsert to target, so Postgres rejected the insert. A migration adds the constraints. It removes any duplicate rows first and skips a table that already has an equivalent constraint, so the manual workaround posted on the issue is safe to upgrade over
 - A database error in one sync endpoint no longer fails every endpoint after it and loses the sync log. Each endpoint now runs in its own savepoint, so only its own writes roll back
+- Docker images installed mcp 2.2.0 even though `pyproject.toml` pinned 2.3.0, because Dependabot bumped the pin without updating `uv.lock`. The lockfile is regenerated, Dependabot now uses its `uv` ecosystem, and CI fails if the lock drifts again (#149)
+
+### Changed
+- `uv-build` build requirement widened to `<0.14` (#147)
 
 ## [1.6.1] - 2026-10-02
 
