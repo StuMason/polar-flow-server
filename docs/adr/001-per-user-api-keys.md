@@ -51,16 +51,15 @@ class APIKey(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    key_prefix: Mapped[str] = mapped_column(String(12), index=True)  # First 8 chars for identification
+    key_prefix: Mapped[str] = mapped_column(
+        String(12), index=True
+    )  # First 8 chars for identification
     name: Mapped[str] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
 
     # NEW: User scoping (nullable for service-level keys)
     user_id: Mapped[str | None] = mapped_column(
-        String(50),
-        ForeignKey("users.polar_user_id"),
-        nullable=True,
-        index=True
+        String(50), ForeignKey("users.polar_user_id"), nullable=True, index=True
     )
 
     # Rate limiting
@@ -252,6 +251,7 @@ Rate limiting is implemented at the API key level:
 # Default limits
 DEFAULT_RATE_LIMIT = 1000  # requests per hour
 
+
 async def check_rate_limit(key: APIKey, session: AsyncSession) -> bool:
     """Check and update rate limit for API key."""
     now = datetime.now(UTC)
@@ -322,11 +322,7 @@ X-API-Key: pfk_service_key_here
 Webhook callbacks FROM polar-flow-server TO Laravel use HMAC signatures:
 ```python
 # polar-flow-server signs webhook payload
-signature = hmac.new(
-    webhook_secret.encode(),
-    payload.encode(),
-    hashlib.sha256
-).hexdigest()
+signature = hmac.new(webhook_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 # Header: X-Webhook-Signature: sha256=xxxxx
 ```

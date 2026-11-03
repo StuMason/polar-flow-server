@@ -112,11 +112,7 @@ Litestar async web framework serving JSON endpoints.
 Every database query is scoped by `user_id`:
 
 ```python
-stmt = (
-    select(Sleep)
-    .where(Sleep.user_id == user_id)
-    .where(Sleep.date >= since_date)
-)
+stmt = select(Sleep).where(Sleep.user_id == user_id).where(Sleep.date >= since_date)
 ```
 
 **Self-hosted mode:**
