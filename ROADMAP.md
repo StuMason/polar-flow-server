@@ -122,9 +122,7 @@ class UserBaseline(Base):
     data_start_date: Mapped[date | None] = mapped_column(nullable=True)
     data_end_date: Mapped[date | None] = mapped_column(nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "metric_name", name="uq_user_baseline"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "metric_name", name="uq_user_baseline"),)
 ```
 
 ### 1.2 Metrics to Calculate
@@ -160,6 +158,7 @@ CREATE INDEX idx_cardio_load_user_date ON cardio_load(user_id, date);
 ```python
 from datetime import datetime, timezone
 
+
 class BaselineService:
     """Calculate and update user baselines."""
 
@@ -170,11 +169,15 @@ class BaselineService:
         today_utc = datetime.now(timezone.utc).date()
 
         # Fetch last 90 days of HRV data
-        stmt = select(NightlyRecharge.hrv, NightlyRecharge.date).where(
-            NightlyRecharge.user_id == user_id,
-            NightlyRecharge.hrv.isnot(None),
-            NightlyRecharge.date >= today_utc - timedelta(days=90)
-        ).order_by(NightlyRecharge.date)
+        stmt = (
+            select(NightlyRecharge.hrv, NightlyRecharge.date)
+            .where(
+                NightlyRecharge.user_id == user_id,
+                NightlyRecharge.hrv.isnot(None),
+                NightlyRecharge.date >= today_utc - timedelta(days=90),
+            )
+            .order_by(NightlyRecharge.date)
+        )
 
         result = await session.execute(stmt)
         data = result.all()
@@ -282,7 +285,9 @@ class PatternAnalysis(Base):
     # Results
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
-    significance: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "high", "medium", "low"
+    significance: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # "high", "medium", "low"
     details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Timestamps
@@ -327,13 +332,11 @@ class PatternService:
                 "correlation_coefficient": r,
                 "p_value": p_value,
                 "sample_size": len(aligned),
-                "interpretation": self.interpret_correlation(r, p_value)
-            }
+                "interpretation": self.interpret_correlation(r, p_value),
+            },
         )
 
-    async def detect_overtraining_risk(
-        self, user_id: str, session: AsyncSession
-    ) -> PatternResult:
+    async def detect_overtraining_risk(self, user_id: str, session: AsyncSession) -> PatternResult:
         """Multi-metric analysis for overtraining detection."""
 
         # Gather multiple signals
@@ -372,8 +375,8 @@ class PatternService:
             significance="high" if risk_score >= 50 else "medium" if risk_score >= 25 else "low",
             details={
                 "risk_factors": factors,
-                "recommendations": self.get_recovery_recommendations(risk_score)
-            }
+                "recommendations": self.get_recovery_recommendations(risk_score),
+            },
         )
 ```
 
@@ -419,14 +422,16 @@ async def detect_anomalies(self, user_id: str, session: AsyncSession) -> list[An
         else:
             continue  # Not an anomaly
 
-        anomalies.append(Anomaly(
-            metric=metric_name,
-            current_value=current,
-            median_value=median,
-            iqr_bounds=(lower_bound, upper_bound),
-            direction="above" if current > median else "below",
-            severity=severity
-        ))
+        anomalies.append(
+            Anomaly(
+                metric=metric_name,
+                current_value=current,
+                median_value=median,
+                iqr_bounds=(lower_bound, upper_bound),
+                direction="above" if current > median else "below",
+                severity=severity,
+            )
+        )
 
     return anomalies
 ```
@@ -464,6 +469,7 @@ async def detect_anomalies(self, user_id: str, session: AsyncSession) -> list[An
 from sklearn.ensemble import GradientBoostingRegressor
 from prophet import Prophet
 
+
 class MLService:
     """Machine learning predictions for health metrics."""
 
@@ -479,11 +485,7 @@ class MLService:
             return ModelTrainingResult(status="insufficient_data")
 
         # Train model
-        model = GradientBoostingRegressor(
-            n_estimators=100,
-            max_depth=3,
-            random_state=42
-        )
+        model = GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
 
         # Cross-validation
         scores = cross_val_score(model, features, targets, cv=5)
@@ -499,15 +501,10 @@ class MLService:
             model_type="gradient_boosting",
             cv_score_mean=scores.mean(),
             cv_score_std=scores.std(),
-            feature_importance=dict(zip(
-                self.readiness_features,
-                model.feature_importances_
-            ))
+            feature_importance=dict(zip(self.readiness_features, model.feature_importances_)),
         )
 
-    async def predict_readiness(
-        self, user_id: str, session: AsyncSession
-    ) -> ReadinessPrediction:
+    async def predict_readiness(self, user_id: str, session: AsyncSession) -> ReadinessPrediction:
         """Predict readiness for tomorrow."""
 
         model = await self.load_model(user_id, "readiness", session)
@@ -524,12 +521,10 @@ class MLService:
         return ReadinessPrediction(
             score=readiness,
             confidence=self.calculate_confidence(model, features),
-            factors=self.explain_prediction(model, features)
+            factors=self.explain_prediction(model, features),
         )
 
-    async def forecast_hrv(
-        self, user_id: str, days: int, session: AsyncSession
-    ) -> HRVForecast:
+    async def forecast_hrv(self, user_id: str, days: int, session: AsyncSession) -> HRVForecast:
         """7-day HRV forecast using Prophet."""
 
         # Get historical HRV
@@ -539,17 +534,10 @@ class MLService:
             return HRVForecast(status="insufficient_data")
 
         # Prepare for Prophet
-        df = pd.DataFrame({
-            "ds": [h.date for h in hrv_history],
-            "y": [h.hrv for h in hrv_history]
-        })
+        df = pd.DataFrame({"ds": [h.date for h in hrv_history], "y": [h.hrv for h in hrv_history]})
 
         # Train Prophet model
-        model = Prophet(
-            yearly_seasonality=False,
-            weekly_seasonality=True,
-            daily_seasonality=False
-        )
+        model = Prophet(yearly_seasonality=False, weekly_seasonality=True, daily_seasonality=False)
         model.fit(df)
 
         # Forecast
@@ -559,14 +547,11 @@ class MLService:
         return HRVForecast(
             predictions=[
                 HRVPrediction(
-                    date=row.ds,
-                    predicted=row.yhat,
-                    lower=row.yhat_lower,
-                    upper=row.yhat_upper
+                    date=row.ds, predicted=row.yhat, lower=row.yhat_lower, upper=row.yhat_upper
                 )
                 for _, row in forecast.tail(days).iterrows()
             ],
-            trend=self.calculate_trend(forecast)
+            trend=self.calculate_trend(forecast),
         )
 ```
 
@@ -604,9 +589,7 @@ class UserModel(Base):
     feature_importance: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     feature_names: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "model_type", name="uq_user_model"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "model_type", name="uq_user_model"),)
 
 
 # Whitelist of allowed model classes (prevents arbitrary class instantiation)
@@ -639,6 +622,7 @@ async def load_model(user_id: str, model_type: str, session: AsyncSession):
 ```python
 # Export trained model to ONNX (framework-agnostic, no code execution)
 import skl2onnx
+
 onnx_model = skl2onnx.convert_sklearn(model, initial_types=input_types)
 
 # Store as bytes (safe binary format, not executable)
@@ -646,6 +630,7 @@ model_onnx_bytes: Mapped[bytes] = mapped_column(LargeBinary)
 
 # Load with ONNX Runtime (sandboxed execution)
 import onnxruntime as ort
+
 session = ort.InferenceSession(onnx_bytes)
 ```
 
@@ -742,55 +727,65 @@ class ObservationGenerator:
         # HRV observations
         hrv = insights["baselines"]["hrv_rmssd"]
         if hrv["percent_of_baseline"] < 85:
-            observations.append(Observation(
-                category="recovery",
-                priority="high",
-                fact=f"HRV is {100 - hrv['percent_of_baseline']:.0f}% below personal baseline",
-                context=f"Current: {hrv['current']:.0f}ms, Baseline: {hrv['baseline']:.0f}ms",
-                trend=hrv["trend"]
-            ))
+            observations.append(
+                Observation(
+                    category="recovery",
+                    priority="high",
+                    fact=f"HRV is {100 - hrv['percent_of_baseline']:.0f}% below personal baseline",
+                    context=f"Current: {hrv['current']:.0f}ms, Baseline: {hrv['baseline']:.0f}ms",
+                    trend=hrv["trend"],
+                )
+            )
 
         # Sleep observations
         sleep = insights["baselines"]["sleep_score"]
         if sleep["trend"] == "declining" and sleep["trend_days"] >= 3:
-            observations.append(Observation(
-                category="sleep",
-                priority="medium",
-                fact=f"Sleep quality has been declining for {sleep['trend_days']} consecutive days",
-                context=f"Average score this week: {sleep['weekly_avg']:.0f}",
-                trend="declining"
-            ))
+            observations.append(
+                Observation(
+                    category="sleep",
+                    priority="medium",
+                    fact=f"Sleep quality has been declining for {sleep['trend_days']} consecutive days",
+                    context=f"Average score this week: {sleep['weekly_avg']:.0f}",
+                    trend="declining",
+                )
+            )
 
         # Training load observations
         load = insights["patterns"].get("training_load_ratio")
         if load and load["score"] > 1.3:
-            observations.append(Observation(
-                category="training",
-                priority="high",
-                fact=f"Training load ratio is {load['score']:.2f} (above recommended 1.3)",
-                context="Acute training load significantly exceeds chronic fitness",
-                trend="increasing"
-            ))
+            observations.append(
+                Observation(
+                    category="training",
+                    priority="high",
+                    fact=f"Training load ratio is {load['score']:.2f} (above recommended 1.3)",
+                    context="Acute training load significantly exceeds chronic fitness",
+                    trend="increasing",
+                )
+            )
 
         # Anomaly observations
         for anomaly in insights["anomalies"]:
-            observations.append(Observation(
-                category="anomaly",
-                priority="critical" if anomaly["severity"] == "critical" else "high",
-                fact=f"{anomaly['metric']} is {abs(anomaly['z_score']):.1f} standard deviations {anomaly['direction']} normal",
-                context=f"Current: {anomaly['current']}, Normal range: {anomaly['baseline']} +/- {anomaly['std_dev']}",
-                trend="anomalous"
-            ))
+            observations.append(
+                Observation(
+                    category="anomaly",
+                    priority="critical" if anomaly["severity"] == "critical" else "high",
+                    fact=f"{anomaly['metric']} is {abs(anomaly['z_score']):.1f} standard deviations {anomaly['direction']} normal",
+                    context=f"Current: {anomaly['current']}, Normal range: {anomaly['baseline']} +/- {anomaly['std_dev']}",
+                    trend="anomalous",
+                )
+            )
 
         # Positive observations too
         if hrv["percent_of_baseline"] > 105:
-            observations.append(Observation(
-                category="recovery",
-                priority="positive",
-                fact=f"HRV is {hrv['percent_of_baseline'] - 100:.0f}% above baseline - excellent recovery",
-                context="Body is well-recovered and ready for training",
-                trend="positive"
-            ))
+            observations.append(
+                Observation(
+                    category="recovery",
+                    priority="positive",
+                    fact=f"HRV is {hrv['percent_of_baseline'] - 100:.0f}% above baseline - excellent recovery",
+                    context="Body is well-recovered and ready for training",
+                    trend="positive",
+                )
+            )
 
         return sorted(observations, key=lambda x: self.priority_order(x.priority))
 ```
@@ -1112,6 +1107,7 @@ GET /users/{user_id}/status
 from datetime import date, timedelta
 import random
 
+
 def generate_realistic_hrv_data(days: int = 90, base_hrv: float = 50) -> list[dict]:
     """Generate realistic HRV data with weekly patterns and natural variation."""
     data = []
@@ -1130,12 +1126,14 @@ def generate_realistic_hrv_data(days: int = 90, base_hrv: float = 50) -> list[di
 
         hrv = base_hrv * weekly_factor * daily_variation * trend
 
-        data.append({
-            "date": current_date + timedelta(days=day),
-            "hrv": round(hrv, 1),
-            "ans_charge": random.randint(3, 5),
-            "recovery_status": "ok" if hrv > 45 else "compromised"
-        })
+        data.append(
+            {
+                "date": current_date + timedelta(days=day),
+                "hrv": round(hrv, 1),
+                "ans_charge": random.randint(3, 5),
+                "recovery_status": "ok" if hrv > 45 else "compromised",
+            }
+        )
 
     return data
 
@@ -1159,14 +1157,16 @@ def generate_sleep_data(days: int = 90) -> list[dict]:
         if is_weekend:
             sleep_score -= 5  # Worse sleep on weekends (staying up late)
 
-        data.append({
-            "date": current_date + timedelta(days=day),
-            "sleep_score": max(40, min(100, round(sleep_score))),
-            "total_sleep_seconds": random.randint(6*3600, 9*3600),
-            "light_sleep_seconds": random.randint(2*3600, 4*3600),
-            "deep_sleep_seconds": random.randint(1*3600, 2*3600),
-            "rem_sleep_seconds": random.randint(1*3600, 2*3600),
-        })
+        data.append(
+            {
+                "date": current_date + timedelta(days=day),
+                "sleep_score": max(40, min(100, round(sleep_score))),
+                "total_sleep_seconds": random.randint(6 * 3600, 9 * 3600),
+                "light_sleep_seconds": random.randint(2 * 3600, 4 * 3600),
+                "deep_sleep_seconds": random.randint(1 * 3600, 2 * 3600),
+                "rem_sleep_seconds": random.randint(1 * 3600, 2 * 3600),
+            }
+        )
 
     return data
 
@@ -1176,10 +1176,10 @@ def generate_overtraining_scenario(days: int = 30) -> dict:
     # First 20 days: normal
     # Last 10 days: declining HRV, rising RHR, declining sleep
     return {
-        "hrv": [50]*20 + [48, 46, 44, 42, 40, 38, 36, 35, 34, 33],
-        "rhr": [55]*20 + [56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
-        "sleep_score": [80]*20 + [78, 76, 74, 72, 70, 68, 66, 65, 64, 62],
-        "expected_risk_score": 75  # High risk
+        "hrv": [50] * 20 + [48, 46, 44, 42, 40, 38, 36, 35, 34, 33],
+        "rhr": [55] * 20 + [56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
+        "sleep_score": [80] * 20 + [78, 76, 74, 72, 70, 68, 66, 65, 64, 62],
+        "expected_risk_score": 75,  # High risk
     }
 
 
@@ -1190,7 +1190,7 @@ def generate_anomaly_scenario() -> dict:
     return {
         "hrv": normal_hrv,
         "anomaly_value": 25,  # Way below normal - should trigger critical
-        "expected_severity": "critical"
+        "expected_severity": "critical",
     }
 ```
 
@@ -1202,8 +1202,9 @@ import pytest
 from tests.fixtures.seed_data import (
     generate_realistic_hrv_data,
     generate_sleep_data,
-    generate_overtraining_scenario
+    generate_overtraining_scenario,
 )
+
 
 @pytest.fixture
 async def seeded_user_90_days(session):
@@ -1215,13 +1216,9 @@ async def seeded_user_90_days(session):
     sleep_data = generate_sleep_data(days=90)
 
     for record in hrv_data:
-        await session.execute(
-            insert(NightlyRecharge).values(user_id=user_id, **record)
-        )
+        await session.execute(insert(NightlyRecharge).values(user_id=user_id, **record))
     for record in sleep_data:
-        await session.execute(
-            insert(Sleep).values(user_id=user_id, **record)
-        )
+        await session.execute(insert(Sleep).values(user_id=user_id, **record))
 
     await session.commit()
     return user_id

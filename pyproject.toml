@@ -80,6 +80,7 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "UP042", # (str, Enum) -> StrEnum changes str()/format() output; needs its own change
 ]
 
 [tool.ruff.lint.isort]
