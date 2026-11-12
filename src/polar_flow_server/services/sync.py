@@ -776,6 +776,8 @@ class SyncService:
         count = 0
         for samples in samples_data:
             samples_dict = ActivitySamplesTransformer.transform(samples, user_id)
+            if samples_dict is None:
+                continue
 
             stmt = insert(ActivitySamples).values(user_id=user_id, **samples_dict)
             stmt = stmt.on_conflict_do_update(
