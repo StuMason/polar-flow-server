@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-12
+
+Security and dependency release.
+
+### Fixed
+- Activity samples sync no longer fails on a day with no step data. polar-flow-api 1.5.2 accepts the missing `steps` key and the sync skips that day (StuMason/polar-flow#17)
+
+### Security
+- certifi 2026.10.23: drops the compromised emSign CA intermediates (critical Dependabot alert)
+- opentelemetry-api 1.45.2 (medium Dependabot alert)
+
+### Changed
+- polar-flow-api 1.5.2, polars 2.1.0, pyarrow 26.0.1, plus the minor-and-patch group (#155)
+
 ## [1.6.2] - 2026-10-19
 
 Sync fix for watches that record biosensing data.

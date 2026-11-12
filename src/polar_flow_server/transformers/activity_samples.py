@@ -27,7 +27,7 @@ class ActivitySamplesTransformer:
     """
 
     @staticmethod
-    def transform(sdk_samples: DailyActivitySamples, user_id: str) -> dict[str, Any]:
+    def transform(sdk_samples: DailyActivitySamples, user_id: str) -> dict[str, Any] | None:
         """Convert SDK activity samples model to database-ready dict.
 
         Args:
@@ -35,7 +35,8 @@ class ActivitySamplesTransformer:
             user_id: User identifier for database record
 
         Returns:
-            Dict ready for database insertion with all fields mapped correctly
+            Dict ready for database insertion with all fields mapped correctly,
+            or None when the day has no step data (AccessLink omits `steps`)
         """
         # Parse date from string if needed
         raw_date = sdk_samples.date
@@ -45,6 +46,8 @@ class ActivitySamplesTransformer:
 
         # Extract step data
         step_data = sdk_samples.steps
+        if step_data is None:
+            return None
         sample_count = len(step_data.samples)
 
         # Convert samples to JSON

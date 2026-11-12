@@ -184,3 +184,31 @@ async def test_sync_success_returns_counts(async_session):
         assert result.records["recharge"] == 0
         assert result.records["activity"] == 0
         assert result.records["exercises"] == 0
+
+
+@pytest.mark.asyncio
+async def test_sync_activity_samples_skips_day_without_steps(async_session):
+    """A day with no `steps` key (polar-flow#17) is skipped, not a sync error."""
+    from polar_flow.models.activity_samples import DailyActivitySamples
+
+    sync_service = SyncService(async_session)
+    mock_client = AsyncMock()
+    mock_client.activity_samples.list = AsyncMock(
+        return_value=[
+            DailyActivitySamples.model_validate({"date": "2026-09-02"}),
+            DailyActivitySamples.model_validate(
+                {
+                    "date": "2026-09-03",
+                    "steps": {
+                        "interval_ms": 60000,
+                        "total_steps": 42,
+                        "samples": [{"steps": 42, "timestamp": "2026-09-03T00:02"}],
+                    },
+                }
+            ),
+        ]
+    )
+
+    count = await sync_service._sync_activity_samples(mock_client, "test_user", days=7)
+
+    assert count == 1
